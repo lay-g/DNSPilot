@@ -19,5 +19,9 @@ These documents describe the implemented product and its enduring engineering co
 
 - [Building](building.md)
 - [AGDnsProxy 2.8.45 compliance inventory](compliance/agdnproxy-v2.8.45.md)
+- [App Store metadata](app-store/metadata.md)
+- [App Review notes](app-store/review-notes.md)
+- [Support](../../SUPPORT.md)
+- [Privacy Policy](../../PRIVACY.md)
 
 When documents conflict, the narrower design contract takes precedence. Build settings in `Configurations/Base.xcconfig` must remain consistent with the toolchain document.

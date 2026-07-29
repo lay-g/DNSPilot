@@ -19,5 +19,9 @@
 
 - [构建](building.md)
 - [AGDnsProxy 2.8.45 合规清单](compliance/agdnproxy-v2.8.45.md)
+- [App Store 元数据](app-store/metadata.md)
+- [App 审核备注](app-store/review-notes.md)
+- [技术支持](../../SUPPORT.md)
+- [隐私政策](../../PRIVACY.md)
 
 文档冲突时，主题更具体的设计合同优先。`Configurations/Base.xcconfig` 的构建设置必须与工具链文档保持一致。
