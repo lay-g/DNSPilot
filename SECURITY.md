@@ -6,7 +6,7 @@ DNSPilot is alpha software. Security fixes are applied to the current public dev
 
 ## Reporting a Vulnerability
 
-Use the repository host's private Security Advisory channel. Do not open a public issue for a suspected vulnerability. If private advisories are unavailable, use the private contact method listed on the repository owner's public profile. A dedicated security contact must be configured before the repository is made public.
+Use the repository host's private Security Advisory channel or email [security@lay-g.com](mailto:security@lay-g.com). Do not open a public issue for a suspected vulnerability.
 
 Include the affected revision, macOS version, build source, impact, and minimal reproduction. Do not send real DNS queries, SSIDs, IP addresses, endpoint tokens, certificates, provisioning profiles, signing credentials, raw packet captures, or unredacted diagnostic exports unless the maintainer explicitly provides a secure transfer method.
 

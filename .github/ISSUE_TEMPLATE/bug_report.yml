@@ -1,0 +1,74 @@
+name: Bug report
+description: Report a reproducible DNSPilot defect
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include real DNS queries, SSIDs, IP addresses, endpoint tokens, signing materials, packet captures, or unredacted diagnostic exports. Use synthetic examples.
+
+  - type: input
+    id: version
+    attributes:
+      label: DNSPilot version or revision
+      description: Provide the app version, Git tag, or commit SHA.
+      placeholder: 0eff273
+    validations:
+      required: true
+
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version and architecture
+      placeholder: macOS 15.5, Apple silicon
+    validations:
+      required: true
+
+  - type: dropdown
+    id: build-source
+    attributes:
+      label: Build source
+      options:
+        - Community source build
+        - Official distribution
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Problem
+      description: Describe what happened and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Provide the smallest reliable reproduction using synthetic configuration data.
+      placeholder: |
+        1. Create a Profile using example.test values
+        2. Enable DNSPilot
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Add redacted logs or screenshots only when they are necessary.
+
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy check
+      options:
+        - label: I have removed private network data, credentials, signing details, and unredacted diagnostics.
+          required: true
+        - label: This is not a security vulnerability. I will report security issues privately as described in SECURITY.md.
+          required: true

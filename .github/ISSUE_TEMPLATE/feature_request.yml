@@ -1,0 +1,42 @@
+name: Feature request
+description: Propose a focused improvement to DNSPilot
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Explain the user problem before proposing an implementation. Keep examples synthetic and free of private network data.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: User problem
+      description: What workflow or limitation should be improved?
+    validations:
+      required: true
+
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: Describe the observable behavior you expect.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Note current workarounds or other approaches you evaluated.
+
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      options:
+        - label: I searched existing issues for the same request.
+          required: true
+        - label: This request does not contain real DNS queries, SSIDs, credentials, signing details, or unredacted diagnostics.
+          required: true
