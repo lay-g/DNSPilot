@@ -71,10 +71,4 @@ Lifecycle shutdown 阻止新切换意图，等待无法取消的 mutation，捕�
 
 如果 disable 明确失败且 exact manager 仍 enabled，可以尝试 exact runtime resume。如果 manager save outcome 未知，在 operation settle 并 reload preference 前禁止 resume 和其他 manager mutation。
 
-正常 Quit 不卸载 System Extension。Force Quit、crash 或断电无法保证 DNS restoration；下次启动必须 reconcile persisted desired state 与 actual runtime。
-
-## 被否决架构
-
-DNSPilot 不使用 prepared/active/retiring 双引擎。公开依赖 API 无法提供安全回收所需的 flow drain 与 callback ownership evidence。
-
-Manager disable/enable 不是普通切换机制。Preference write 不能证明 Provider stop、restart 或消费新配置，连续写入还可能被合并。Stop/start 只用于首次 enable、显式 restore、Quit、Extension replacement 和有界 lifecycle repair。
+正常 Quit 保留已安装的 System Extension。发生 Force Quit、crash 或断电后，系统管理的 DNS Proxy 可能保持 enabled，直到下次启动 reconcile persisted desired state 与 actual runtime，或用户恢复 System DNS。Manager stop/start 用于首次 enable、显式 restore、Quit、Extension replacement 和有界 lifecycle repair；普通 Profile 切换使用 manager enabled 的 single-engine reapply 路径。

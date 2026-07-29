@@ -2,7 +2,7 @@
 
 [English](../../en/design/testing.md)
 
-DNSPilot 将确定性的自动检查与需要签名、macOS 授权、网络 fixture 或人工 UI 检查的操作分开。历史测试轮次和机器相关 evidence 不作为长期设计文档保存。
+DNSPilot 使用确定性自动检查、受控网络 fixture、签名运行时验证和人工 UI 检查。
 
 ## 自动单元测试
 
@@ -44,8 +44,6 @@ Build-only 成功不能证明 code signing、entitlement authorization、System 
 
 改变 UI 或系统状态的 signed validation 必须获得用户明确授权。
 
-## 人工 UI 边界
+## 人工 UI 验证
 
-除非当前任务明确授权 UI automation，不启动并操作 App，不点击授权弹窗，也不使用 XCUITest、Playwright 或 browser-style automation。窗口行为、菜单一致性、keyboard-only、VoiceOver、长本地化、权限弹窗、contrast、transparency、motion 和 Quit alert 仍需人工检查。
-
-未执行这些检查时，必须列为剩余验证，不能宣称完整验收。
+人工检查覆盖窗口行为、菜单一致性、keyboard-only、VoiceOver、长本地化、权限弹窗、contrast、transparency、motion 和 Quit alert。UI 与授权检查在获得明确授权的测试机器上执行。

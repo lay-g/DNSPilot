@@ -4,6 +4,6 @@ Use the public issue tracker for reproducible bugs and feature requests. Search 
 
 Do not attach unredacted DNS queries, SSIDs, IP addresses, endpoint tokens, certificates, provisioning profiles, signing details, packet captures, or diagnostic exports. Reduce a report to synthetic examples whenever possible.
 
-Community builds require an independently approved Apple `dns-proxy` entitlement and matching signing configuration. The project can document its build contract but cannot grant entitlements, repair Apple Developer accounts, or support arbitrary signing topologies.
+Community build support covers the documented identity and build configuration. Apple controls `dns-proxy` entitlement approval and Developer account services; builders provide Team-owned identifiers, certificates, provisioning, and matching signing configuration.
 
 Report security issues through `SECURITY.md`, not the public issue tracker.

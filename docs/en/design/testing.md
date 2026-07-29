@@ -2,7 +2,7 @@
 
 [中文](../../zh/design/testing.md)
 
-DNSPilot separates deterministic automated checks from operations that require signing, macOS authorization, network fixtures, or human UI review. Historical test rounds and machine-specific evidence are not stored as enduring design documentation.
+DNSPilot uses deterministic automated checks, controlled network fixtures, signed runtime validation, and manual UI review.
 
 ## Automated Unit Tests
 
@@ -44,8 +44,6 @@ A properly provisioned machine is required to validate:
 
 Signed validation must use explicit user authorization when it changes UI or system state.
 
-## Manual UI Boundary
+## Manual UI Validation
 
-Unless the current task explicitly authorizes UI automation, do not launch and operate the app, click authorization dialogs, or use XCUITest, Playwright, or browser-style automation. Manual review remains required for window behavior, menu consistency, keyboard-only operation, VoiceOver, long localization, permission dialogs, contrast, transparency, motion, and Quit alerts.
-
-When these checks are not performed, report them as remaining validation rather than claiming full acceptance.
+Manual review covers window behavior, menu consistency, keyboard-only operation, VoiceOver, long localization, permission dialogs, contrast, transparency, motion, and Quit alerts. UI and authorization checks run on an explicitly authorized test machine.

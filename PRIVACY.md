@@ -6,15 +6,15 @@ This document describes the DNSPilot open-source application. Independently dist
 
 ## Project Services
 
-DNSPilot does not require an account and does not send analytics or telemetry to a DNSPilot-operated server. Configuration and rule data are stored locally for the current macOS user.
+Configuration and Rule data are stored locally for the current macOS user. Runtime network destinations are the user-selected DNS resolver and Apple-managed system services. The project operates no application service that receives analytics, telemetry, configuration, or DNS data.
 
 ## DNS Resolution
 
-DNS queries are sent to the resolver selected in the active Profile. The resolver and network providers can observe query names, IP addresses, timing, and protocol metadata under their own terms and privacy policies. DNSPilot does not operate or endorse third-party resolvers merely because they appear as built-in examples.
+DNS queries are sent to the resolver selected in the active Profile. The resolver and network providers can observe query names, IP addresses, timing, and protocol metadata under their own terms and privacy policies.
 
 ## Location and SSID
 
-macOS controls access to the current Wi-Fi SSID through Location authorization. DNSPilot requests authorization only after an explicit user action. SSID is used locally to evaluate rules and is not sent to a DNSPilot-operated service.
+macOS controls access to the current Wi-Fi SSID through Location authorization. DNSPilot requests authorization after an explicit user action and keeps the SSID in the Host process for local Rule evaluation.
 
 ## Logs and Diagnostics
 
@@ -22,7 +22,7 @@ Default logging minimizes DNS details. Debug logging can expose query names, add
 
 ## System Extension
 
-The DNS Proxy System Extension receives the active immutable resolver configuration and DNS flows supplied by macOS. It does not receive the Profile catalog, rules, SSID, account data, or store receipts.
+The DNS Proxy System Extension receives the active immutable resolver configuration, runtime logging mode, and DNS flows supplied by macOS. Profile catalogs, Rules, and SSID remain in the Host process.
 
 ## Retention and Deletion
 
@@ -31,5 +31,3 @@ DNSPilot keeps configuration in the user's Application Support container and sho
 ## Third Parties
 
 DNSPilot uses AdGuard DnsLibs/AGDnsProxy. See `THIRD-PARTY-NOTICES.md`. macOS, Apple signing services, the selected DNS resolver, and the source hosting provider operate under their own policies.
-
-Privacy manifest and encryption/export declarations are release gates and must be re-audited against every shipped binary and dependency revision.

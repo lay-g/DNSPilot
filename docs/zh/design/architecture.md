@@ -47,15 +47,15 @@ Runtime switching layer 属于 Extension，通过 authenticated Mach XPC 访问�
 
 ## 通信边界
 
-Host 和 Extension 通过由构建身份派生的 Mach service 通信。两者不使用 App Group 文件、共享 `UserDefaults`、Darwin Notification、`/Users/Shared` 或其他共享持久化存储。App Group entitlement 只授权 Mach service namespace。
+Host 和 Extension 只通过由构建身份派生的 Mach service 通信。App Group entitlement 只授权 Mach service namespace。Host 配置保存在私有 Application Support storage，runtime status 保存在 Extension 进程内。
 
-Extension 只接收一个 immutable `ActiveProxyConfiguration`，不接收 Profile catalog、Rules、SSID、UI state、发行状态或购买状态。
+Extension 接收一份 immutable `ActiveProxyConfiguration`，内容包括 schema version、generation 与 Profile identity、upstream 配置和 runtime logging mode。
 
 ## 依赖边界
 
 `AGDnsProxy` 是唯一 DNS transport engine。DNSPilot 只映射配置、把 Network Extension flow 交给 `AGDnsAppProxyFlowManager`、桥接事件和日志，并管理 runtime identity。DNS wire 解析、request ID、UDP/TCP exchange、TC fallback、DoH、bootstrap、TLS、HTTP connection reuse、取消和 transport cleanup 均由 DnsLibs 负责。
 
-Host 通过 `AGDnsUtils.testUpstream` 使用同一份纯 upstream mapping 做预检。DNSPilot 不得创建平行 transport，也不得在 DnsLibs 外修补 raw DNS response。
+Host 通过 `AGDnsUtils.testUpstream` 使用同一份纯 upstream mapping 做预检。Runtime 与 preflight DNS transport 都通过 DnsLibs 实现。
 
 ## 登录会话边界
 

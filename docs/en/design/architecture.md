@@ -47,15 +47,15 @@ No layer may silently copy, replace, or infer another layer's source of truth.
 
 ## Communication Boundary
 
-The Host and Extension communicate through a build-identity-derived Mach service. They do not use App Group files, shared `UserDefaults`, Darwin notifications, `/Users/Shared`, or another shared durable store. The App Group entitlement authorizes the Mach service namespace only.
+The Host and Extension use a build-identity-derived Mach service as their sole communication channel. The App Group entitlement authorizes only the Mach service namespace. Host configuration remains in private Application Support storage, and runtime status remains process-local in the Extension.
 
-The Extension receives one immutable `ActiveProxyConfiguration`. It never receives the Profile catalog, Rules, SSID, UI state, distribution state, or purchase state.
+The Extension receives one immutable `ActiveProxyConfiguration` containing schema version, generation and Profile identity, upstream configuration, and runtime logging mode.
 
 ## Dependency Boundary
 
 `AGDnsProxy` is the only DNS transport engine. DNSPilot maps configuration, passes Network Extension flows to `AGDnsAppProxyFlowManager`, bridges events and logs, and manages runtime identity. DNS wire parsing, request IDs, UDP/TCP exchange, truncation fallback, DoH, bootstrap, TLS, HTTP connection reuse, cancellation, and transport cleanup remain inside DnsLibs.
 
-The Host uses the same pure upstream mapping through `AGDnsUtils.testUpstream` for preflight. DNSPilot must not create a parallel transport implementation or patch raw DNS responses outside DnsLibs.
+The Host uses the same pure upstream mapping through `AGDnsUtils.testUpstream` for preflight. Runtime and preflight DNS transport are both implemented through DnsLibs.
 
 ## Session Boundary
 

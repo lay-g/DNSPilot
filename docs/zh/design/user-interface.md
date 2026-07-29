@@ -4,27 +4,27 @@
 
 ## 产品形态
 
-DNSPilot 是安静、原生的 macOS utility，不是 dashboard 或营销页面。它包含一个管理窗口、一个标准 Settings 窗口和常驻菜单栏菜单。关闭窗口不是 Quit。
+DNSPilot 是安静、原生的 macOS utility，包含一个管理窗口、一个标准 Settings 窗口和常驻菜单栏菜单。关闭窗口后 App 继续运行，并保持当前 DNS Proxy 状态。
 
 管理窗口使用两列 NavigationSplitView，包含 Overview、Profiles、Rules。Settings 包含 General、Privacy、Diagnostics、About。使用原生 list、form、sheet、alert、menu、segmented control、toggle、系统字体、语义色和 SF Symbols。颜色不能单独表达状态。
 
 ## 状态语言
 
-UI 只描述可观察事实：`DNS Proxy On`、`DNS Proxy Off`、`Preparing`、`Applying`、`Restoring System DNS`、`Recovery Required` 和 `Error`，不宣称流量“安全”或“私密”。
+UI 展示可观察的运行状态：`DNS Proxy On`、`DNS Proxy Off`、`Preparing`、`Applying`、`Restoring System DNS`、`Recovery Required` 和 `Error`。
 
 System Extension installation 与 DNS Proxy enablement 是独立状态。稳定状态显示一个 Active Profile；切换或失败可以同时显示 Target 与已确认 Active。Ownership 或 runtime identity 未知时必须显示 recovery-required。
 
 ## Overview
 
-Overview 展示 DNS Proxy 状态与控制、Automatic/Manual、Target/Active Profile、selection source、当前网络、Profile test、诊断入口和恢复操作。它不显示 query 历史、图表、虚构 score 或统计。
+Overview 展示 DNS Proxy 状态与控制、Automatic/Manual、Target/Active Profile、selection source、当前网络、Profile test、诊断入口和恢复操作。
 
-选择 Manual 会持久化请求的 Profile。Proxy Off 时不会隐式开启。切换失败保留 Target 与已确认 Active，并提供 Retry 和 `Use Active Profile (Manual)`。返回 Automatic 后立即计算最新有效 network context。
+选择 Manual 会持久化请求的 Profile，并保持当前 Proxy On/Off 状态。切换失败保留 Target 与已确认 Active，并提供 Retry 和 `Use Active Profile (Manual)`。返回 Automatic 后立即计算最新有效 network context。
 
 ## Profiles 与 Rules
 
-Profile/Rule editor 使用 staged draft，只有 Save 才提交 domain configuration。Validation 聚焦第一个无效字段。编辑 Active Profile 使用 journaled runtime/configuration transaction，在 exact verification 前不把 draft 发布为 Active。
+Profile/Rule editor 使用 staged draft，只有 Save 才提交 domain configuration。Validation 聚焦第一个无效字段。编辑 Active Profile 使用 journaled runtime/configuration transaction，并在 exact verification 后把 draft 发布为 Active。
 
-Profiles 提供 create、edit、duplicate、test、make-default、replacement 和 delete。列表身份不显示敏感 DoH URL 细节。
+Profiles 提供 create、edit、duplicate、test、make-default、replacement 和 delete。列表身份使用隐私安全的 DoH server 摘要。
 
 Rules 显示 enabled、priority、condition summary 和 target Profile。Reorder 只保存一次并 reevaluate 一次。Drag 必须提供 Move Up/Move Down 键盘替代。Default Profile selector 保持可见，Proxy 可用时不能为空。
 
@@ -39,7 +39,7 @@ Setup 是独立流程：
 5. 再由用户明确执行后启用 DNS Proxy。
 6. 只有确认 exact Active runtime 后显示完成。
 
-拒绝权限只影响 SSID Rule。等待批准时提供 System Settings 和重新检查，不使用无限 spinner。引导中断后保留已提交配置，但不能宣称 DNS 已启用。
+拒绝权限只影响 SSID Rule。等待批准时提供 System Settings 和重新检查。引导中断后保留已提交配置，只有确认 exact Active runtime 后才显示完成。
 
 ## 菜单栏与命令
 
@@ -55,7 +55,7 @@ Setup 是独立流程：
 
 ## 隐私与诊断
 
-Location 只在上下文中请求，并只用于 Wi-Fi SSID。Debug Logging 持续显示敏感数据警告。Diagnostic export 需要确认。About 展示 version、build、license、source、privacy、support、third-party notices 和中性 build origin，不改变功能。
+Location 在需要 Wi-Fi SSID 时按上下文请求。Debug Logging 持续显示敏感数据警告。Diagnostic export 需要确认。About 展示 version、build、license、source、privacy、support、third-party notices 和 build origin。
 
 ## 无障碍与布局
 

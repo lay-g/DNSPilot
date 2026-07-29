@@ -21,7 +21,7 @@ Profile UUID 是身份，名称允许重复。名称去除首尾空白后不能�
 
 显示身份由名称和隐私安全的协议/server 摘要组成。DoH 摘要不包含 path、query、token 或 bootstrap。业务逻辑始终使用 UUID。
 
-Default Profile 是普通用户 Profile 的角色，不是隐藏内置 resolver。Provider 模板只用于创建用户 Profile，应用升级不得静默修改它们。
+Default Profile 是用户自有 Profile 的角色。Provider 模板创建普通 Profile，用户可以继续编辑。
 
 ## Rule
 
@@ -41,7 +41,7 @@ Automatic 按有序 Rules 选择目标，未命中时使用 Default Profile。Ma
 
 ## Network Context
 
-`NetworkContext` 记录 path 状态、SSID 及其不可用原因、活动接口类型和所有相关活动 IPv4/IPv6 地址，不虚构单一“主接口”。
+`NetworkContext` 记录 path 状态、SSID 及其不可用原因、活动接口类型和所有相关活动 IPv4/IPv6 地址。
 
 SSID 权限拒绝只禁用 SSID 条件；接口和子网 Rule 继续工作。网络变化先按内容去重，再 debounce 1 秒。切换进行中只保留最新决策。
 

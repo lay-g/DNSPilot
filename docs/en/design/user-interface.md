@@ -4,27 +4,27 @@
 
 ## Product Shape
 
-DNSPilot is a quiet, native macOS utility, not a dashboard or marketing surface. It has one management window, one standard Settings window, and a persistent menu-bar menu. Closing a window is not Quit.
+DNSPilot is a quiet, native macOS utility with one management window, one standard Settings window, and a persistent menu-bar menu. Closing the window leaves the app running and preserves the current DNS Proxy state.
 
 The management window uses a two-column navigation split view with Overview, Profiles, and Rules. Settings contains General, Privacy, Diagnostics, and About. Use native lists, forms, sheets, alerts, menus, segmented controls, toggles, system typography, semantic colors, and SF Symbols. Color never carries status alone.
 
 ## State Language
 
-The UI describes observable facts: `DNS Proxy On`, `DNS Proxy Off`, `Preparing`, `Applying`, `Restoring System DNS`, `Recovery Required`, and `Error`. It does not claim that traffic is secure or private.
+The UI presents observable runtime states: `DNS Proxy On`, `DNS Proxy Off`, `Preparing`, `Applying`, `Restoring System DNS`, `Recovery Required`, and `Error`.
 
 System Extension installation and DNS Proxy enablement are separate states. Stable state shows one Active Profile. Switching or failure may show both Target and confirmed Active Profile. Unknown ownership or runtime identity is always recovery-required.
 
 ## Overview
 
-Overview presents DNS Proxy state and control, Automatic/Manual mode, Target and Active Profiles, selection source, current network, Profile testing, diagnostics access, and recovery actions. It does not show query history, charts, synthetic scores, or invented statistics.
+Overview presents DNS Proxy state and control, Automatic/Manual mode, Target and Active Profiles, selection source, current network, Profile testing, diagnostics access, and recovery actions.
 
-Selecting Manual persists the requested Profile. If the Proxy is off, this does not enable it. A failed switch preserves Target and confirmed Active, with Retry and `Use Active Profile (Manual)` actions. Returning to Automatic immediately evaluates the latest valid network context.
+Selecting Manual persists the requested Profile while preserving the current Proxy On/Off state. A failed switch preserves Target and confirmed Active, with Retry and `Use Active Profile (Manual)` actions. Returning to Automatic immediately evaluates the latest valid network context.
 
 ## Profiles And Rules
 
-Profile and Rule editors use staged drafts. Only Save commits domain configuration. Validation focuses the first invalid field. Editing an Active Profile uses the journaled runtime/configuration transaction and does not publish the draft as Active before exact verification.
+Profile and Rule editors use staged drafts. Only Save commits domain configuration. Validation focuses the first invalid field. Editing an Active Profile uses the journaled runtime/configuration transaction and publishes the draft as Active after exact verification.
 
-Profiles expose create, edit, duplicate, test, make-default, replacement, and delete workflows. Sensitive DoH URL details are not shown in list identity.
+Profiles expose create, edit, duplicate, test, make-default, replacement, and delete workflows. List identity uses a privacy-safe DoH server summary.
 
 Rules show enabled state, priority, condition summary, and target Profile. Reordering saves once and reevaluates once. Dragging has Move Up/Move Down keyboard alternatives. The Default Profile selector remains visible and cannot be empty while the Proxy is usable.
 
@@ -39,7 +39,7 @@ Setup is a dedicated workflow:
 5. Enable the DNS Proxy after another explicit command.
 6. Show completion only after exact Active runtime confirmation.
 
-Permission denial affects only SSID Rules. Approval-required state offers System Settings and recheck actions instead of an indefinite spinner. Interrupted setup preserves committed configuration without claiming that DNS is active.
+Permission denial affects only SSID Rules. Approval-required state offers System Settings and recheck actions. Interrupted setup preserves committed configuration, and completion requires exact Active runtime confirmation.
 
 ## Menu Bar And Commands
 
@@ -55,7 +55,7 @@ An explicit menu click starts safe Quit immediately. Unsaved drafts require a se
 
 ## Privacy And Diagnostics
 
-Location is requested contextually and only for Wi-Fi SSID. Debug Logging displays a persistent sensitive-data warning. Diagnostic export requires confirmation. About shows version, build, license, source, privacy, support, third-party notices, and neutral build origin without changing functionality.
+Location is requested contextually for Wi-Fi SSID. Debug Logging displays a persistent sensitive-data warning. Diagnostic export requires confirmation. About shows version, build, license, source, privacy, support, third-party notices, and build origin.
 
 ## Accessibility And Layout
 

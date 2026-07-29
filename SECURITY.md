@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-DNSPilot is alpha software. Security fixes are applied to the current public development branch; no released version is currently covered by a long-term support commitment.
+Security fixes are applied to the current public development branch.
 
 ## Reporting a Vulnerability
 
@@ -14,4 +14,4 @@ The initial response target is seven days. Confirmation, remediation, and disclo
 
 ## Security Boundaries
 
-Reports involving System Extension lifecycle, DNS restoration, XPC authentication, configuration/journal integrity, privacy-sensitive logging, or dependency integrity are in scope. Apple entitlement approval, third-party resolver operation, and unsupported local modifications are outside project control, but integration defects may still be valid reports.
+Reports involving System Extension lifecycle, DNS restoration, XPC authentication, configuration/journal integrity, privacy-sensitive logging, dependency integrity, and DNSPilot's third-party integrations are in scope. Apple manages entitlement approval, and resolver operators remain responsible for their services.

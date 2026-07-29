@@ -12,9 +12,6 @@ DNSPilot is a native macOS DNS Proxy utility for managing Plain DNS and DNS-over
 - Persistent Manual mode and a user-selected Default Profile.
 - Native management window, Settings window, and menu-bar controls.
 - Exact runtime identity, authenticated Host/Extension IPC, and bounded DNS restoration.
-- No accounts, subscriptions, in-app purchases, receipt checks, license keys, or Profile limits.
-
-Official and source-built distributions provide the same product capabilities and configuration format.
 
 ## Requirements
 
@@ -47,19 +44,14 @@ See [Building](docs/en/building.md) for commands and identity derivation.
 - [Runtime design](docs/en/design/runtime.md)
 - [Toolchain baseline](docs/en/design/toolchain.md)
 - [Testing strategy](docs/en/design/testing.md)
-- [Release requirements](docs/en/releasing.md)
 
 ## Privacy
 
-DNSPilot has no project-operated account, analytics, or telemetry service. DNS queries are sent to the resolver selected by the user. Location permission is used only to obtain the current Wi-Fi name for SSID Rules. Debug Logging and explicit diagnostic exports can contain sensitive DNS and network details. Read [PRIVACY.md](PRIVACY.md) before sharing logs.
+Configuration and Rule data remain on the Mac. DNS queries are sent to the resolver selected by the user. Location permission provides the current Wi-Fi name for SSID Rules. Debug Logging and explicit diagnostic exports can contain sensitive DNS and network details. Read [PRIVACY.md](PRIVACY.md) before sharing logs.
 
-## Limitations
+## Runtime And Dependencies
 
-- DNSPilot does not detect, control, or repair VPN DNS precedence.
-- A VPN, another DNS Proxy, Fake-IP service, or scoped resolver can prevent DNSPilot from observing all DNS traffic.
-- Normal Quit attempts to restore System DNS; crash or Force Quit cannot guarantee cleanup.
-- AGDnsProxy is a pinned prebuilt dependency governed by [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
-- Application binary redistribution is blocked until the [AGDnsProxy transitive inventory](docs/en/compliance/agdnproxy-v2.8.45.md) is complete.
+DNSPilot processes the DNS flows supplied by the macOS DNS Proxy subsystem. Normal Quit attempts to restore System DNS. After an interrupted exit, the system-managed DNS Proxy may remain enabled until the next launch reconciles persisted state or the user restores System DNS. DNS transport uses the pinned AGDnsProxy dependency documented in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Its artifact-level transitive notice inventory is currently incomplete, so application binary redistribution requires completion of the [compliance inventory](docs/en/compliance/agdnproxy-v2.8.45.md).
 
 ## Development
 

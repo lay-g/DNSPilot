@@ -71,10 +71,4 @@ Lifecycle shutdown fences new switching intent, waits for unavoidable in-flight 
 
 If disable explicitly fails while the exact manager remains enabled, exact runtime resume may be attempted. If manager save outcome is unknown, resume and further manager mutation are forbidden until the operation settles and preferences are reloaded.
 
-Normal Quit does not uninstall the System Extension. Force Quit, crash, or power loss cannot guarantee DNS restoration; the next launch must reconcile persisted desired state and actual runtime.
-
-## Rejected Architectures
-
-DNSPilot does not use a prepared/active/retiring two-engine design. Public dependency APIs do not provide sufficient flow-drain or callback ownership evidence for safe reclamation.
-
-Manager disable/enable is not an ordinary switching mechanism. Preference writes do not prove Provider stop, restart, or configuration consumption, and closely spaced writes may be coalesced. Stop/start remains limited to initial enablement, explicit restore, Quit, Extension replacement, and bounded lifecycle repair.
+Normal Quit leaves the System Extension installed. After Force Quit, crash, or power loss, the system-managed DNS Proxy may remain enabled until the next launch reconciles persisted desired state and actual runtime or the user restores System DNS. Manager stop/start is used for initial enablement, explicit restore, Quit, Extension replacement, and bounded lifecycle repair; ordinary Profile switching uses the enabled single-engine reapply path.

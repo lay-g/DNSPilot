@@ -12,9 +12,6 @@ DNSPilot 是原生 macOS DNS Proxy 工具，用于管理普通 DNS 和 DNS-over-
 - 持久化 Manual mode 和用户指定的 Default Profile。
 - 原生管理窗口、Settings 窗口和菜单栏控制。
 - Exact runtime identity、认证后的 Host/Extension IPC 和有界 DNS 恢复。
-- 无账号、订阅、内购、receipt 检查、license key 或 Profile 数量限制。
-
-官方版本与源码自编译版本具有相同产品功能和配置格式。
 
 ## 要求
 
@@ -47,19 +44,14 @@ cp Configurations/Identity.local.xcconfig.example \
 - [运行时设计](docs/zh/design/runtime.md)
 - [工具链基线](docs/zh/design/toolchain.md)
 - [测试策略](docs/zh/design/testing.md)
-- [发布要求](docs/zh/releasing.md)
 
 ## 隐私
 
-DNSPilot 不运营账号、analytics 或 telemetry 服务。DNS query 会发送到用户选择的 resolver。Location 权限只用于获取当前 Wi-Fi 名称以匹配 SSID Rule。Debug Logging 和显式 diagnostic export 可能包含敏感 DNS 与网络信息。分享日志前请阅读 [PRIVACY.md](PRIVACY.md)。
+配置与 Rule 数据保留在 Mac 本地。DNS query 会发送到用户选择的 resolver。Location 权限提供当前 Wi-Fi 名称以匹配 SSID Rule。Debug Logging 和显式 diagnostic export 可能包含敏感 DNS 与网络信息。分享日志前请阅读 [PRIVACY.md](PRIVACY.md)。
 
-## 限制
+## 运行时与依赖
 
-- DNSPilot 不检测、控制或修复 VPN DNS 优先级。
-- VPN、其他 DNS Proxy、Fake-IP 服务或 scoped resolver 可能使 DNSPilot 无法观察全部 DNS 流量。
-- 正常 Quit 会尝试恢复 System DNS；crash 或 Force Quit 无法保证清理。
-- AGDnsProxy 是锁定版本的预编译依赖，受 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) 约束。
-- [AGDnsProxy transitive inventory](docs/zh/compliance/agdnproxy-v2.8.45.md) 完成前禁止重新分发应用二进制。
+DNSPilot 处理 macOS DNS Proxy 子系统提供的 DNS flow。正常 Quit 会尝试恢复 System DNS。退出中断后，系统管理的 DNS Proxy 可能保持 enabled，直到下次启动 reconcile 持久化状态或用户恢复 System DNS。DNS transport 使用锁定版本的 AGDnsProxy，详见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。其 artifact-level transitive notice inventory 当前尚未完成，应用二进制重新分发需要先完成[合规清单](docs/zh/compliance/agdnproxy-v2.8.45.md)。
 
 ## 开发
 

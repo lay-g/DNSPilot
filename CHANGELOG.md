@@ -11,17 +11,13 @@ All notable changes to DNSPilot are documented in this file. The format follows 
 
 ### Changed
 
-- Profile creation, duplication, editing, and deletion no longer use entitlement or purchase state.
+- Profile creation, duplication, editing, and deletion are available in every build.
 - Build identities are supplied outside Git and derived consistently for Host, System Extension, App Group, Mach service, and XPC authentication.
-
-### Removed
-
-- Unshipped StoreKit product setting, Profile quota, entitlement revision, and Free-plan messaging.
 
 ### Security
 
 - Public examples and tests use synthetic Team and Bundle identifiers.
 
-### Known Limitations
+### Compliance
 
-- AGDnsProxy's artifact-level transitive license inventory remains incomplete, so application binary redistribution is blocked pending review.
+- AGDnsProxy attribution and artifact provenance are documented; application binary redistribution requires completion of the artifact-level transitive notice inventory.

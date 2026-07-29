@@ -21,7 +21,7 @@ Profile UUID is identity; names may repeat. Names are trimmed and non-empty. Pla
 
 Display identity uses the name plus a privacy-safe protocol/server summary. DoH summaries exclude paths, queries, tokens, and bootstrap addresses. Business logic always uses UUIDs.
 
-The Default Profile is a role assigned to a normal user Profile. It is not a hidden built-in resolver. Provider templates only create user-owned Profiles and updates must not silently change them.
+The Default Profile is a role assigned to a user-owned Profile. Provider templates create ordinary Profiles that remain editable by the user.
 
 ## Rules
 
@@ -41,7 +41,7 @@ Automatic mode uses the ordered Rules and falls back to the Default Profile. Man
 
 ## Network Context
 
-`NetworkContext` records path status, SSID and its availability reason, active interface types, and all relevant active IPv4/IPv6 interface addresses. It does not invent one primary interface.
+`NetworkContext` records path status, SSID and its availability reason, active interface types, and all relevant active IPv4/IPv6 interface addresses.
 
 SSID denial disables only SSID conditions. Interface and subnet Rules continue to work. Network changes are content-deduplicated and debounced for one second. While a switch is running, only the latest decision remains pending.
 
