@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>DNSPilotExpectedHostBundleIdentifier</key>
+	<string>$(APP_BUNDLE_IDENTIFIER)</string>
+	<key>DNSPilotExpectedTeamIdentifier</key>
+	<string>$(EXPECTED_TEAM_IDENTIFIER)</string>
+	<key>NetworkExtension</key>
+	<dict>
+		<key>NEMachServiceName</key>
+		<string>$(MACH_SERVICE_NAME)</string>
+		<key>NEProviderClasses</key>
+		<dict>
+			<key>com.apple.networkextension.dns-proxy</key>
+			<string>$(PRODUCT_MODULE_NAME).DNSProxyProvider</string>
+		</dict>
+	</dict>
+	<key>NSSystemExtensionUsageDescription</key>
+	<string>DNSPilot uses this system extension to securely process and forward DNS queries.</string>
+</dict>
+</plist>

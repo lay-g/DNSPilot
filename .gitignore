@@ -1,0 +1,51 @@
+# macOS
+.DS_Store
+
+# Xcode user data
+xcuserdata/
+*.xcuserstate
+*.xcsettings
+*.moved-aside
+*.xccheckout
+*.xcscmblueprint
+/Configurations/Identity.local.xcconfig
+.xcode.env.local
+
+# Build products and release artifacts
+build/
+DerivedData/
+*.hmap
+*.app/
+*.xcarchive/
+*.xcresult/
+*.ipa
+*.pkg
+*.dmg
+*.dSYM
+*.dSYM.zip
+*.profraw
+*.profdata
+
+# Signing and provisioning material
+*.cer
+*.cert
+*.csr
+*.key
+*.p8
+*.p12
+*.pem
+*.pfx
+*.mobileprovision
+*.provisionprofile
+
+# Local secrets and diagnostics
+.env
+.env.*
+!.env.example
+*.log
+*.pcap
+*.pcapng
+
+# Swift Package Manager build artifacts
+.build/
+.swiftpm/

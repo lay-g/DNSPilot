@@ -1,0 +1,83 @@
+import Combine
+import ServiceManagement
+
+enum LaunchAtLoginStatus: Equatable, Sendable {
+    case disabled
+    case enabled
+    case requiresApproval
+    case unavailable
+    case failed(String)
+
+    var isEnabled: Bool {
+        switch self {
+        case .enabled, .requiresApproval:
+            true
+        case .disabled, .unavailable, .failed:
+            false
+        }
+    }
+}
+
+@MainActor
+protocol LaunchAtLoginRegistering: AnyObject {
+    var status: LaunchAtLoginStatus { get }
+    func register() throws
+    func unregister() throws
+}
+
+@MainActor
+final class LaunchAtLoginService: ObservableObject {
+    @Published private(set) var status: LaunchAtLoginStatus
+
+    private let registration: any LaunchAtLoginRegistering
+
+    init(registration: any LaunchAtLoginRegistering = SystemLaunchAtLoginRegistration()) {
+        self.registration = registration
+        status = registration.status
+    }
+
+    func refresh() {
+        status = registration.status
+    }
+
+    func setEnabled(_ enabled: Bool) {
+        do {
+            if enabled {
+                try registration.register()
+            } else {
+                try registration.unregister()
+            }
+            status = registration.status
+        } catch {
+            status = .failed(error.localizedDescription)
+        }
+    }
+}
+
+@MainActor
+private final class SystemLaunchAtLoginRegistration: LaunchAtLoginRegistering {
+    private let service = SMAppService.mainApp
+
+    var status: LaunchAtLoginStatus {
+        switch service.status {
+        case .notRegistered:
+            .disabled
+        case .enabled:
+            .enabled
+        case .requiresApproval:
+            .requiresApproval
+        case .notFound:
+            .unavailable
+        @unknown default:
+            .unavailable
+        }
+    }
+
+    func register() throws {
+        try service.register()
+    }
+
+    func unregister() throws {
+        try service.unregister()
+    }
+}

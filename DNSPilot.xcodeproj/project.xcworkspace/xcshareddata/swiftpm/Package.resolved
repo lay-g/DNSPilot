@@ -1,0 +1,14 @@
+{
+  "originHash" : "35361965b5f8b1965e5110780538248132317082113b5ce42a0da74d97eef3ef",
+  "pins" : [
+    {
+      "identity" : "dnslibs",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/AdguardTeam/DnsLibs.git",
+      "state" : {
+        "revision" : "5570e10e4883f9fe770a291b4025449127185f88"
+      }
+    }
+  ],
+  "version" : 3
+}
