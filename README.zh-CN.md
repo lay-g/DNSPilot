@@ -1,5 +1,7 @@
 # DNSPilot
 
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+
 [English](README.md) | 简体中文
 
 DNSPilot 是原生 macOS DNS Proxy 工具，用于管理普通 DNS 和 DNS-over-HTTPS Profile。用户可以手动选择 Profile，也可以根据有序的 Wi-Fi SSID、接口类型和子网 Rule 自动选择。
