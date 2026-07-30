@@ -10,7 +10,7 @@
 - 副标题：`按网络自动切换 DNS`
 - 主要类别：`工具`
 - 次要类别：`开发者工具`
-- 内容版权：DNSPilot 包含第三方内容，并已取得必要使用权。仅在二进制发布合规门槛关闭后确认此答案。
+- 内容版权：选择`否`。DNSPilot 不包含、展示或访问第三方内容；开源软件依赖仍须单独通过二进制发布许可证合规检查。
 - 自定义许可协议：无，使用 Apple 标准《许可应用程序最终用户许可协议》。
 - 版权：`[年份] [法定名称]`
 
@@ -24,19 +24,20 @@
 
 ## 宣传文本
 
-从菜单栏切换普通 DNS 与 DNS over HTTPS Profile，或让 DNSPilot 根据当前网络自动选择。
+创建并测试普通 DNS、DNS over TLS 和 DNS over HTTPS Profile，然后从菜单栏切换，或让网络 Rule 自动选择。
 
 ## 描述
 
 DNSPilot 是一款管理 Mac 所用 DNS 解析器的原生 macOS 工具。
 
-你可以创建普通 DNS 或 DNS over HTTPS Profile，在启用前进行测试，并从 App 或菜单栏快速切换。自动模式按照 Rule 顺序，根据当前 Wi-Fi 名称、活动接口类型或 IPv4、IPv6 子网选择 Profile；手动模式会持续使用指定 Profile，直到你返回自动模式。
+你可以创建、复制、编辑和测试普通 DNS、DNS over TLS 或 DNS over HTTPS Profile，然后从 App 或菜单栏快速切换。自动模式按照 Rule 顺序，根据当前 Wi-Fi 名称、活动接口类型或 IPv4、IPv6 子网选择 Profile；手动模式会持续使用指定 Profile，直到你返回自动模式。
 
 DNSPilot 将配置保存在 Mac 本地，不要求注册账号。位置权限是可选的，仅用于读取当前 Wi-Fi 名称以匹配 SSID Rule。拒绝位置权限后，接口和子网 Rule 仍可正常工作。
 
 主要功能：
 
 - 普通 DNS，优先 UDP 并支持 TCP fallback
+- 支持证书验证的 DNS over TLS
 - 使用 DNS wire format 的 DNS over HTTPS
 - 按顺序匹配 Rule，并由 Default Profile 兜底
 - 自动与手动运行模式
@@ -50,11 +51,11 @@ DNS 查询会发送到活动 Profile 中选择的解析器。解析器运营方�
 
 ## 关键词
 
-`DoH,加密DNS,域名解析,网络切换,Wi-Fi,SSID,隐私,菜单栏,自动切换,配置文件`
+`DoH,DoT,加密DNS,域名解析,网络切换,Wi-Fi,SSID,隐私,菜单栏,自动切换,配置文件`
 
 ## 首次发布摘要
 
-DNSPilot 首次发布，支持普通 DNS 与 DNS over HTTPS Profile、基于网络的自动 Rule、菜单栏控制、Profile 测试、诊断和经过确认的 System DNS 恢复。
+DNSPilot 首次发布，支持普通 DNS、DNS over TLS 与 DNS over HTTPS Profile、基于网络的自动 Rule、菜单栏控制、Profile 测试、诊断和经过确认的 System DNS 恢复。
 
 App Store Connect 不为 App 的首个版本提供“此版本的新功能”字段。仅在其他位置要求首次发布摘要时复用本段，不要尝试把它填写为版本 1.0 的更新说明。
 
@@ -69,7 +70,7 @@ App Store Connect 暂定回答：开发者`不收集数据`。
 - 将 `[年份] [法定名称]` 替换为 App Store Connect 销售主体对应的版权方。
 - 确认技术支持 URL 按销售地区法律要求提供通用支持邮箱、法定地址或电话号码；仅提供公开 Issue Tracker 可能无法满足所有 storefront。
 - 确认最终价格和销售地区。
-- 在许可证审查完成后确认第三方内容版权答案。
+- 分发前完成开源二进制许可证和声明清单审查。
 - 根据归档二进制重新检查 App 隐私答案。
 - 根据最终二进制的加密功能完成出口合规问卷。
 - 上传真实使用界面的截图，不使用占位内容或仅供开发的验收控制。

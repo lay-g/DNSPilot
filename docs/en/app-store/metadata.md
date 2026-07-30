@@ -10,7 +10,7 @@ This document contains copy-ready metadata for the first Mac App Store release. 
 - Subtitle: `DNS Profiles for Every Network`
 - Primary category: `Utilities`
 - Secondary category: `Developer Tools`
-- Content rights: DNSPilot contains third-party content and has the necessary rights to use it. Confirm this answer only after the binary-release compliance gate is closed.
+- Content rights: `No`. DNSPilot does not contain, show, or access third-party content. Open-source software dependencies remain subject to the separate binary-release license-compliance gate.
 - Custom license agreement: None. Use Apple's standard Licensed Application End User License Agreement.
 - Copyright: `[YEAR] [LEGAL NAME]`
 
@@ -24,19 +24,20 @@ Keep the repository public and verify these URLs without authentication before s
 
 ## Promotional Text
 
-Switch between plain DNS and DNS over HTTPS Profiles from the menu bar, or let DNSPilot select one automatically for the network you are using.
+Create and test Plain DNS, DNS over TLS, and DNS over HTTPS Profiles, then switch from the menu bar or let network Rules choose automatically.
 
 ## Description
 
 DNSPilot is a native macOS utility for managing the DNS resolver used by your Mac.
 
-Create Profiles for plain DNS or DNS over HTTPS, test them before use, and switch between them from the app or menu bar. Automatic mode can select a Profile using ordered Rules based on the current Wi-Fi name, active interface type, or IPv4 and IPv6 subnet. Manual mode keeps your chosen Profile active until you return to Automatic.
+Create, duplicate, edit, and test Profiles for Plain DNS, DNS over TLS, or DNS over HTTPS, then switch between them from the app or menu bar. Automatic mode can select a Profile using ordered Rules based on the current Wi-Fi name, active interface type, or IPv4 and IPv6 subnet. Manual mode keeps your chosen Profile active until you return to Automatic.
 
 DNSPilot keeps its configuration on your Mac and does not require an account. Location access is optional and is used only to read the current Wi-Fi name for SSID Rules. Interface and subnet Rules continue to work without Location access.
 
 Features:
 
 - Plain DNS over UDP with TCP fallback
+- DNS over TLS with certificate validation
 - DNS over HTTPS using DNS wire format
 - Ordered Rules with a Default Profile fallback
 - Automatic and Manual operating modes
@@ -50,11 +51,11 @@ Requires macOS 15 or later.
 
 ## Keywords
 
-`DoH,resolver,encrypted DNS,network,Wi-Fi,SSID,privacy,menu bar,automatic,profile`
+`DoH,DoT,resolver,encrypted DNS,network,Wi-Fi,SSID,privacy,menu bar,automatic,profile`
 
 ## First-Release Summary
 
-Initial release of DNSPilot with plain DNS and DNS over HTTPS Profiles, network-based automatic Rules, menu bar controls, Profile testing, diagnostics, and confirmed System DNS restoration.
+Initial release of DNSPilot with Plain DNS, DNS over TLS, and DNS over HTTPS Profiles, network-based automatic Rules, menu bar controls, Profile testing, diagnostics, and confirmed System DNS restoration.
 
 App Store Connect does not provide the What's New field for an app's first version. Reuse this summary only where a first-release summary is requested; do not try to enter it as What's New for version 1.0.
 
@@ -69,7 +70,7 @@ Confirm this answer against the final signed binary and Apple's current definiti
 - Replace `[YEAR] [LEGAL NAME]` with the App Store Connect seller's legal copyright holder.
 - Confirm that the Support URL exposes a general support email, legal address, or telephone number where required by local law. The public issue tracker alone may not satisfy every storefront.
 - Confirm final pricing and availability.
-- Confirm the third-party content-rights answer after license review.
+- Complete the open-source binary license and notice review before distribution.
 - Recheck the App Privacy answer against the archived binary.
 - Complete export-compliance answers for the final binary's encryption use.
 - Upload screenshots showing the actual app in use; do not use placeholders or development-only acceptance controls.
