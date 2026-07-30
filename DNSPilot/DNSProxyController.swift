@@ -2944,24 +2944,26 @@ actor DNSProxyController {
     }
 
     private func compatibleSchemaVersion(for upstream: DNSUpstream) async throws -> Int {
-        let maximumSchemaVersion: Int?
-        do {
-            let clock = ContinuousClock()
-            let status = try await runtimeStatus(
-                before: clock.now.advanced(by: pollInterval)
-            )
-            maximumSchemaVersion = status.maximumConfigurationSchemaVersion
-        } catch {
-            maximumSchemaVersion = nil
-        }
-
         switch upstream {
         case .https:
+            let maximumSchemaVersion: Int?
+            do {
+                let clock = ContinuousClock()
+                let status = try await runtimeStatus(
+                    before: clock.now.advanced(by: pollInterval)
+                )
+                maximumSchemaVersion = status.maximumConfigurationSchemaVersion
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                maximumSchemaVersion = nil
+            }
             return (maximumSchemaVersion ?? 1) >= Self.currentConfigurationSchemaVersion
                 ? Self.currentConfigurationSchemaVersion
                 : 1
         case .plain:
-            guard (maximumSchemaVersion ?? 1) >= Self.currentConfigurationSchemaVersion else {
+            let maximumSchemaVersion = try await waitForProviderSchemaCapability()
+            guard maximumSchemaVersion >= Self.currentConfigurationSchemaVersion else {
                 throw DNSProxyControllerError.unsupportedProviderConfigurationSchema(
                     required: Self.currentConfigurationSchemaVersion,
                     available: maximumSchemaVersion
@@ -2969,6 +2971,37 @@ actor DNSProxyController {
             }
             return Self.currentConfigurationSchemaVersion
         }
+    }
+
+    private func waitForProviderSchemaCapability() async throws -> Int {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: readinessTimeout)
+        while clock.now < deadline {
+            try checkForTerminationRequest()
+            let requestDeadline = min(clock.now.advanced(by: pollInterval), deadline)
+            do {
+                let status = try await runtimeStatus(before: requestDeadline)
+                if status.providerInstanceID != nil,
+                   status.runtimeControlProtocolVersion
+                       == DNSProxyXPCContract.currentRuntimeControlProtocolVersion,
+                   let maximumSchemaVersion = status.maximumConfigurationSchemaVersion {
+                    return maximumSchemaVersion
+                }
+            } catch DNSProxyControllerError.readinessTimeout {
+                // The Extension process can lag its macOS activation state briefly.
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch let error as DNSProxyControllerError {
+                throw error
+            } catch {
+                // Retry transient XPC discovery failures until the shared readiness deadline.
+            }
+            try await sleepForReconciliation(before: deadline)
+        }
+        throw DNSProxyControllerError.unsupportedProviderConfigurationSchema(
+            required: Self.currentConfigurationSchemaVersion,
+            available: nil
+        )
     }
 
     private func managerCall<Value: Sendable>(

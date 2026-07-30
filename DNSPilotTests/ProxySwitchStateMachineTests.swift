@@ -45,6 +45,67 @@ struct ProxySwitchStateMachineTests {
         #expect(Set(recorder.revisions).count == recorder.revisions.count)
     }
 
+    @Test func initialPlainTargetWaitsForAuthenticatedProviderCapability() async throws {
+        let target = try plainTarget()
+        let manager = FakeDNSProxyManager(isEnabled: false)
+        let startup = FailFirstRuntimeStatus()
+        let providerInstanceID = UUID()
+        let status = FakeRuntimeStatusProvider {
+            try await startup.checkAvailability()
+            guard let persisted = await manager.currentSnapshot.persistedConfiguration else {
+                return .idle(
+                    runtimeControlProtocolVersion: DNSProxyXPCContract
+                        .currentRuntimeControlProtocolVersion,
+                    providerInstanceID: providerInstanceID
+                )
+            }
+            return runtimeStatus(
+                generation: persisted.value.generation,
+                phase: .ready,
+                runtimeControlProtocolVersion: DNSProxyXPCContract
+                    .currentRuntimeControlProtocolVersion,
+                providerInstanceID: providerInstanceID,
+                configurationFingerprint: persisted.fingerprint
+            )
+        }
+        let controller = makeController(
+            manager: manager,
+            statusProvider: status,
+            readinessTimeout: .milliseconds(100),
+            pollInterval: .milliseconds(2)
+        )
+
+        let result = await controller.activate(target)
+
+        #expect(result.activeProfileID == target.profileID)
+        #expect(await manager.currentSnapshot.activeConfiguration?.schemaVersion
+            == ActiveProxyConfiguration.currentSchemaVersion)
+        #expect(await status.requestCount >= 3)
+    }
+
+    @Test func initialPlainTargetRejectsUnauthenticatedSchemaClaim() async throws {
+        let target = try plainTarget()
+        let manager = FakeDNSProxyManager(isEnabled: false)
+        let status = FakeRuntimeStatusProvider {
+            runtimeStatus(generation: nil, phase: .idle)
+        }
+        let controller = makeController(
+            manager: manager,
+            statusProvider: status,
+            readinessTimeout: .milliseconds(20),
+            pollInterval: .milliseconds(2)
+        )
+
+        let result = await controller.activate(target)
+
+        guard case .failed = result.state else {
+            Issue.record("Expected compatibility failure, got \(result.state)")
+            return
+        }
+        #expect(result.lastSwitchFailure?.code == .providerCompatibilityUnavailable)
+        #expect(await manager.enableSaveCount == 0)
+    }
+
     @MainActor
     @Test func olderPresentationCallbackCannotReplaceNewerSnapshot() {
         let model = DNSPilotAppModel()
@@ -864,6 +925,17 @@ private actor FailFirstValidation {
     private var shouldFail = true
 
     func run() throws {
+        if shouldFail {
+            shouldFail = false
+            throw FakeTestError.unavailable
+        }
+    }
+}
+
+private actor FailFirstRuntimeStatus {
+    private var shouldFail = true
+
+    func checkAvailability() throws {
         if shouldFail {
             shouldFail = false
             throw FakeTestError.unavailable
