@@ -17,21 +17,21 @@ struct ProfilesView: View {
     var body: some View {
         HSplitView {
             List(appState.profiles, selection: $selection) { profile in
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
                         Text(displayNames[profile.id] ?? profile.name)
-                        Spacer()
-                        if profile.id == appState.proxy.activeProfileID {
-                            Image(systemName: "checkmark").accessibilityLabel("Active")
+                        Text(identity(for: profile).displaySummary)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        if profile.id == appState.configuration?.defaultProfileID {
+                            Text("Default").font(.caption).foregroundStyle(.secondary)
                         }
                     }
-                    Text(identity(for: profile).displaySummary)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                    if profile.id == appState.configuration?.defaultProfileID {
-                        Text("Default").font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    if profile.id == appState.proxy.activeProfileID {
+                        Image(systemName: "checkmark").accessibilityLabel("Active")
                     }
                 }
                 .tag(profile.id)
