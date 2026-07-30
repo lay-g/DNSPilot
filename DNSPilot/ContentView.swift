@@ -1,6 +1,20 @@
 import SwiftUI
 
 @MainActor
+struct ProductWindowContent: View {
+    @AppStorage(ProductWindowPolicy.onboardingCompletedKey)
+    private var onboardingCompleted = false
+
+    var body: some View {
+        if onboardingCompleted {
+            ContentView()
+        } else {
+            SetupWindowContent()
+        }
+    }
+}
+
+@MainActor
 struct ContentView: View {
     @EnvironmentObject private var appState: AppState
     @AppStorage("window.sidebarVisible") private var sidebarVisible = true

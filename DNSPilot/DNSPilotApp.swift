@@ -42,7 +42,7 @@ struct DNSPilotApp: App {
             if isGateAProbeMode {
                 EmptyView()
             } else {
-                ContentView()
+                ProductWindowContent()
                     .environmentObject(appState)
                     .background(WindowFrameAutosaveView(name: "DNSPilot.MainWindow"))
                     .task {
@@ -60,21 +60,6 @@ struct DNSPilotApp: App {
             DNSPilotCommands(appState: appState)
         }
 
-        Window("DNSPilot Setup", id: "setup") {
-            SetupWindowContent()
-                .environmentObject(appState)
-                .background(WindowFrameAutosaveView(name: "DNSPilot.SetupWindow"))
-                .task {
-                    applicationDelegate.configure(
-                        appState: appState,
-                        suppressAutomaticWindows: isGateAProbeMode
-                    )
-                }
-        }
-        .defaultSize(width: 680, height: 520)
-        .defaultLaunchBehavior(.suppressed)
-        .restorationBehavior(.disabled)
-
         Settings {
             SettingsView().environmentObject(appState)
                 .task {
@@ -90,7 +75,6 @@ struct DNSPilotApp: App {
 @MainActor
 private struct MenuBarLabel: View {
     @Environment(\.openWindow) private var openWindow
-    @Environment(\.dismissWindow) private var dismissWindow
     @ObservedObject var appState: AppState
     let applicationDelegate: ApplicationDelegate
     let suppressAutomaticWindows: Bool
@@ -112,14 +96,7 @@ private struct MenuBarLabel: View {
 
     private func route(_ request: ProductWindowRequest?) {
         guard let request, !suppressAutomaticWindows else { return }
-        switch request.destination {
-        case .setup:
-            dismissWindow(id: "main")
-            openWindow(id: "setup")
-        case .main:
-            dismissWindow(id: "setup")
-            openWindow(id: "main")
-        }
+        openWindow(id: "main")
         NSApp.activate(ignoringOtherApps: true)
         appState.consumeWindowRequest(request.id)
     }

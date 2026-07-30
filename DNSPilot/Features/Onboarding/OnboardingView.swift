@@ -446,6 +446,10 @@ struct OnboardingView: View {
 
     private func prepareOnboarding() async {
         defer { onboardingPreparationInProgress = false }
+        guard !appState.onboardingCompleted else {
+            appState.requestPrimaryWindow()
+            return
+        }
         guard !appState.profiles.isEmpty else { return }
         guard profileOperationSucceeded(await appState.resetOnboardingConfiguration()) else {
             return

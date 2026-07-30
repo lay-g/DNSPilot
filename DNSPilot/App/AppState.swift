@@ -296,6 +296,9 @@ final class AppState: ObservableObject {
 
     var profiles: [DNSProfile] { configuration?.profiles ?? [] }
     var rules: [DNSRule] { configuration?.rules ?? [] }
+    var onboardingCompleted: Bool {
+        userDefaults.bool(forKey: ProductWindowPolicy.onboardingCompletedKey)
+    }
     var hasUnsavedDrafts: Bool { activeDraft != nil }
     var configurationWritesLocked: Bool {
         if isPerformingAction { return true }
@@ -410,7 +413,7 @@ final class AppState: ObservableObject {
     }
 
     func requestSetupWindow() {
-        requestWindow(.setup)
+        requestWindow(onboardingCompleted ? .main : .setup)
     }
 
     @discardableResult

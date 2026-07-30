@@ -47,6 +47,10 @@ struct WindowLifecycleTests {
         #expect(state.windowRequest?.destination == .main)
         if let request = state.windowRequest { state.consumeWindowRequest(request.id) }
 
+        state.requestSetupWindow()
+        #expect(state.windowRequest?.destination == .main)
+        if let request = state.windowRequest { state.consumeWindowRequest(request.id) }
+
         state.redirectMainWindowToSetupIfNeeded()
         #expect(state.windowRequest == nil)
 
