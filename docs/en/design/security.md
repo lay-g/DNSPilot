@@ -38,6 +38,8 @@ Configuration and recovery files use private directories and restrictive permiss
 
 Default logs avoid those values. Debug Logging requires explicit warning and may expose them. Diagnostic summary copying is reduced; explicit export is treated as sensitive and requires confirmation.
 
+Underlying operational errors are logged as private by default and are not rendered directly in user-facing error text. Debug Logging and confirmed diagnostic export may contain detailed failures under their existing sensitive-data warnings.
+
 ## Failure Policy
 
 Authentication, ownership, schema, replay, rate-limit, or identity uncertainty fails closed. External manager changes are observed but never overwritten automatically. Legacy read-only runtime-control capability permits status inspection but blocks active Profile switching until a compatible Extension is installed.

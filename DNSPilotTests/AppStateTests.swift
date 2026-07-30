@@ -131,6 +131,22 @@ struct AppStateTests {
         #expect(backend.intents == [.editProfile(fixture.profile), .editProfile(fixture.profile)])
     }
 
+    @Test func operationalFailureMessageDoesNotExposeDiagnosticDetails() {
+        let detail = "Upstream exchange failed at internal/file.cc:51"
+
+        #expect(ProductActionFailure.rejected(detail).message == "The operation could not be completed. Try again.")
+        #expect(!ProductActionFailure.rejected(detail).message.contains(detail))
+        #expect(ProductActionFailure.rejected(detail).diagnosticDescription == detail)
+    }
+
+    @Test func startupFailureSeparatesUserTextFromDiagnosticDetails() {
+        let detail = "Configuration decoder failed at byte 51"
+        let failure = ProductStartupFailure.unavailable(detail)
+
+        #expect(failure.message == "DNSPilot could not load its configuration.")
+        #expect(failure.diagnosticDescription == detail)
+    }
+
     @Test func successfulPreflightDoesNotClearUnsavedProfileDraft() async throws {
         let fixture = try Fixture()
         let backend = FakeProductRuntimeBackend(snapshot: fixture.snapshot)

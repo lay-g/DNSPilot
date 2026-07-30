@@ -88,6 +88,17 @@ final class SystemExtensionController: NSObject, ObservableObject {
             }
         }
 
+        var userDescription: String {
+            switch self {
+            case .updateFailed:
+                "System Extension update failed"
+            case .failed:
+                "System Extension operation failed"
+            default:
+                description
+            }
+        }
+
         var allowsDeactivation: Bool {
             switch self {
             case .active, .awaitingApproval, .inactive, .restartRequired:
@@ -246,6 +257,7 @@ final class SystemExtensionController: NSObject, ObservableObject {
     private func timeoutDeactivationWaiter(_ waiterID: UUID) {
         guard let waiter = deactivationWaiters.removeValue(forKey: waiterID) else { return }
         deactivationTimeoutTasks.removeValue(forKey: waiterID)
+        logger.error("System Extension deactivation timed out")
         waiter.resume(returning: .failed("System Extension deactivation timed out."))
     }
 
@@ -440,7 +452,9 @@ extension SystemExtensionController: @MainActor OSSystemExtensionRequestDelegate
 
     func request(_ request: OSSystemExtensionRequest, didFailWithError error: any Error) {
         guard let operation = finishOperation(for: request) else { return }
-        logger.error("System Extension request failed: \(error.localizedDescription, privacy: .public)")
+        logger.error(
+            "System Extension request failed: \(error.localizedDescription, privacy: .private)"
+        )
         if operation == .deactivation, Self.isExtensionNotFoundError(error) {
             logger.notice("System Extension is no longer deactivatable; synchronizing current state")
             pendingDeactivationFailure = error.localizedDescription
@@ -495,6 +509,8 @@ extension SystemExtensionController: @MainActor OSSystemExtensionRequestDelegate
         )
         pendingDeactivationFailure = nil
         state = resolved
-        logger.notice("System Extension state synchronized as \(self.state.description, privacy: .public)")
+        logger.notice(
+            "System Extension state synchronized as \(self.state.userDescription, privacy: .public)"
+        )
     }
 }

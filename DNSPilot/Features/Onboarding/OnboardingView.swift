@@ -160,7 +160,7 @@ struct OnboardingView: View {
             }
         case .systemExtension:
             Text("Install System Extension").font(.title2.weight(.semibold))
-            Text(appState.systemExtensionState.description).foregroundStyle(.secondary)
+            Text(appState.systemExtensionState.userDescription).foregroundStyle(.secondary)
         case .dnsProxy:
             Text("Enable DNS Proxy").font(.title2.weight(.semibold))
             Text("DNSPilot will enable the selected Profile only after you confirm this step.")

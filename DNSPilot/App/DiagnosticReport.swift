@@ -18,7 +18,7 @@ struct ProductDiagnosticReport: Equatable, Sendable {
         let displayNames = ProfileDisplayIdentity.displayNames(for: profiles)
         let activeName = proxy.activeProfileID.flatMap { displayNames[$0] } ?? "System DNS"
         var summaryLines = [
-            "DNS Proxy: \(proxy.state.description)",
+            "DNS Proxy: \(proxy.state.userDescription)",
             "Active Profile: \(activeName)",
             "Network Status: \(network?.status.rawValue ?? "checking")",
             "System Extension: \(systemExtensionDescription)",
@@ -31,6 +31,7 @@ struct ProductDiagnosticReport: Equatable, Sendable {
         var exportLines = summaryLines
         exportLines.insert("Generated At: \(generatedAt.ISO8601Format())", at: 0)
         appendSensitiveRuntimeDetails(diagnostics, to: &exportLines)
+        exportLines.append("DNS Proxy Details: \(proxy.state.description)")
         exportLines.append("Operating Mode: \(operatingModeDescription(configuration?.operatingMode))")
         exportLines.append("Wi-Fi Name: \(network?.ssid ?? "unavailable")")
         exportLines.append("Interfaces: \(network?.activeInterfaceTypes.map(\.rawValue).sorted().joined(separator: ", ") ?? "")")
@@ -60,8 +61,8 @@ struct ProductDiagnosticReport: Equatable, Sendable {
             lines.append("Runtime Phase: \(phase.rawValue)")
             lines.append("Runtime Error: \(errorCode?.rawValue ?? "none")")
             lines.append("Transition Sequence: \(sequence.map(String.init) ?? "unavailable")")
-        case let .unavailable(message):
-            lines.append("Runtime Details: unavailable (\(message))")
+        case .unavailable:
+            lines.append("Runtime Details: unavailable")
         }
     }
 
@@ -69,12 +70,15 @@ struct ProductDiagnosticReport: Equatable, Sendable {
         _ diagnostics: ProductDiagnosticsSnapshot,
         to lines: inout [String]
     ) {
-        guard case let .available(_, providerID, generation, _, _, fingerprint, _, quiesced)
-            = diagnostics else { return }
-        lines.append("Provider Instance: \(providerID?.uuidString ?? "unavailable")")
-        lines.append("Active Generation: \(generation?.uuidString ?? "unavailable")")
-        lines.append("Configuration Fingerprint: \(fingerprint?.rawValue ?? "unavailable")")
-        lines.append("Last Quiesced Generation: \(quiesced?.uuidString ?? "unavailable")")
+        switch diagnostics {
+        case let .available(_, providerID, generation, _, _, fingerprint, _, quiesced):
+            lines.append("Provider Instance: \(providerID?.uuidString ?? "unavailable")")
+            lines.append("Active Generation: \(generation?.uuidString ?? "unavailable")")
+            lines.append("Configuration Fingerprint: \(fingerprint?.rawValue ?? "unavailable")")
+            lines.append("Last Quiesced Generation: \(quiesced?.uuidString ?? "unavailable")")
+        case let .unavailable(message):
+            lines.append("Runtime Error Details: \(message)")
+        }
     }
 
     private static func operatingModeDescription(_ mode: OperatingMode?) -> String {

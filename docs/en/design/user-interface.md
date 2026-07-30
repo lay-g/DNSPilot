@@ -57,6 +57,8 @@ An explicit menu click starts safe Quit immediately. Unsaved drafts require a se
 
 Location is requested contextually for Wi-Fi SSID. Debug Logging displays a persistent sensitive-data warning. Diagnostic export requires confirmation. About shows version, build, license, source, privacy, support, third-party notices, and build origin.
 
+Operational failures use concise, actionable user text. Alerts, status labels, tooltips, and reduced diagnostic summaries never expose underlying error chains; full details are recorded through the logging boundary. Field-level validation remains specific so users can correct input.
+
 ## Accessibility And Layout
 
 Core workflows must support keyboard-only operation and VoiceOver. Icon-only controls need labels and tooltips. Lists expose coherent accessibility values. Primary commands must not truncate. Long names, IPv6 addresses, URLs, and error codes may wrap or use middle truncation while copy preserves full values.

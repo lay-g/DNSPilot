@@ -57,6 +57,8 @@ Setup 是独立流程：
 
 Location 在需要 Wi-Fi SSID 时按上下文请求。Debug Logging 持续显示敏感数据警告。Diagnostic export 需要确认。About 展示 version、build、license、source、privacy、support、third-party notices 和 build origin。
 
+操作失败使用简短且可操作的用户文案。Alert、状态标签、tooltip 和降敏 diagnostic summary 不暴露底层错误链；完整详情通过日志边界记录。字段级校验仍保留具体原因，便于用户修正输入。
+
 ## 无障碍与布局
 
 核心流程必须支持 keyboard-only 与 VoiceOver。纯图标控件需要 label 和 tooltip。列表提供完整 accessibility value。主要命令不能截断。长名称、IPv6、URL 和 error code 可以换行或中间截断，但复制保留完整值。

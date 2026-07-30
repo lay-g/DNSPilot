@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import Foundation
+import OSLog
 
 enum ProductStartupFailure: Equatable, Sendable {
     case recoveryRequired(String)
@@ -21,6 +22,21 @@ enum ProductStartupFailure: Equatable, Sendable {
     }
 
     var message: String {
+        switch self {
+        case .recoveryRequired:
+            "DNSPilot could not confirm the DNS Proxy state. Reconnect or restore System DNS."
+        case .corruptConfiguration:
+            "DNSPilot could not read its configuration. Choose a recovery action below."
+        case .newerConfigurationSchema:
+            "Update DNSPilot to open this configuration."
+        case .unsupportedConfigurationSchema:
+            "This configuration is not supported by this version of DNSPilot."
+        case .unavailable:
+            "DNSPilot could not load its configuration."
+        }
+    }
+
+    var diagnosticDescription: String {
         switch self {
         case let .recoveryRequired(message), let .unavailable(message):
             message
@@ -97,8 +113,25 @@ enum ProductActionFailure: Equatable, Sendable {
             "The configuration changed. Review the latest values and try again."
         case .recoveryRequired:
             "Configuration recovery is required before making changes."
+        case .rejected:
+            "The operation could not be completed. Try again."
+        }
+    }
+
+    var diagnosticDescription: String {
+        switch self {
+        case .startupUnavailable:
+            "startupUnavailable"
+        case .networkUnavailable:
+            "networkUnavailable"
+        case .invalidConfiguration:
+            "invalidConfiguration"
+        case .conflict:
+            "conflict"
+        case .recoveryRequired:
+            "recoveryRequired"
         case let .rejected(reason):
-            "The operation could not be completed (\(reason))."
+            reason
         }
     }
 }
@@ -166,6 +199,11 @@ struct ProductEditorRequest: Equatable, Identifiable, Sendable {
 
 @MainActor
 final class AppState: ObservableObject {
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "DNSPilot",
+        category: "ProductActions"
+    )
+
     @Published var navigation: AppNavigationSection {
         didSet { userDefaults.set(navigation.rawValue, forKey: ProductWindowPolicy.navigationSectionKey) }
     }
@@ -553,7 +591,7 @@ final class AppState: ObservableObject {
             configuration: configuration,
             proxy: proxy,
             network: network,
-            systemExtensionDescription: systemExtensionState.description,
+            systemExtensionDescription: systemExtensionState.userDescription,
             systemExtensionVersion: systemExtensionVersion,
             diagnostics: diagnostics,
             loggingMode: loggingMode,
@@ -564,7 +602,7 @@ final class AppState: ObservableObject {
     func copyStartupFailureDetails() {
         guard let startupFailure else { return }
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(startupFailure.message, forType: .string)
+        NSPasteboard.general.setString(startupFailure.diagnosticDescription, forType: .string)
     }
 
     func revealStartupRecoveryArtifact() {
@@ -650,9 +688,7 @@ final class AppState: ObservableObject {
     @discardableResult
     func turnOnDNSProxy() async -> ProductActionOutcome {
         guard systemExtensionState == .active else {
-            let failure = ProductActionFailure.rejected("systemExtensionNotActive")
-            actionFailure = failure
-            return .failed(failure)
+            return failAction(.rejected("systemExtensionNotActive"))
         }
         return await submit(.turnOnDNSProxy)
     }
@@ -741,12 +777,18 @@ final class AppState: ObservableObject {
         case .completed:
             if clearsDraftOnSuccess { activeDraft = nil }
         case let .failed(failure):
+            Self.logger.error(
+                "Product action failed: \(failure.diagnosticDescription, privacy: .private)"
+            )
             actionFailure = failure
         }
         return outcome
     }
 
     private func failValidation(_ error: any Error) -> ProductActionOutcome {
+        Self.logger.error(
+            "Product validation failed: \(error.localizedDescription, privacy: .private)"
+        )
         let failure = ProductActionFailure.rejected(
             (error as? any LocalizedError)?.errorDescription ?? error.localizedDescription
         )
@@ -755,11 +797,17 @@ final class AppState: ObservableObject {
     }
 
     private func failAction(_ failure: ProductActionFailure) -> ProductActionOutcome {
+        Self.logger.error(
+            "Product action rejected: \(failure.diagnosticDescription, privacy: .private)"
+        )
         actionFailure = failure
         return .failed(failure)
     }
 
     private func failSettingsAction(_ failure: ProductActionFailure) -> ProductActionOutcome {
+        Self.logger.error(
+            "Settings action failed: \(failure.diagnosticDescription, privacy: .private)"
+        )
         settingsActionFailure = failure
         return .failed(failure)
     }

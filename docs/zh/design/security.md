@@ -38,6 +38,8 @@ XPC 不接收 Profile catalog、Rules、SSID、文件路径、任意 command str
 
 默认日志避开这些值。Debug Logging 必须先警告，并可能暴露这些内容。复制 diagnostic summary 需要降敏；显式 export 被视为敏感操作并要求确认。
 
+底层操作错误默认按私有信息记录，不直接渲染到面向用户的错误文案。Debug Logging 和已确认的 diagnostic export 可在现有敏感数据警告约束下包含详细失败信息。
+
 ## 失败策略
 
 Authentication、ownership、schema、replay、rate-limit 或 identity 不确定时 fail closed。外部 manager change 只观察，不自动覆盖。Legacy read-only runtime-control 允许查看 status，但在安装兼容 Extension 前禁止 active Profile switching。

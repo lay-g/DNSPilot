@@ -1,9 +1,14 @@
 import Combine
 import Foundation
+import OSLog
 
 @MainActor
 final class DNSPilotAppModel: ObservableObject, ProductRuntimeBacking {
     static let shared = DNSPilotAppModel()
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "DNSPilot",
+        category: "AppModel"
+    )
 
     @Published private(set) var proxySnapshot = ProxyControllerSnapshot(
         state: .disabled,
@@ -91,6 +96,9 @@ final class DNSPilotAppModel: ObservableObject, ProductRuntimeBacking {
             case .synchronized:
                 break
             case let .recoveryRequired(reason):
+                Self.logger.error(
+                    "Startup recovery is required: \(String(describing: reason), privacy: .private)"
+                )
                 startupFailure = .recoveryRequired(
                     "Configuration recovery is required: \(String(describing: reason))"
                 )
@@ -144,9 +152,15 @@ final class DNSPilotAppModel: ObservableObject, ProductRuntimeBacking {
             await stopAndResetStartupComponents()
         } catch let error as AppStartupError {
             await stopAndResetStartupComponents()
+            Self.logger.error(
+                "Startup failed: \(error.localizedDescription, privacy: .private)"
+            )
             startupFailure = error.productFailure
         } catch {
             await stopAndResetStartupComponents()
+            Self.logger.error(
+                "Startup failed: \(error.localizedDescription, privacy: .private)"
+            )
             startupFailure = .unavailable(error.localizedDescription)
         }
         return startupCompleted
@@ -302,6 +316,9 @@ final class DNSPilotAppModel: ObservableObject, ProductRuntimeBacking {
                     lastQuiescedGeneration: status.lastQuiescedGeneration
                 )
             } catch {
+                Self.logger.error(
+                    "Runtime diagnostics refresh failed: \(error.localizedDescription, privacy: .private)"
+                )
                 diagnostics = .unavailable(error.localizedDescription)
             }
             outcome = .completed

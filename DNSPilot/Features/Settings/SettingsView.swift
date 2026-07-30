@@ -22,8 +22,8 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                     Button("Open Login Items Settings") { appState.openLoginItemsSettings() }
                 }
-                if case let .failed(message) = appState.launchAtLoginStatus {
-                    Text(message).foregroundStyle(.red)
+                if case .failed = appState.launchAtLoginStatus {
+                    Text("Launch at Login could not be changed.").foregroundStyle(.red)
                 }
             }
             .formStyle(.grouped)
@@ -60,7 +60,7 @@ struct SettingsView: View {
                 }
                 LabeledContent("DNS Proxy", value: appState.menuPresentation?.statusText ?? "Checking")
                 LabeledContent("Active Profile", value: activeProfileName)
-                LabeledContent("System Extension", value: appState.systemExtensionState.description)
+                LabeledContent("System Extension", value: appState.systemExtensionState.userDescription)
                 LabeledContent(
                     "Installed System Extension",
                     value: appState.installedSystemExtensionVersion
@@ -232,9 +232,8 @@ struct SettingsView: View {
             LabeledContent("Runtime Phase", value: phase.rawValue)
             LabeledContent("Last Stable Error", value: stableErrorDescription(errorCode))
             LabeledContent("Transition Sequence", value: sequence.map(String.init) ?? "Unavailable")
-        case let .unavailable(message):
+        case .unavailable:
             LabeledContent("Runtime Details", value: "Unavailable")
-                .help(message)
         }
     }
 

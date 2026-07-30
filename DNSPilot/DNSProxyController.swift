@@ -34,6 +34,29 @@ enum DNSProxyControllerState: Equatable, Sendable {
             "System DNS recovery required: \(message)"
         }
     }
+
+    var userDescription: String {
+        switch self {
+        case .disabled:
+            "Off"
+        case .preparing:
+            "Preparing"
+        case .applying:
+            "Applying"
+        case .repairing:
+            "Repairing"
+        case .active:
+            "On"
+        case .stopping:
+            "Restoring System DNS"
+        case .failed:
+            "Error"
+        case .degraded:
+            "Limited"
+        case .recoveryRequired:
+            "Recovery required"
+        }
+    }
 }
 
 struct DNSProxyTarget: Hashable, Sendable {

@@ -85,6 +85,13 @@ struct SystemExtensionControllerTests {
         #expect(SystemExtensionController.State.updateFailed("failed").allowsActivation)
     }
 
+    @Test func userDescriptionDoesNotExposeSystemErrorDetails() {
+        let detail = "OSSystemExtensionErrorDomain error 9"
+
+        #expect(SystemExtensionController.State.failed(detail).userDescription == "System Extension operation failed")
+        #expect(SystemExtensionController.State.updateFailed(detail).userDescription == "System Extension update failed")
+    }
+
     @Test func bundleVersionsUseNumericBuildOrdering() {
         let build9 = version("1.0", "9")
         let build10 = version("1.0", "10")

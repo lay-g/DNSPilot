@@ -191,10 +191,9 @@ struct OverviewView: View {
             LabeledContent("System Extension Required") {
                 Button("Resume Setup") { appState.requestSetupWindow() }
             }
-        case let .failed(message):
+        case .failed:
             LabeledContent("System Extension Error") {
                 Button("Retry") { appState.installSystemExtension() }
-                    .help(message)
             }
         case .updateRequired:
             LabeledContent("System Extension Update Required") {
@@ -203,12 +202,11 @@ struct OverviewView: View {
                 }
                 .disabled(appState.systemExtensionRequestInProgress)
             }
-        case let .updateFailed(message):
+        case .updateFailed:
             LabeledContent("System Extension Update Failed") {
                 Button("Retry Safely") {
                     Task { await appState.updateSystemExtensionSafely() }
                 }
-                .help(message)
                 .disabled(appState.systemExtensionRequestInProgress)
             }
         case .downgradeBlocked:
@@ -217,7 +215,7 @@ struct OverviewView: View {
                 value: "A newer DNSPilot build is required"
             )
         case .checking, .activating, .deactivating, .uninstalling, .restartRequired:
-            LabeledContent("System Extension", value: appState.systemExtensionState.description)
+            LabeledContent("System Extension", value: appState.systemExtensionState.userDescription)
         }
     }
 

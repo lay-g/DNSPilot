@@ -1,4 +1,5 @@
 import Combine
+import OSLog
 import ServiceManagement
 
 enum LaunchAtLoginStatus: Equatable, Sendable {
@@ -30,6 +31,10 @@ final class LaunchAtLoginService: ObservableObject {
     @Published private(set) var status: LaunchAtLoginStatus
 
     private let registration: any LaunchAtLoginRegistering
+    private let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "DNSPilot",
+        category: "LaunchAtLogin"
+    )
 
     init(registration: any LaunchAtLoginRegistering = SystemLaunchAtLoginRegistration()) {
         self.registration = registration
@@ -49,6 +54,9 @@ final class LaunchAtLoginService: ObservableObject {
             }
             status = registration.status
         } catch {
+            logger.error(
+                "Launch at Login update failed: \(error.localizedDescription, privacy: .private)"
+            )
             status = .failed(error.localizedDescription)
         }
     }

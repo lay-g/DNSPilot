@@ -313,4 +313,28 @@ struct ProductModelsTests {
         #expect(report.export.contains(fingerprint.rawValue))
         #expect(report.export.contains(quiescedGeneration.uuidString))
     }
+
+    @Test func diagnosticSummaryDoesNotExposeOperationalErrorDetails() {
+        let detail = "XPC request failed at internal/file.swift:51"
+        let report = ProductDiagnosticReport.make(
+            configuration: nil,
+            proxy: ProxyControllerSnapshot(
+                state: .failed(detail),
+                targetProfileID: nil,
+                activeProfileID: nil,
+                activeGeneration: nil,
+                lastSwitchFailure: nil
+            ),
+            network: nil,
+            systemExtensionDescription: "System Extension operation failed",
+            systemExtensionVersion: "Unavailable",
+            diagnostics: .unavailable(detail),
+            loggingMode: .default
+        )
+
+        #expect(!report.summary.contains(detail))
+        #expect(report.summary.contains("DNS Proxy: Error"))
+        #expect(report.summary.contains("Runtime Details: unavailable"))
+        #expect(report.export.contains(detail))
+    }
 }

@@ -1,4 +1,5 @@
 import AppKit
+import OSLog
 import Synchronization
 
 final class DNSRestoreOperation: Sendable {
@@ -85,6 +86,10 @@ final class DNSRestoreOperation: Sendable {
 
 @MainActor
 final class ApplicationDelegate: NSObject, NSApplicationDelegate {
+    private let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "DNSPilot",
+        category: "ApplicationLifecycle"
+    )
     private static let terminationDecisionTimeout = Duration.seconds(5)
 
     private var terminationTask: Task<Void, Never>?
@@ -387,11 +392,13 @@ final class ApplicationDelegate: NSObject, NSApplicationDelegate {
         for application: NSApplication
     ) {
         guard terminationPending else { return }
+        logger.error(
+            "System DNS restoration before termination failed: \(state.description, privacy: .private)"
+        )
         presentTerminationAlert(
             style: .critical,
             message: "System DNS could not be restored",
-            information: state.description
-                + " Retry before quitting. Force Quit may leave the DNS Proxy enabled.",
+            information: "Retry before quitting. Quitting now may leave DNS Proxy enabled.",
             buttons: ["Retry", "Quit Anyway", "Cancel Quit"]
         ) { [weak self, weak application] buttonIndex in
             guard let self, let application else { return }
