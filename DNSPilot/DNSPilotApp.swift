@@ -127,9 +127,16 @@ private struct MenuBarLabel: View {
 
 @MainActor
 private struct DNSPilotCommands: Commands {
+    @Environment(\.openSettings) private var openSettings
     @ObservedObject var appState: AppState
 
     var body: some Commands {
+        CommandGroup(replacing: .appInfo) {
+            Button("About DNSPilot") {
+                appState.selectSettingsSection(.about)
+                openSettings()
+            }
+        }
         CommandGroup(replacing: .newItem) {
             Button("New Profile") {
                 appState.requestEditor(.newProfile)
