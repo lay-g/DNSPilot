@@ -45,6 +45,7 @@ DerivedData/
 *.log
 *.pcap
 *.pcapng
+/docs/plans/
 
 # Swift Package Manager build artifacts
 .build/
