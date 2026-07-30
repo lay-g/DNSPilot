@@ -18,10 +18,11 @@ struct StringListEditor: View {
                 ForEach(values.indices, id: \.self) { index in
                     HStack {
                         TextField(
-                            itemLabel,
                             text: valueBinding(at: index),
                             prompt: Text(itemPrompt ?? itemLabel)
-                        )
+                        ) {
+                            EmptyView()
+                        }
                             .frame(width: 240)
                             .focused($focusedIndex, equals: index)
                             .accessibilityLabel(itemLabel)
