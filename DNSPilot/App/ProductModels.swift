@@ -10,6 +10,7 @@ enum AppNavigationSection: String, CaseIterable, Codable, Identifiable, Sendable
 
 enum ProfileTransport: String, CaseIterable, Codable, Identifiable, Sendable {
     case plain
+    case tls
     case https
 
     var id: Self { self }
@@ -18,6 +19,7 @@ enum ProfileTransport: String, CaseIterable, Codable, Identifiable, Sendable {
 enum ProfileDraftError: LocalizedError, Equatable, Sendable {
     case emptyName
     case invalidServerAddress(String)
+    case invalidServerName(String)
     case invalidPort(Int)
     case invalidEndpoint(String)
     case invalidBootstrapServer(String)
@@ -29,6 +31,8 @@ enum ProfileDraftError: LocalizedError, Equatable, Sendable {
             "Enter a Profile name."
         case let .invalidServerAddress(value):
             "Enter a valid IP address for the DNS server: \(value)."
+        case let .invalidServerName(value):
+            "Enter a valid hostname or IP address for the DNS server: \(value)."
         case let .invalidPort(value):
             "The DNS port must be between 1 and 65535, got \(value)."
         case let .invalidEndpoint(value):
@@ -36,7 +40,7 @@ enum ProfileDraftError: LocalizedError, Equatable, Sendable {
         case let .invalidBootstrapServer(value):
             "Enter a valid bootstrap IP address: \(value)."
         case .missingBootstrapServers:
-            "A hostname endpoint requires at least one bootstrap server."
+            "A hostname requires at least one bootstrap server."
         }
     }
 }
@@ -47,6 +51,8 @@ struct ProfileDraft: Identifiable, Equatable, Sendable {
     var transport: ProfileTransport
     var plainServerAddress: String
     var plainPort: Int
+    var dotServerName: String
+    var dotPort: Int
     var endpointURL: String
     var bootstrapServers: [String]
 
@@ -56,6 +62,8 @@ struct ProfileDraft: Identifiable, Equatable, Sendable {
         transport: ProfileTransport = .https,
         plainServerAddress: String = "",
         plainPort: Int = 53,
+        dotServerName: String = "",
+        dotPort: Int = DoTConfiguration.defaultPort,
         endpointURL: String = "",
         bootstrapServers: [String] = []
     ) {
@@ -64,6 +72,8 @@ struct ProfileDraft: Identifiable, Equatable, Sendable {
         self.transport = transport
         self.plainServerAddress = plainServerAddress
         self.plainPort = plainPort
+        self.dotServerName = dotServerName
+        self.dotPort = dotPort
         self.endpointURL = endpointURL
         self.bootstrapServers = bootstrapServers
     }
@@ -76,12 +86,24 @@ struct ProfileDraft: Identifiable, Equatable, Sendable {
             transport = .plain
             plainServerAddress = configuration.serverAddress.stringValue
             plainPort = Int(configuration.port)
+            dotServerName = ""
+            dotPort = DoTConfiguration.defaultPort
             endpointURL = ""
             bootstrapServers = []
+        case let .tls(configuration):
+            transport = .tls
+            plainServerAddress = ""
+            plainPort = 53
+            dotServerName = configuration.serverName
+            dotPort = Int(configuration.port)
+            endpointURL = ""
+            bootstrapServers = configuration.bootstrapServers.map(\.stringValue)
         case let .https(configuration):
             transport = .https
             plainServerAddress = ""
             plainPort = 53
+            dotServerName = ""
+            dotPort = DoTConfiguration.defaultPort
             endpointURL = configuration.endpointURL.absoluteString
             bootstrapServers = configuration.bootstrapServers.map(\.stringValue)
         }
@@ -105,18 +127,27 @@ struct ProfileDraft: Identifiable, Equatable, Sendable {
                 serverAddress: address,
                 port: plainPort
             ))
+        case .tls:
+            let bootstrap = try parsedBootstrapServers()
+            do {
+                upstream = .tls(try DoTConfiguration(
+                    serverName: dotServerName,
+                    port: dotPort,
+                    bootstrapServers: bootstrap
+                ))
+            } catch ActiveProxyConfigurationError.missingDoTBootstrapServers {
+                throw ProfileDraftError.missingBootstrapServers
+            } catch ActiveProxyConfigurationError.invalidDoTPort {
+                throw ProfileDraftError.invalidPort(dotPort)
+            } catch {
+                throw ProfileDraftError.invalidServerName(dotServerName)
+            }
         case .https:
             let endpointValue = endpointURL.trimmingCharacters(in: .whitespacesAndNewlines)
             guard let endpoint = URL(string: endpointValue) else {
                 throw ProfileDraftError.invalidEndpoint(endpointURL)
             }
-            let bootstrap = try bootstrapServers.map { value in
-                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard let address = try? IPAddress(trimmed) else {
-                    throw ProfileDraftError.invalidBootstrapServer(value)
-                }
-                return address
-            }
+            let bootstrap = try parsedBootstrapServers()
             do {
                 upstream = .https(try DoHConfiguration(
                     endpointURL: endpoint,
@@ -129,6 +160,16 @@ struct ProfileDraft: Identifiable, Equatable, Sendable {
             }
         }
         return try DNSProfile(id: id, name: trimmedName, upstream: upstream)
+    }
+
+    private func parsedBootstrapServers() throws -> [IPAddress] {
+        try bootstrapServers.map { value in
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let address = try? IPAddress(trimmed) else {
+                throw ProfileDraftError.invalidBootstrapServer(value)
+            }
+            return address
+        }
     }
 }
 

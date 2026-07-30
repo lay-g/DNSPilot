@@ -13,13 +13,14 @@ struct DNSProfile {
 
 enum DNSUpstream {
     case plain(PlainDNSConfiguration)
+    case tls(DoTConfiguration)
     case https(DoHConfiguration)
 }
 ```
 
-Profile UUID is identity; names may repeat. Names are trimmed and non-empty. Plain DNS accepts an IPv4 or IPv6 literal and port `1...65535`. DoH requires HTTPS, a host, no user information or fragment, and at least one literal bootstrap address when the endpoint uses a hostname.
+Profile UUID is identity; names may repeat. Names are trimmed and non-empty. Plain DNS accepts an IPv4 or IPv6 literal and port `1...65535`. DoT accepts a hostname or IP address and port `1...65535`, defaulting to 853; a hostname requires at least one literal bootstrap address. DoH requires HTTPS, a host, no user information or fragment, and at least one literal bootstrap address when the endpoint uses a hostname.
 
-Display identity uses the name plus a privacy-safe protocol/server summary. DoH summaries exclude paths, queries, tokens, and bootstrap addresses. Business logic always uses UUIDs.
+Display identity uses the name plus a privacy-safe protocol/server summary. DoT summaries exclude bootstrap addresses. DoH summaries exclude paths, queries, tokens, and bootstrap addresses. Business logic always uses UUIDs.
 
 The Default Profile is a role assigned to a user-owned Profile. Provider templates create ordinary Profiles that remain editable by the user.
 
@@ -49,7 +50,7 @@ SSID denial disables only SSID conditions. Interface and subnet Rules continue t
 
 Profiles, Rules, Default Profile, and operating mode live in one versioned `AppConfiguration` document. An empty document starts in Automatic mode and cannot enable the DNS Proxy until a valid Profile and Default Profile exist.
 
-Loading validates schema support, duplicate identities, and every reference. A newer schema enters read-only recovery and is never overwritten. Corrupt input is preserved before reset is offered.
+Loading validates schema support, duplicate identities, and every reference. Persisted schema 1 is migrated canonically to schema 2 in memory and changes the official file only through the normal atomic commit path. A newer schema enters read-only recovery and is never overwritten. Corrupt input is preserved before reset is offered.
 
 Configuration is canonicalized, fingerprinted, and committed with compare-and-swap semantics using a private Application Support directory, restrictive permissions, durable temporary-file writes, and atomic replacement. `UserDefaults` is limited to UI preferences.
 

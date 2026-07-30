@@ -624,6 +624,58 @@ struct ProxySwitchStateMachineTests {
         #expect(await manager.enableSaveCount == 0)
     }
 
+    @Test func schemaTwoExtensionUsesSchemaTwoForPlain() async throws {
+        let target = try plainTarget()
+        let manager = FakeDNSProxyManager(isEnabled: false)
+        let providerInstanceID = UUID()
+        let status = FakeRuntimeStatusProvider {
+            let snapshot = await manager.currentSnapshot
+            let persisted = snapshot.persistedConfiguration
+            return runtimeStatus(
+                generation: snapshot.activeConfiguration?.generation,
+                phase: snapshot.isEnabled ? .ready : .idle,
+                maximumConfigurationSchemaVersion: 2,
+                runtimeControlProtocolVersion: DNSProxyXPCContract.currentRuntimeControlProtocolVersion,
+                providerInstanceID: providerInstanceID,
+                configurationFingerprint: persisted?.fingerprint
+            )
+        }
+        let controller = makeController(manager: manager, statusProvider: status)
+
+        let result = await controller.activate(target)
+        let configuration = try #require(await manager.currentSnapshot.activeConfiguration)
+
+        #expect(result.state == .active(configuration.generation))
+        #expect(configuration.schemaVersion == 2)
+    }
+
+    @Test func schemaTwoExtensionRejectsDoTBeforeManagerMutation() async throws {
+        let target = try dotTarget()
+        let manager = FakeDNSProxyManager(isEnabled: false)
+        let validator = FakeUpstreamValidator()
+        let providerInstanceID = UUID()
+        let status = FakeRuntimeStatusProvider {
+            runtimeStatus(
+                generation: nil,
+                phase: .idle,
+                maximumConfigurationSchemaVersion: 2,
+                runtimeControlProtocolVersion: DNSProxyXPCContract.currentRuntimeControlProtocolVersion,
+                providerInstanceID: providerInstanceID
+            )
+        }
+        let controller = makeController(
+            manager: manager,
+            validator: validator,
+            statusProvider: status
+        )
+
+        let result = await controller.activate(target)
+
+        #expect(result.lastSwitchFailure?.code == .providerCompatibilityUnavailable)
+        #expect(await validator.validationCount == 0)
+        #expect(await manager.enableSaveCount == 0)
+    }
+
     @Test func rejectedSwitchRestoresLegacyWireSchemaExactly() async throws {
         let old = try ActiveProxyConfiguration(
             generation: UUID(),
@@ -651,7 +703,7 @@ struct ProxySwitchStateMachineTests {
         )
 
         #expect(result.activeProfileID == old.profileID)
-        #expect(attempted.value.schemaVersion == 2)
+        #expect(attempted.value.schemaVersion == 3)
         #expect(await manager.currentSnapshot.activeConfiguration?.schemaVersion == 1)
         #expect(await manager.disableSaveCount == 0)
     }
@@ -878,6 +930,16 @@ private func plainTarget() throws -> DNSProxyTarget {
     DNSProxyTarget(
         profileID: UUID(),
         upstream: .plain(try PlainDNSConfiguration(serverAddress: IPAddress("1.1.1.1")))
+    )
+}
+
+private func dotTarget() throws -> DNSProxyTarget {
+    DNSProxyTarget(
+        profileID: UUID(),
+        upstream: .tls(try DoTConfiguration(
+            serverName: "dns.example.test",
+            bootstrapServers: [IPAddress("192.0.2.53")]
+        ))
     )
 }
 

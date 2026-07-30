@@ -23,6 +23,22 @@ enum AGDnsConfigurationAdapter {
                 port: configuration.port
             )
             result.bootstrap = []
+        case let .tls(configuration):
+            var components = URLComponents()
+            components.scheme = "tls"
+            components.host = (try? IPAddress(configuration.serverName))?.isIPv6 == true
+                ? "[\(configuration.serverName)]"
+                : configuration.serverName
+            if configuration.port != DoTConfiguration.defaultPort {
+                components.port = Int(configuration.port)
+            }
+            guard let address = components.string else {
+                preconditionFailure("Validated DoT configuration must produce an upstream URL")
+            }
+            result.address = address
+            result.bootstrap = configuration.bootstrapServers.map {
+                serverAddress($0, port: 53)
+            }
         case let .https(configuration):
             result.address = configuration.endpointURL.absoluteString
             result.bootstrap = configuration.bootstrapServers.map {

@@ -191,6 +191,14 @@ private struct ProfileDetailView: View {
                 LabeledContent("Protocol", value: "Plain DNS")
                 LabeledContent("Server", value: configuration.serverAddress.stringValue)
                 LabeledContent("Port", value: String(configuration.port))
+            case let .tls(configuration):
+                LabeledContent("Protocol", value: "DNS over TLS")
+                LabeledContent("Server", value: configuration.serverName)
+                LabeledContent("Port", value: String(configuration.port))
+                LabeledContent("Bootstrap Servers") {
+                    Text(configuration.bootstrapServers.map(\.stringValue).joined(separator: ", "))
+                        .textSelection(.enabled)
+                }
             case let .https(configuration):
                 LabeledContent("Protocol", value: "DNS over HTTPS")
                 LabeledContent("Endpoint") {
@@ -254,11 +262,13 @@ private struct ProfileEditorView: View {
                 fieldError(.name)
                 Picker("Protocol", selection: $draft.transport) {
                     Text("Plain DNS").tag(ProfileTransport.plain)
+                    Text("DNS over TLS").tag(ProfileTransport.tls)
                     Text("DNS over HTTPS").tag(ProfileTransport.https)
                 }
                 .pickerStyle(.segmented)
 
-                if draft.transport == .plain {
+                switch draft.transport {
+                case .plain:
                     TextField(
                         "Server Address",
                         text: $draft.plainServerAddress,
@@ -274,7 +284,24 @@ private struct ProfileEditorView: View {
                     )
                         .focused($focusedField, equals: .port)
                     fieldError(.port)
-                } else {
+                case .tls:
+                    TextField(
+                        "Server Name or Address",
+                        text: $draft.dotServerName,
+                        prompt: Text("dns.example.com")
+                    )
+                        .focused($focusedField, equals: .server)
+                    fieldError(.server)
+                    TextField(
+                        "Port",
+                        value: $draft.dotPort,
+                        format: .number,
+                        prompt: Text("853")
+                    )
+                        .focused($focusedField, equals: .port)
+                    fieldError(.port)
+                    bootstrapEditor
+                case .https:
                     TextField(
                         "Endpoint URL",
                         text: $draft.endpointURL,
@@ -282,16 +309,7 @@ private struct ProfileEditorView: View {
                     )
                         .focused($focusedField, equals: .endpoint)
                     fieldError(.endpoint)
-                    StringListEditor(
-                        label: "Bootstrap Servers",
-                        itemLabel: "Bootstrap Server",
-                        addLabel: "Add Bootstrap Server",
-                        values: $draft.bootstrapServers,
-                        normalize: normalizeIPAddress,
-                        itemPrompt: "1.1.1.1"
-                    )
-                    .focused($focusedField, equals: .bootstrap)
-                    fieldError(.bootstrap)
+                    bootstrapEditor
                 }
             }
             .formStyle(.grouped)
@@ -371,7 +389,7 @@ private struct ProfileEditorView: View {
     private func field(for error: ProfileDraftError) -> Field {
         switch error {
         case .emptyName: .name
-        case .invalidServerAddress: .server
+        case .invalidServerAddress, .invalidServerName: .server
         case .invalidPort: .port
         case .invalidEndpoint: .endpoint
         case .invalidBootstrapServer, .missingBootstrapServers: .bootstrap
@@ -381,6 +399,21 @@ private struct ProfileEditorView: View {
     private func normalizeIPAddress(_ value: String) -> String? {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return (try? IPAddress(trimmed))?.stringValue
+    }
+
+    private var bootstrapEditor: some View {
+        Group {
+            StringListEditor(
+                label: "Bootstrap Servers",
+                itemLabel: "Bootstrap Server",
+                addLabel: "Add Bootstrap Server",
+                values: $draft.bootstrapServers,
+                normalize: normalizeIPAddress,
+                itemPrompt: "1.1.1.1"
+            )
+            .focused($focusedField, equals: .bootstrap)
+            fieldError(.bootstrap)
+        }
     }
 
     @ViewBuilder

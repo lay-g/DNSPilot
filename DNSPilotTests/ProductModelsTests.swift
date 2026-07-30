@@ -47,6 +47,31 @@ struct ProductModelsTests {
                 endpointURL: "https://dns.example.test/dns-query"
             ).profile()
         }
+        #expect(throws: ProfileDraftError.invalidServerName("bad host")) {
+            try ProfileDraft(
+                name: "DoT",
+                transport: .tls,
+                dotServerName: "bad host",
+                bootstrapServers: ["192.0.2.1"]
+            ).profile()
+        }
+    }
+
+    @Test func dotProfileDraftRoundTripsAllFields() throws {
+        let profile = try ProfileDraft(
+            name: "Private DoT",
+            transport: .tls,
+            dotServerName: "DNS.Example.Test",
+            dotPort: 8853,
+            bootstrapServers: ["192.0.2.53"]
+        ).profile()
+        let draft = ProfileDraft(profile: profile)
+
+        #expect(draft.transport == .tls)
+        #expect(draft.dotServerName == "dns.example.test")
+        #expect(draft.dotPort == 8853)
+        #expect(draft.bootstrapServers == ["192.0.2.53"])
+        #expect(try draft.profile() == profile)
     }
 
     @Test func ruleDraftNormalizesSubnetsAndPreservesSSIDCase() throws {

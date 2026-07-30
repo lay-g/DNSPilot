@@ -24,7 +24,7 @@ Selecting Manual persists the requested Profile while preserving the current Pro
 
 Profile and Rule editors use staged drafts. Only Save commits domain configuration. Validation focuses the first invalid field. Editing an Active Profile uses the journaled runtime/configuration transaction and publishes the draft as Active after exact verification.
 
-Profiles expose create, edit, duplicate, test, make-default, replacement, and delete workflows. List identity uses a privacy-safe DoH server summary.
+Profiles expose create, edit, duplicate, test, make-default, replacement, and delete workflows. Custom Profile editors support Plain DNS, DNS over TLS, and DNS over HTTPS. DoT input contains server name or address, port, and bootstrap addresses. List identity uses privacy-safe DoT and DoH server summaries.
 
 Rules show enabled state, priority, condition summary, and target Profile. Reordering saves once and reevaluates once. Dragging has Move Up/Move Down keyboard alternatives. The Default Profile selector remains visible and cannot be empty while the Proxy is usable.
 

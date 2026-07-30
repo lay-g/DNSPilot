@@ -257,7 +257,7 @@ struct ConfigurationStore: ConfigurationStoring {
         if schemaVersion > AppConfiguration.currentSchemaVersion {
             return .newerSchema(version: schemaVersion)
         }
-        guard schemaVersion == AppConfiguration.currentSchemaVersion else {
+        guard schemaVersion >= 1 else {
             return .unsupportedSchema(version: schemaVersion)
         }
 

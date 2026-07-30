@@ -483,7 +483,10 @@ struct DNSProxyXPCContractTests {
 
         #expect(decoded.generation == current.generation)
         #expect(decoded.phase == current.phase)
-        #expect(decoded.maximumConfigurationSchemaVersion == 2)
+        #expect(
+            decoded.maximumConfigurationSchemaVersion
+                == ActiveProxyConfiguration.currentSchemaVersion
+        )
     }
 
     @Test func runtimeIdentityRoundTripsAndIgnoresFutureReadFields() throws {

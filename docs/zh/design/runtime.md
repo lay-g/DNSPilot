@@ -10,6 +10,8 @@
 
 只有 Provider instance、generation、fingerprint、`.ready` phase、兼容 control protocol 和最终 manager ownership reload 全部一致，runtime 才算已确认。
 
+Active Proxy schema capability 按 transport 区分：DoH 至少需要 schema 1，Plain DNS 至少需要 schema 2，DoT 至少需要 schema 3。Host 在编码 schema 1 之后新增的 transport 前先发现经过认证的 Provider capability，并且绝不发送 Provider 不支持的 upstream discriminator。Capability 不匹配时必须在预检或 manager mutation 前失败。
+
 ## Single-Engine Lifecycle
 
 Provider process 只拥有一个 `AGDnsProxy` 和一个 `AGDnsAppProxyFlowManager`。

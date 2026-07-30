@@ -74,6 +74,14 @@ struct ProfileDisplayIdentity: Equatable, Sendable {
                 ? "[\(configuration.serverAddress.stringValue)]"
                 : configuration.serverAddress.stringValue
             return "Plain DNS · \(address):\(configuration.port)"
+        case let .tls(configuration):
+            let serverName = (try? IPAddress(configuration.serverName))?.isIPv6 == true
+                ? "[\(configuration.serverName)]"
+                : configuration.serverName
+            let serverIdentity = configuration.port == DoTConfiguration.defaultPort
+                ? serverName
+                : "\(serverName):\(configuration.port)"
+            return "DNS over TLS · \(serverIdentity)"
         case let .https(configuration):
             guard let components = URLComponents(
                 url: configuration.endpointURL,

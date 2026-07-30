@@ -63,7 +63,7 @@ enum AppConfigurationError: LocalizedError, Equatable, Sendable {
 }
 
 struct AppConfiguration: Codable, Equatable, Sendable {
-    static let currentSchemaVersion = 1
+    static let currentSchemaVersion = 2
 
     let schemaVersion: Int
     let profiles: [DNSProfile]
@@ -119,8 +119,11 @@ struct AppConfiguration: Codable, Equatable, Sendable {
 
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        let decodedSchemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
+        guard (1...Self.currentSchemaVersion).contains(decodedSchemaVersion) else {
+            throw AppConfigurationError.unsupportedSchemaVersion(decodedSchemaVersion)
+        }
         try self.init(
-            schemaVersion: container.decode(Int.self, forKey: .schemaVersion),
             profiles: container.decode([DNSProfile].self, forKey: .profiles),
             rules: container.decode([DNSRule].self, forKey: .rules),
             defaultProfileID: container.decodeIfPresent(DNSProfile.ID.self, forKey: .defaultProfileID),

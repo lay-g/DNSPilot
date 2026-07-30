@@ -89,6 +89,8 @@ struct ProductDiagnosticReport: Equatable, Sendable {
         switch upstream {
         case let .plain(configuration):
             "Plain DNS \(configuration.serverAddress.stringValue):\(configuration.port)"
+        case let .tls(configuration):
+            "DNS over TLS \(configuration.serverName):\(configuration.port) | Bootstrap \(configuration.bootstrapServers.map(\.stringValue).joined(separator: ", "))"
         case let .https(configuration):
             "DNS over HTTPS \(configuration.endpointURL.absoluteString) | Bootstrap \(configuration.bootstrapServers.map(\.stringValue).joined(separator: ", "))"
         }

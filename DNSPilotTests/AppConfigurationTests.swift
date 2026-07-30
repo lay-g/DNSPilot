@@ -6,7 +6,7 @@ struct AppConfigurationTests {
     private let profileID = UUID(uuidString: "40000000-0000-0000-0000-000000000001")!
     private let ruleID = UUID(uuidString: "50000000-0000-0000-0000-000000000001")!
 
-    @Test func schemaOneRoundTripPreservesModelsAndStableSetEncoding() throws {
+    @Test func schemaTwoRoundTripPreservesModelsAndStableSetEncoding() throws {
         let profile = try makeProfile()
         let rule = try DNSRule(
             id: ruleID,
@@ -36,7 +36,7 @@ struct AppConfigurationTests {
     @Test func emptyInitialConfigurationIsValid() throws {
         let configuration = try AppConfiguration()
 
-        #expect(configuration.schemaVersion == 1)
+        #expect(configuration.schemaVersion == 2)
         #expect(configuration.profiles.isEmpty)
         #expect(configuration.defaultProfileID == nil)
         #expect(configuration.operatingMode == .automatic)
@@ -51,8 +51,8 @@ struct AppConfigurationTests {
             profileID: profile.id
         )
 
-        #expect(throws: AppConfigurationError.unsupportedSchemaVersion(2)) {
-            try AppConfiguration(schemaVersion: 2)
+        #expect(throws: AppConfigurationError.unsupportedSchemaVersion(3)) {
+            try AppConfiguration(schemaVersion: 3)
         }
         #expect(throws: AppConfigurationError.duplicateProfileID(profile.id)) {
             try AppConfiguration(profiles: [profile, profile])
@@ -60,6 +60,22 @@ struct AppConfigurationTests {
         #expect(throws: AppConfigurationError.duplicateRuleID(rule.id)) {
             try AppConfiguration(profiles: [profile], rules: [rule, rule])
         }
+    }
+
+    @Test func migratesSchemaOneToCurrentSchema() throws {
+        let current = try AppConfiguration(profiles: [makeProfile()])
+        var payload = try #require(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(current)) as? [String: Any]
+        )
+        payload["schemaVersion"] = 1
+
+        let migrated = try JSONDecoder().decode(
+            AppConfiguration.self,
+            from: JSONSerialization.data(withJSONObject: payload)
+        )
+
+        #expect(migrated.schemaVersion == AppConfiguration.currentSchemaVersion)
+        #expect(migrated.profiles == current.profiles)
     }
 
     @Test func rejectsMissingDefaultManualAndRuleReferences() throws {

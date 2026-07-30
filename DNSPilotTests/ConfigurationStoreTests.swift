@@ -55,15 +55,37 @@ struct ConfigurationStoreTests {
 
     @Test func newerSchemaIsClassifiedBeforeFullDecode() throws {
         try withTemporaryStore { store, directoryURL in
-            let source = Data(#"{"schemaVersion":2,"operatingMode":{"kind":"future"}}"#.utf8)
+            let source = Data(#"{"schemaVersion":3,"operatingMode":{"kind":"future"}}"#.utf8)
             try source.write(to: store.configurationURL)
 
-            #expect(try store.load() == .newerSchema(version: 2))
+            #expect(try store.load() == .newerSchema(version: 3))
             #expect(
                 try FileManager.default.contentsOfDirectory(atPath: directoryURL.path)
                     .sorted()
                     == [".configuration.lock", ConfigurationStore.configurationFileName]
             )
+        }
+    }
+
+    @Test func schemaOneLoadsCanonicallyAndCanBeReplaced() throws {
+        try withTemporaryStore { store, _ in
+            let current = try store.encode(populatedConfiguration())
+            var payload = try #require(
+                JSONSerialization.jsonObject(with: current.data) as? [String: Any]
+            )
+            payload["schemaVersion"] = 1
+            try JSONSerialization.data(withJSONObject: payload).write(to: store.configurationURL)
+
+            guard case let .loaded(migrated) = try store.load() else {
+                Issue.record("Expected migrated configuration")
+                return
+            }
+            #expect(migrated.value.schemaVersion == AppConfiguration.currentSchemaVersion)
+            #expect(migrated == current)
+
+            let replacement = try store.encode(AppConfiguration())
+            try store.commit(replacement, replacing: migrated.fingerprint)
+            #expect(try store.load() == .loaded(replacement))
         }
     }
 

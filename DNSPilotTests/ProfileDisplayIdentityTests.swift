@@ -69,6 +69,20 @@ struct ProfileDisplayIdentityTests {
         #expect(identity.summary == "Plain DNS · [2001:db8::53]:5353")
     }
 
+    @Test func dotIdentityOmitsBootstrapAndDefaultPort() throws {
+        let profile = try DNSProfile(
+            name: "Private",
+            upstream: .tls(try DoTConfiguration(
+                serverName: "dns.example.test",
+                bootstrapServers: [IPAddress("192.0.2.99")]
+            ))
+        )
+
+        let identity = try #require(ProfileDisplayIdentity.identities(for: [profile])[profile.id])
+        #expect(identity.summary == "DNS over TLS · dns.example.test")
+        #expect(!identity.summary.contains("192.0.2.99"))
+    }
+
     private func dohProfile(id: UUID, endpoint: String) throws -> DNSProfile {
         try DNSProfile(
             id: id,

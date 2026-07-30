@@ -63,7 +63,8 @@ struct ActiveProxyConfigurationTests {
         let configuration = try ActiveProxyConfiguration(
             generation: generation,
             profileID: profileID,
-            upstream: upstream
+            upstream: upstream,
+            schemaVersion: 2
         )
 
         let data = try configuration.propertyListData()
@@ -84,7 +85,8 @@ struct ActiveProxyConfigurationTests {
             generation: generation,
             profileID: profileID,
             upstream: .fixedCloudflare,
-            loggingMode: .debug
+            loggingMode: .debug,
+            schemaVersion: 2
         )
 
         let decoded = try ActiveProxyConfiguration.decodePropertyList(configuration.propertyListData())
@@ -100,6 +102,53 @@ struct ActiveProxyConfigurationTests {
         #expect(decoded == configuration)
         #expect(decoded.schemaVersion == 2)
         #expect(encodedDoH["endpointURL"] as? String == "https://cloudflare-dns.com/dns-query")
+    }
+
+    @Test func schemaThreeDoTRoundTripPreservesConfigurationAndDiscriminator() throws {
+        let configuration = try ActiveProxyConfiguration(
+            generation: generation,
+            profileID: profileID,
+            upstream: .tls(try DoTConfiguration(
+                serverName: "DNS.Example.Test",
+                port: 8853,
+                bootstrapServers: [IPAddress("192.0.2.53")]
+            ))
+        )
+
+        let data = try configuration.propertyListData()
+        let decoded = try ActiveProxyConfiguration.decodePropertyList(data)
+        let payload = try #require(
+            PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any]
+        )
+        let upstream = try #require(payload["upstream"] as? [String: Any])
+
+        #expect(decoded == configuration)
+        #expect(decoded.schemaVersion == 3)
+        #expect(upstream["kind"] as? String == "tls")
+    }
+
+    @Test func schemasOneAndTwoRejectDoT() throws {
+        let upstream = DNSUpstream.tls(try DoTConfiguration(
+            serverName: "dns.example.test",
+            bootstrapServers: [IPAddress("192.0.2.53")]
+        ))
+
+        #expect(throws: ActiveProxyConfigurationError.unsupportedLegacyUpstreamKind("tls")) {
+            try ActiveProxyConfiguration(
+                generation: generation,
+                profileID: profileID,
+                upstream: upstream,
+                schemaVersion: 1
+            )
+        }
+        #expect(throws: ActiveProxyConfigurationError.unsupportedLegacyUpstreamKind("tls")) {
+            try ActiveProxyConfiguration(
+                generation: generation,
+                profileID: profileID,
+                upstream: upstream,
+                schemaVersion: 2
+            )
+        }
     }
 
     @Test func migratesSchemaOneFixedDoHAndRemovesBootstrapPortsFromModel() throws {
@@ -279,6 +328,29 @@ struct ActiveProxyConfigurationTests {
         }
         #expect(try DoHConfiguration(endpointURL: ipv4URL, bootstrapServers: []).bootstrapServers.isEmpty)
         #expect(try DoHConfiguration(endpointURL: ipv6URL, bootstrapServers: []).bootstrapServers.isEmpty)
+    }
+
+    @Test func validatesDoTServerPortAndBootstrap() throws {
+        let bootstrap = [try IPAddress("192.0.2.53")]
+        let hostname = try DoTConfiguration(
+            serverName: " DNS.Example.Test ",
+            bootstrapServers: bootstrap
+        )
+
+        #expect(hostname.serverName == "dns.example.test")
+        #expect(hostname.port == 853)
+        #expect(try DoTConfiguration(serverName: "192.0.2.1", bootstrapServers: []).serverName == "192.0.2.1")
+        #expect(try DoTConfiguration(serverName: "2001:0DB8::1", bootstrapServers: []).serverName == "2001:db8::1")
+        #expect(try DoTConfiguration(serverName: "[2001:db8::1]", bootstrapServers: []).serverName == "2001:db8::1")
+        #expect(throws: ActiveProxyConfigurationError.missingDoTBootstrapServers) {
+            try DoTConfiguration(serverName: "dns.example.test", bootstrapServers: [])
+        }
+        #expect(throws: ActiveProxyConfigurationError.invalidDoTServerName) {
+            try DoTConfiguration(serverName: "bad host", bootstrapServers: bootstrap)
+        }
+        #expect(throws: ActiveProxyConfigurationError.invalidDoTPort(0)) {
+            try DoTConfiguration(serverName: "192.0.2.1", port: 0, bootstrapServers: [])
+        }
     }
 
     @Test(arguments: [

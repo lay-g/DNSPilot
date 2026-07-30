@@ -187,10 +187,12 @@ struct OnboardingView: View {
             customFieldError(.name)
             Picker("Protocol", selection: $customDraft.transport) {
                 Text("Plain DNS").tag(ProfileTransport.plain)
+                Text("DNS over TLS").tag(ProfileTransport.tls)
                 Text("DNS over HTTPS").tag(ProfileTransport.https)
             }
             .pickerStyle(.segmented)
-            if customDraft.transport == .plain {
+            switch customDraft.transport {
+            case .plain:
                 TextField(
                     "Server Address",
                     text: $customDraft.plainServerAddress,
@@ -206,7 +208,24 @@ struct OnboardingView: View {
                 )
                     .focused($focusedCustomField, equals: .port)
                 customFieldError(.port)
-            } else {
+            case .tls:
+                TextField(
+                    "Server Name or Address",
+                    text: $customDraft.dotServerName,
+                    prompt: Text("dns.example.com")
+                )
+                    .focused($focusedCustomField, equals: .server)
+                customFieldError(.server)
+                TextField(
+                    "Port",
+                    value: $customDraft.dotPort,
+                    format: .number,
+                    prompt: Text("853")
+                )
+                    .focused($focusedCustomField, equals: .port)
+                customFieldError(.port)
+                customBootstrapEditor
+            case .https:
                 TextField(
                     "Endpoint URL",
                     text: $customDraft.endpointURL,
@@ -214,16 +233,7 @@ struct OnboardingView: View {
                 )
                     .focused($focusedCustomField, equals: .endpoint)
                 customFieldError(.endpoint)
-                StringListEditor(
-                    label: "Bootstrap Servers",
-                    itemLabel: "Bootstrap Server",
-                    addLabel: "Add Bootstrap Server",
-                    values: $customDraft.bootstrapServers,
-                    normalize: normalizeIPAddress,
-                    itemPrompt: "1.1.1.1"
-                )
-                .focused($focusedCustomField, equals: .bootstrap)
-                customFieldError(.bootstrap)
+                customBootstrapEditor
             }
         }
         .formStyle(.grouped)
@@ -545,7 +555,7 @@ struct OnboardingView: View {
     private func customField(for error: ProfileDraftError) -> CustomField {
         switch error {
         case .emptyName: .name
-        case .invalidServerAddress: .server
+        case .invalidServerAddress, .invalidServerName: .server
         case .invalidPort: .port
         case .invalidEndpoint: .endpoint
         case .invalidBootstrapServer, .missingBootstrapServers: .bootstrap
@@ -555,6 +565,21 @@ struct OnboardingView: View {
     private func normalizeIPAddress(_ value: String) -> String? {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return (try? IPAddress(trimmed))?.stringValue
+    }
+
+    private var customBootstrapEditor: some View {
+        Group {
+            StringListEditor(
+                label: "Bootstrap Servers",
+                itemLabel: "Bootstrap Server",
+                addLabel: "Add Bootstrap Server",
+                values: $customDraft.bootstrapServers,
+                normalize: normalizeIPAddress,
+                itemPrompt: "1.1.1.1"
+            )
+            .focused($focusedCustomField, equals: .bootstrap)
+            customFieldError(.bootstrap)
+        }
     }
 
     @ViewBuilder

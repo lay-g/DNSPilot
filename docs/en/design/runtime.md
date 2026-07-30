@@ -10,6 +10,8 @@ Encoding occurs once per generation. Manager persistence, XPC mutation, runtime 
 
 A runtime is confirmed only when Provider instance, generation, fingerprint, `.ready` phase, compatible control protocol, and final manager ownership reload all agree.
 
+Active Proxy schema capability is transport-specific: DoH requires schema 1, Plain DNS requires schema 2, and DoT requires schema 3. The Host discovers authenticated Provider capability before encoding transports newer than schema 1 and never sends an unsupported upstream discriminator. Capability mismatch fails before preflight or manager mutation.
+
 ## Single-Engine Lifecycle
 
 The Provider process owns exactly one `AGDnsProxy` and one `AGDnsAppProxyFlowManager`.

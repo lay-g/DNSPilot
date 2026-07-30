@@ -24,7 +24,7 @@ Overview 展示 DNS Proxy 状态与控制、Automatic/Manual、Target/Active Pro
 
 Profile/Rule editor 使用 staged draft，只有 Save 才提交 domain configuration。Validation 聚焦第一个无效字段。编辑 Active Profile 使用 journaled runtime/configuration transaction，并在 exact verification 后把 draft 发布为 Active。
 
-Profiles 提供 create、edit、duplicate、test、make-default、replacement 和 delete。列表身份使用隐私安全的 DoH server 摘要。
+Profiles 提供 create、edit、duplicate、test、make-default、replacement 和 delete。自定义 Profile editor 支持 Plain DNS、DNS over TLS 和 DNS over HTTPS。DoT 输入包含 server name 或 address、port 和 bootstrap address。列表身份使用隐私安全的 DoT 与 DoH server 摘要。
 
 Rules 显示 enabled、priority、condition summary 和 target Profile。Reorder 只保存一次并 reevaluate 一次。Drag 必须提供 Move Up/Move Down 键盘替代。Default Profile selector 保持可见，Proxy 可用时不能为空。
 

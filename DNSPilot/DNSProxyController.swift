@@ -2958,18 +2958,17 @@ actor DNSProxyController {
             } catch {
                 maximumSchemaVersion = nil
             }
-            return (maximumSchemaVersion ?? 1) >= Self.currentConfigurationSchemaVersion
-                ? Self.currentConfigurationSchemaVersion
-                : 1
-        case .plain:
+            return min(maximumSchemaVersion ?? 1, Self.currentConfigurationSchemaVersion)
+        case .plain, .tls:
+            let minimumSchemaVersion = if case .plain = upstream { 2 } else { 3 }
             let maximumSchemaVersion = try await waitForProviderSchemaCapability()
-            guard maximumSchemaVersion >= Self.currentConfigurationSchemaVersion else {
+            guard maximumSchemaVersion >= minimumSchemaVersion else {
                 throw DNSProxyControllerError.unsupportedProviderConfigurationSchema(
-                    required: Self.currentConfigurationSchemaVersion,
+                    required: minimumSchemaVersion,
                     available: maximumSchemaVersion
                 )
             }
-            return Self.currentConfigurationSchemaVersion
+            return min(maximumSchemaVersion, Self.currentConfigurationSchemaVersion)
         }
     }
 

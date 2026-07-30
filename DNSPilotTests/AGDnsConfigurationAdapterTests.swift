@@ -44,6 +44,26 @@ struct AGDnsConfigurationAdapterTests {
         #expect(result.bootstrap == ["192.0.2.1:53", "[2001:db8::1]:53"])
     }
 
+    @Test func mapsDoTHostsPortsAndBootstrapAtAdapterBoundary() throws {
+        let hostname = DNSUpstream.tls(try DoTConfiguration(
+            serverName: "dns.example.test",
+            bootstrapServers: [IPAddress("192.0.2.1"), IPAddress("2001:db8::1")]
+        ))
+        let ipv6 = DNSUpstream.tls(try DoTConfiguration(
+            serverName: "2001:db8::53",
+            port: 8853,
+            bootstrapServers: []
+        ))
+
+        let hostnameResult = try AGDnsConfigurationAdapter.makeUpstream(from: hostname)
+        let ipv6Result = try AGDnsConfigurationAdapter.makeUpstream(from: ipv6)
+
+        #expect(hostnameResult.address == "tls://dns.example.test")
+        #expect(hostnameResult.bootstrap == ["192.0.2.1:53", "[2001:db8::1]:53"])
+        #expect(ipv6Result.address == "tls://[2001:db8::53]:8853")
+        #expect(ipv6Result.bootstrap.isEmpty)
+    }
+
     @Test func fixedDoHMappingDisablesFallbackAndExperimentalFeatures() throws {
         let configuration = try ActiveProxyConfiguration(
             generation: UUID(),

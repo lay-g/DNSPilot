@@ -13,13 +13,14 @@ struct DNSProfile {
 
 enum DNSUpstream {
     case plain(PlainDNSConfiguration)
+    case tls(DoTConfiguration)
     case https(DoHConfiguration)
 }
 ```
 
-Profile UUID 是身份，名称允许重复。名称去除首尾空白后不能为空。普通 DNS 接受 IPv4/IPv6 literal 和 `1...65535` 端口。DoH 必须使用 HTTPS、包含 host、不得包含 user info 或 fragment；endpoint 使用 hostname 时至少提供一个 literal bootstrap address。
+Profile UUID 是身份，名称允许重复。名称去除首尾空白后不能为空。普通 DNS 接受 IPv4/IPv6 literal 和 `1...65535` 端口。DoT 接受 hostname 或 IP address 和 `1...65535` 端口，默认端口为 853；hostname 至少需要一个 literal bootstrap address。DoH 必须使用 HTTPS、包含 host、不得包含 user info 或 fragment；endpoint 使用 hostname 时至少提供一个 literal bootstrap address。
 
-显示身份由名称和隐私安全的协议/server 摘要组成。DoH 摘要不包含 path、query、token 或 bootstrap。业务逻辑始终使用 UUID。
+显示身份由名称和隐私安全的协议/server 摘要组成。DoT 摘要不包含 bootstrap；DoH 摘要不包含 path、query、token 或 bootstrap。业务逻辑始终使用 UUID。
 
 Default Profile 是用户自有 Profile 的角色。Provider 模板创建普通 Profile，用户可以继续编辑。
 
@@ -49,7 +50,7 @@ SSID 权限拒绝只禁用 SSID 条件；接口和子网 Rule 继续工作。网
 
 Profiles、Rules、Default Profile 和 operating mode 存在一个 versioned `AppConfiguration` 文档。初始空配置使用 Automatic，在至少存在一个有效 Profile 和 Default Profile 前不能启用 DNS Proxy。
 
-加载时校验 schema、重复 identity 和全部引用。更高 schema 进入只读恢复，绝不被旧版本覆盖。损坏输入在提供 reset 前必须保留。
+加载时校验 schema、重复 identity 和全部引用。持久化 schema 1 在内存中 canonical migration 为 schema 2，并且只通过正常 atomic commit path 修改正式文件。更高 schema 进入只读恢复，绝不被旧版本覆盖。损坏输入在提供 reset 前必须保留。
 
 配置采用 canonical encoding 与 fingerprint，通过 compare-and-swap 提交；使用私有 Application Support 目录、严格权限、durable 临时写入和原子替换。`UserDefaults` 只保存 UI preference。
 

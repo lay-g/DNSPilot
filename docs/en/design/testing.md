@@ -9,6 +9,7 @@ DNSPilot uses deterministic automated checks, controlled network fixtures, signe
 Unit and contract tests cover:
 
 - Profile, upstream, Rule, IP, CIDR, and reference validation.
+- Plain DNS, DoT, and DoH model validation, adapter wire mapping, bootstrap conversion, and transport-specific schema capability gating.
 - Rule ordering, AND/OR semantics, SSID availability, and Default fallback.
 - Configuration schema, canonical encoding, fingerprints, atomic commit, corruption preservation, and compare-and-swap conflicts.
 - Automatic/Manual persistence, target coalescing, stale decisions, and session fencing.
@@ -37,7 +38,7 @@ A properly provisioned machine is required to validate:
 - System Extension install, approval, replacement, and deactivation.
 - DNS Proxy enablement and actual system DNS interception.
 - XPC peer authentication and wrong-signer rejection.
-- Plain DNS, DoH, switching, retry behavior, sleep/wake, and restoration.
+- Plain DNS, DoT, DoH, switching, retry behavior, sleep/wake, and restoration.
 - Network and active-user-session changes.
 - Conflicts with other DNS or VPN products.
 - Crash recovery and normal Quit restoration.

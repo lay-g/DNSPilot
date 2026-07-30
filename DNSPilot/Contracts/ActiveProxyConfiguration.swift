@@ -6,8 +6,11 @@ enum ActiveProxyConfigurationError: LocalizedError, Equatable, Sendable {
     case unsupportedLegacyDoHConfiguration
     case invalidLegacyBootstrapServer(String)
     case invalidPlainDNSPort(Int)
+    case invalidDoTServerName
+    case invalidDoTPort(Int)
     case invalidDoHEndpoint
     case missingBootstrapServers
+    case missingDoTBootstrapServers
     case invalidPropertyListStructure
 
     var errorDescription: String? {
@@ -22,10 +25,16 @@ enum ActiveProxyConfigurationError: LocalizedError, Equatable, Sendable {
             "Invalid legacy bootstrap server address: \(address)."
         case let .invalidPlainDNSPort(port):
             "The plain DNS port must be between 1 and 65535, got \(port)."
+        case .invalidDoTServerName:
+            "The DNS-over-TLS server must be a valid hostname or IP address."
+        case let .invalidDoTPort(port):
+            "The DNS-over-TLS port must be between 1 and 65535, got \(port)."
         case .invalidDoHEndpoint:
             "The DNS-over-HTTPS endpoint must be an HTTPS URL with a host and no user info or fragment."
         case .missingBootstrapServers:
             "A DNS-over-HTTPS hostname endpoint requires at least one bootstrap server."
+        case .missingDoTBootstrapServers:
+            "A DNS-over-TLS hostname requires at least one bootstrap server."
         case .invalidPropertyListStructure:
             "The proxy configuration property list has an invalid structure."
         }
@@ -54,6 +63,61 @@ struct PlainDNSConfiguration: Codable, Hashable, Sendable {
         try self.init(
             serverAddress: container.decode(IPAddress.self, forKey: .serverAddress),
             port: container.decode(Int.self, forKey: .port)
+        )
+    }
+}
+
+struct DoTConfiguration: Codable, Hashable, Sendable {
+    static let defaultPort = 853
+
+    let serverName: String
+    let port: UInt16
+    let bootstrapServers: [IPAddress]
+
+    init(
+        serverName: String,
+        port: Int = Self.defaultPort,
+        bootstrapServers: [IPAddress]
+    ) throws {
+        let trimmedServerName = serverName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let literalCandidate = trimmedServerName.hasPrefix("[") && trimmedServerName.hasSuffix("]")
+            ? String(trimmedServerName.dropFirst().dropLast())
+            : trimmedServerName
+        let canonicalServerName: String
+        if let address = try? IPAddress(literalCandidate) {
+            canonicalServerName = address.stringValue
+        } else {
+            var components = URLComponents()
+            components.scheme = "tls"
+            components.host = trimmedServerName
+            guard components.url != nil, !trimmedServerName.isEmpty else {
+                throw ActiveProxyConfigurationError.invalidDoTServerName
+            }
+            guard !bootstrapServers.isEmpty else {
+                throw ActiveProxyConfigurationError.missingDoTBootstrapServers
+            }
+            canonicalServerName = trimmedServerName.lowercased()
+        }
+        guard (1...65_535).contains(port) else {
+            throw ActiveProxyConfigurationError.invalidDoTPort(port)
+        }
+        self.serverName = canonicalServerName
+        self.port = UInt16(port)
+        self.bootstrapServers = bootstrapServers
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case serverName
+        case port
+        case bootstrapServers
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        try self.init(
+            serverName: container.decode(String.self, forKey: .serverName),
+            port: container.decode(Int.self, forKey: .port),
+            bootstrapServers: container.decode([IPAddress].self, forKey: .bootstrapServers)
         )
     }
 }
@@ -112,6 +176,7 @@ struct DoHConfiguration: Codable, Hashable, Sendable {
 
 enum DNSUpstream: Codable, Hashable, Sendable {
     case plain(PlainDNSConfiguration)
+    case tls(DoTConfiguration)
     case https(DoHConfiguration)
 
     private enum CodingKeys: String, CodingKey {
@@ -121,6 +186,7 @@ enum DNSUpstream: Codable, Hashable, Sendable {
 
     private enum Kind: String, Codable {
         case plain
+        case tls
         case https
     }
 
@@ -129,6 +195,8 @@ enum DNSUpstream: Codable, Hashable, Sendable {
         switch try container.decode(Kind.self, forKey: .kind) {
         case .plain:
             self = .plain(try container.decode(PlainDNSConfiguration.self, forKey: .configuration))
+        case .tls:
+            self = .tls(try container.decode(DoTConfiguration.self, forKey: .configuration))
         case .https:
             self = .https(try container.decode(DoHConfiguration.self, forKey: .configuration))
         }
@@ -139,6 +207,9 @@ enum DNSUpstream: Codable, Hashable, Sendable {
         switch self {
         case let .plain(configuration):
             try container.encode(Kind.plain, forKey: .kind)
+            try container.encode(configuration, forKey: .configuration)
+        case let .tls(configuration):
+            try container.encode(Kind.tls, forKey: .kind)
             try container.encode(configuration, forKey: .configuration)
         case let .https(configuration):
             try container.encode(Kind.https, forKey: .kind)
@@ -164,6 +235,14 @@ enum DNSUpstream: Codable, Hashable, Sendable {
         #else
         fixedCloudflare
         #endif
+    }
+
+    fileprivate var kindName: String {
+        switch self {
+        case .plain: "plain"
+        case .tls: "tls"
+        case .https: "https"
+        }
     }
 
     private static func builtInDoH(endpoint: String, bootstrapServers: [String]) -> DNSUpstream {
@@ -193,7 +272,7 @@ enum ProxyLoggingMode: String, Codable, Sendable {
 }
 
 struct ActiveProxyConfiguration: Codable, Equatable, Sendable {
-    static let currentSchemaVersion = 2
+    static let currentSchemaVersion = 3
     static let providerConfigurationKey = "DNSPilotActiveProxyConfiguration"
     static let vendorDataOptionKey = "VendorData"
 
@@ -210,12 +289,12 @@ struct ActiveProxyConfiguration: Codable, Equatable, Sendable {
         loggingMode: ProxyLoggingMode = .default,
         schemaVersion: Int = Self.currentSchemaVersion
     ) throws {
-        guard schemaVersion == 1 || schemaVersion == Self.currentSchemaVersion else {
+        guard (1...Self.currentSchemaVersion).contains(schemaVersion) else {
             throw ActiveProxyConfigurationError.unsupportedSchemaVersion(schemaVersion)
         }
         if schemaVersion == 1 {
             guard case let .https(configuration) = upstream else {
-                throw ActiveProxyConfigurationError.unsupportedLegacyUpstreamKind("plain")
+                throw ActiveProxyConfigurationError.unsupportedLegacyUpstreamKind(upstream.kindName)
             }
             guard
                 configuration.endpointURL.scheme == "https",
@@ -223,6 +302,8 @@ struct ActiveProxyConfiguration: Codable, Equatable, Sendable {
             else {
                 throw ActiveProxyConfigurationError.unsupportedLegacyDoHConfiguration
             }
+        } else if schemaVersion == 2, case .tls = upstream {
+            throw ActiveProxyConfigurationError.unsupportedLegacyUpstreamKind("tls")
         }
         self.schemaVersion = schemaVersion
         self.generation = generation
@@ -271,6 +352,11 @@ struct ActiveProxyConfiguration: Codable, Equatable, Sendable {
         "endpointURL",
         "bootstrapServers",
     ]
+    private static let doTConfigurationKeys: Set<String> = [
+        "serverName",
+        "port",
+        "bootstrapServers",
+    ]
 
     private static func validatePropertyListStructure(_ payload: Any) throws {
         guard
@@ -279,7 +365,7 @@ struct ActiveProxyConfiguration: Codable, Equatable, Sendable {
         else {
             throw ActiveProxyConfigurationError.invalidPropertyListStructure
         }
-        guard schemaVersion == 1 || schemaVersion == currentSchemaVersion else {
+        guard (1...currentSchemaVersion).contains(schemaVersion) else {
             throw ActiveProxyConfigurationError.unsupportedSchemaVersion(schemaVersion)
         }
         try requireExactKeys(propertyListKeys, in: configuration)
@@ -302,6 +388,8 @@ struct ActiveProxyConfiguration: Codable, Equatable, Sendable {
         switch kind {
         case "plain":
             try requireExactKeys(plainConfigurationKeys, in: nestedConfiguration)
+        case "tls" where schemaVersion == currentSchemaVersion:
+            try requireExactKeys(doTConfigurationKeys, in: nestedConfiguration)
         case "https":
             try requireExactKeys(doHConfigurationKeys, in: nestedConfiguration)
         default:
@@ -336,23 +424,33 @@ struct ActiveProxyConfiguration: Codable, Equatable, Sendable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let decodedSchemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
 
-        guard decodedSchemaVersion == 1 || decodedSchemaVersion == Self.currentSchemaVersion else {
+        guard (1...Self.currentSchemaVersion).contains(decodedSchemaVersion) else {
             throw ActiveProxyConfigurationError.unsupportedSchemaVersion(decodedSchemaVersion)
         }
 
-        generation = try container.decode(UUID.self, forKey: .generation)
-        profileID = try container.decode(UUID.self, forKey: .profileID)
-        loggingMode = try container.decode(ProxyLoggingMode.self, forKey: .loggingMode)
+        let decodedGeneration = try container.decode(UUID.self, forKey: .generation)
+        let decodedProfileID = try container.decode(UUID.self, forKey: .profileID)
+        let decodedLoggingMode = try container.decode(ProxyLoggingMode.self, forKey: .loggingMode)
 
         switch decodedSchemaVersion {
         case 1:
-            upstream = try Self.migrateLegacyUpstream(
-                container.decode(LegacyDNSUpstream.self, forKey: .upstream)
+            try self.init(
+                generation: decodedGeneration,
+                profileID: decodedProfileID,
+                upstream: Self.migrateLegacyUpstream(
+                    container.decode(LegacyDNSUpstream.self, forKey: .upstream)
+                ),
+                loggingMode: decodedLoggingMode,
+                schemaVersion: 1
             )
-            schemaVersion = 1
-        case Self.currentSchemaVersion:
-            upstream = try container.decode(DNSUpstream.self, forKey: .upstream)
-            schemaVersion = Self.currentSchemaVersion
+        case 2, Self.currentSchemaVersion:
+            try self.init(
+                generation: decodedGeneration,
+                profileID: decodedProfileID,
+                upstream: container.decode(DNSUpstream.self, forKey: .upstream),
+                loggingMode: decodedLoggingMode,
+                schemaVersion: decodedSchemaVersion
+            )
         default:
             preconditionFailure("Schema version was validated before payload decoding")
         }
@@ -366,7 +464,7 @@ struct ActiveProxyConfiguration: Codable, Equatable, Sendable {
         switch schemaVersion {
         case 1:
             guard case let .https(configuration) = upstream else {
-                throw ActiveProxyConfigurationError.unsupportedLegacyUpstreamKind("plain")
+                throw ActiveProxyConfigurationError.unsupportedLegacyUpstreamKind(upstream.kindName)
             }
             try container.encode(
                 LegacyDNSUpstream(
@@ -378,7 +476,7 @@ struct ActiveProxyConfiguration: Codable, Equatable, Sendable {
                 ),
                 forKey: .upstream
             )
-        case Self.currentSchemaVersion:
+        case 2, Self.currentSchemaVersion:
             try container.encode(upstream, forKey: .upstream)
         default:
             throw ActiveProxyConfigurationError.unsupportedSchemaVersion(schemaVersion)
