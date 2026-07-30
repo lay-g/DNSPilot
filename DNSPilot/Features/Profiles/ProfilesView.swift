@@ -52,31 +52,34 @@ struct ProfilesView: View {
             }
             .frame(minWidth: 240, idealWidth: 270, maxWidth: 320)
 
-            if let profile = selectedProfile {
-                ProfileDetailView(
-                    profile: profile,
-                    isActive: profile.id == appState.proxy.activeProfileID,
-                    isDefault: profile.id == appState.configuration?.defaultProfileID,
-                    edit: { appState.requestEditor(.editProfile(profile.id)) },
-                    test: {
-                        Task { await appState.preflightProfile(ProfileDraft(profile: profile)) }
-                    },
-                    duplicate: { appState.requestEditor(.duplicateProfile(profile.id)) },
-                    makeDefault: { Task { await appState.setDefaultProfile(profile.id) } },
-                    delete: { requestDeletion(of: profile) }
-                )
-            } else {
-                ContentUnavailableView {
-                    Label(
-                        appState.profiles.isEmpty ? "No DNS Profiles" : "Select a Profile",
-                        systemImage: "list.bullet.rectangle"
+            Group {
+                if let profile = selectedProfile {
+                    ProfileDetailView(
+                        profile: profile,
+                        isActive: profile.id == appState.proxy.activeProfileID,
+                        isDefault: profile.id == appState.configuration?.defaultProfileID,
+                        edit: { appState.requestEditor(.editProfile(profile.id)) },
+                        test: {
+                            Task { await appState.preflightProfile(ProfileDraft(profile: profile)) }
+                        },
+                        duplicate: { appState.requestEditor(.duplicateProfile(profile.id)) },
+                        makeDefault: { Task { await appState.setDefaultProfile(profile.id) } },
+                        delete: { requestDeletion(of: profile) }
                     )
-                } actions: {
-                    if appState.profiles.isEmpty {
-                        Button("Create Profile") { appState.requestEditor(.newProfile) }
+                } else {
+                    ContentUnavailableView {
+                        Label(
+                            appState.profiles.isEmpty ? "No DNS Profiles" : "Select a Profile",
+                            systemImage: "list.bullet.rectangle"
+                        )
+                    } actions: {
+                        if appState.profiles.isEmpty {
+                            Button("Create Profile") { appState.requestEditor(.newProfile) }
+                        }
                     }
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .navigationTitle("Profiles")
         .toolbar {
