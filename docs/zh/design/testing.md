@@ -14,7 +14,9 @@ Unit 与 contract test 覆盖：
 - Configuration schema、canonical encoding、fingerprint、atomic commit、损坏保留和 compare-and-swap conflict。
 - Automatic/Manual 持久化、target coalescing、stale decision 和 session fencing。
 - Mutation journal authentication、compensation、crash recovery 和 cleanup。
+- Safe Quit resume journal encoding、phase fencing、损坏保留、一次性 claim，以及 manager disable 前后的 crash window。
 - Runtime payload、exact identity、replay、rate limit、rollback、quiescence、resume 和 recovery classification。
+- Manual/Automatic startup resume、fresh-session network selection、Extension readiness gate、exact-disabled manager mismatch 和显式 Keep System DNS 行为。
 - Quit key-up、repeat rejection、timeout、cancellation、draft handling 和 exactly-once dispatch。
 - 隐私安全的显示 identity 与 diagnostic redaction。
 

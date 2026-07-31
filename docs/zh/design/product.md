@@ -15,7 +15,7 @@ DNSPilot 是菜单栏优先的 macOS 工具，通过 DNS Proxy System Extension 
 - 第一条启用且匹配的 Rule 生效；用户指定的 Default Profile 负责兜底。
 - Manual 选择持续有效，直到用户明确返回 Automatic。
 - 关闭管理窗口后 App 继续运行，并保持当前 DNS Proxy 状态。
-- 正常 Quit 尝试禁用 DNS Proxy 并恢复 System DNS。
+- 正常 Quit 尝试禁用 DNS Proxy 并恢复 System DNS。若 Proxy 已确认开启，下次启动会在 lifecycle evidence、manager ownership、配置与 Extension readiness 仍一致时安全恢复开启状态。
 - UI 分别展示 Target Profile、已确认的 Active Profile、运行模式、网络上下文、System Extension 状态和 DNS Proxy 状态。
 
 ## 平台边界

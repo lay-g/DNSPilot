@@ -19,6 +19,7 @@ enum FakeTestError: LocalizedError, Sendable {
 enum FakeDNSProxyManagerEvent: Sendable, Equatable {
     case load
     case enable(generation: UUID, profileID: UUID)
+    case fencedEnable(expectedGeneration: UUID?, targetGeneration: UUID)
     case disable(expectedGeneration: UUID?)
     case replace(expectedGeneration: UUID, targetGeneration: UUID)
 }
@@ -150,6 +151,30 @@ actor FakeDNSProxyManager: DNSProxyManagerManaging {
             providerBundleIdentifier: providerBundleIdentifier
         )
         return .enabled
+    }
+
+    func saveEnabledConfiguration(
+        _ configuration: PersistedProxyConfiguration,
+        providerBundleIdentifier: String,
+        ifDisabledSnapshotMatches expected: DNSProxyManagerSnapshot
+    ) async throws -> DNSProxyManagerFencedEnableResult {
+        events.append(.fencedEnable(
+            expectedGeneration: expected.activeConfiguration?.generation,
+            targetGeneration: configuration.value.generation
+        ))
+        enableSaveCount += 1
+        enabledConfigurations.append(configuration.value)
+        await beforeEnableSave(configuration.value)
+        try consumeFailure(&enableFailures)
+        guard !snapshot.isEnabled, snapshot == expected else {
+            return .configurationChanged(snapshot)
+        }
+        snapshot = Self.makeSnapshot(
+            isEnabled: true,
+            activeConfiguration: configuration.value,
+            providerBundleIdentifier: providerBundleIdentifier
+        )
+        return .enabled(snapshot)
     }
 
     func saveDisabled(

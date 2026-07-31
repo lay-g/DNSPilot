@@ -30,11 +30,15 @@ Provider instance、lifecycle epoch、base generation、base fingerprint、targe
 
 Host 校验 response protocol、operation identity、Provider instance、各 disposition 必需字段、target/base identity、preserved exact bytes 和 forbidden fields。Malformed response 视为 control outcome 未知。
 
+Safe Quit resume evidence 只有与当前 disabled manager 一起验证时才有效；manager 的 provider Bundle identity、owner configuration fingerprint、保留 generation 与保留 Active configuration fingerprint 必须与 record 完全一致。Enable 前 Host 先耐久 claim record，再 reload、compare、save 并最终再次 reload manager；任何 mismatch 或 uncertain save 都 fail closed。Journal 本身绝不能授权 manager write。
+
 ## 数据最小化
 
 XPC 不接收 Profile catalog、Rules、SSID、文件路径、任意 command string、shell command 或 DNS query data。Runtime status 是进程内 evidence，不是持久化配置通道。
 
 配置与恢复文件位于私有目录并使用严格权限。DNS name、SSID、地址、子网、answer、endpoint path、token、bootstrap 和 raw runtime payload 都是私有数据。
+
+Lifecycle journal 只包含 identity fingerprint 与 UUID，不包含 upstream value、raw provider configuration、network context 或 runtime payload。损坏源文件在同一私有文件边界内保留。
 
 默认日志避开这些值。Debug Logging 必须先警告，并可能暴露这些内容。复制 diagnostic summary 需要降敏；显式 export 被视为敏感操作并要求确认。
 

@@ -41,9 +41,12 @@ The runtime switching layer is Extension-owned and reached through authenticated
 | Actual runtime and last confirmed bytes | `ProxyLifecycleController` | Process-local |
 | Runtime phase and evidence | `RuntimeStatusStore` | Process-local |
 | Profile mutation compensation | Host mutation journal | Durable, recovery-only |
+| Safe-Quit resume evidence | Host lifecycle journal | Durable, one-shot |
 | Extension installation and approval | macOS | System-owned |
 
 No layer may silently copy, replace, or infer another layer's source of truth.
+
+The lifecycle journal records only that DNSPilot prepared or completed an exact manager disable during safe Quit. It is evidence for one later startup reconciliation, not a desired-runtime source of truth and not independent authority to write the manager.
 
 ## Communication Boundary
 

@@ -41,9 +41,12 @@ Runtime switching layer 属于 Extension，通过 authenticated Mach XPC 访问�
 | Actual runtime 与最后确认 bytes | `ProxyLifecycleController` | 进程内 |
 | Runtime phase 与 evidence | `RuntimeStatusStore` | 进程内 |
 | Profile mutation compensation | Host mutation journal | 仅恢复持久化 |
+| Safe Quit resume evidence | Host lifecycle journal | 持久化、一次性 |
 | Extension 安装与批准 | macOS | 系统拥有 |
 
 任何层都不得静默复制、替换或推断另一层的事实源。
+
+Lifecycle journal 只记录 DNSPilot 在 safe Quit 中准备或完成了一次 exact manager disable。它是下一次启动进行一次 reconciliation 的证据，不是 desired-runtime 事实源，也不能独立授权 manager 写入。
 
 ## 通信边界
 

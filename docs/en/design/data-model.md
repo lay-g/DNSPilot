@@ -69,3 +69,9 @@ Profile mutations are serialized. Inactive changes need one atomic configuration
 - a short-lived private payload containing exact bytes required for compensation.
 
 Startup processes mutation evidence before ordinary runtime reconciliation. It may complete the draft, restore the old state, or clean a verified terminal transaction. Unknown, conflicting, incomplete, or corrupt evidence enters recovery-required state. Recovery artifacts are deleted only after a verified terminal state.
+
+## Lifecycle Resume Journal
+
+Safe Quit uses a separate versioned lifecycle journal in the same private Application Support directory. It stores an operation identity, phase, application-configuration fingerprint, expected manager owner fingerprint, Active generation, Active configuration fingerprint, and Profile identity. It never stores raw runtime bytes, upstream configuration, network context, or DNS traffic.
+
+The phases cover prepared Quit, confirmed disable, claimed launch, and failed attempt. Phase changes use canonical encoding, checksums, durable atomic replacement, and operation-scoped compare-and-swap. Corrupt and newer-schema records are preserved and never authorize automatic enablement. The journal is consumed once and is not part of `AppConfiguration`; `UserDefaults` remains limited to UI preferences.

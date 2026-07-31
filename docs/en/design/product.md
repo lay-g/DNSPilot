@@ -15,7 +15,7 @@ DNSPilot is a menu-bar-first macOS utility that forwards system DNS traffic thro
 - First matching enabled Rule wins; a user-selected Default Profile is the fallback.
 - Manual selection persists until the user explicitly returns to Automatic mode.
 - Closing the management window keeps the app running and preserves the current DNS Proxy state.
-- Normal Quit attempts to disable the DNS Proxy and restore System DNS.
+- Normal Quit attempts to disable the DNS Proxy and restore System DNS. If the Proxy was confirmed On, the next launch safely restores the On state when lifecycle evidence, manager ownership, configuration, and Extension readiness still agree.
 - The UI distinguishes Target Profile, confirmed Active Profile, operating mode, network context, System Extension state, and DNS Proxy state.
 
 ## Platform Boundary

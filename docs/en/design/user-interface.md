@@ -18,6 +18,8 @@ System Extension installation and DNS Proxy enablement are separate states. Stab
 
 Overview presents DNS Proxy state and control, Automatic/Manual mode, Target and Active Profiles, selection source, current network, Profile testing, diagnostics access, and recovery actions.
 
+After safe Quit, startup resume may show `Waiting for System Extension`, `Waiting for Network`, or `Restoring DNS Proxy`. The menu continues to report `DNS Proxy Off` until exact Active proof exists. A failed or blocked attempt offers `Retry` and `Keep System DNS`; it never retries continuously in the background.
+
 Selecting Manual persists the requested Profile while preserving the current Proxy On/Off state. A failed switch preserves Target and confirmed Active, with Retry and `Use Active Profile (Manual)` actions. Returning to Automatic immediately evaluates the latest valid network context.
 
 ## Profiles And Rules
@@ -52,6 +54,8 @@ Standard shortcuts include `Command-1/2/3` for main sections, `Command-,` for Se
 Keyboard Quit requires two independent `Command-Q` presses within two seconds. Auto-repeat is ignored and a key-up is required between presses. The first press only displays a non-activating visual prompt and VoiceOver announcement. Timeout, Escape, or lost keyboard context disarms it.
 
 An explicit menu click starts safe Quit immediately. Unsaved drafts require a separate discard confirmation. Confirmed Quit fences changes, restores System DNS within a bounded decision window, and exits only after proof. Failure offers Retry, Cancel Quit, and Quit Anyway with a warning that DNS Proxy may remain enabled.
+
+If DNSPilot cannot durably prepare the next-launch resume record, Quit leaves the current runtime unchanged and offers Retry, Quit Without Auto-Restore, and Cancel Quit. Choosing the opt-out path discards the incomplete resume intent before using the normal safe System DNS restoration path.
 
 ## Privacy And Diagnostics
 

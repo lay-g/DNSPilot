@@ -69,3 +69,9 @@ Profile mutation 串行执行。Inactive 修改只需要一次原子配置提交
 - 包含 compensation 所需 exact bytes 的短期私有 payload。
 
 启动时先处理 mutation evidence，再进行普通 runtime reconcile。恢复只能完成 draft、恢复 old state，或清理已验证的 terminal transaction。未知、冲突、不完整或损坏 evidence 进入 recovery-required。只有验证 terminal state 后才能删除恢复文件。
+
+## Lifecycle Resume Journal
+
+Safe Quit 在同一私有 Application Support 目录使用独立的 versioned lifecycle journal。它保存 operation identity、phase、App configuration fingerprint、预期 manager owner fingerprint、Active generation、Active configuration fingerprint 和 Profile identity，绝不保存 raw runtime bytes、upstream 配置、network context 或 DNS traffic。
+
+Phase 覆盖 prepared Quit、confirmed disable、claimed launch 与 failed attempt。Phase 变更使用 canonical encoding、checksum、durable atomic replacement 和 operation-scoped compare-and-swap。损坏或更高 schema 的 record 会被保留，且绝不能授权自动 enable。Journal 只消费一次，不属于 `AppConfiguration`；`UserDefaults` 仍只保存 UI preference。

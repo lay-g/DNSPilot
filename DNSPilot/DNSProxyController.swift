@@ -59,6 +59,30 @@ enum DNSProxyControllerState: Equatable, Sendable {
     }
 }
 
+enum DNSProxyTerminationRestoreResult: Equatable, Sendable {
+    case disabled
+    case resumePreparationFailed(state: DNSProxyControllerState, message: String)
+    case restoreFailed(DNSProxyControllerState)
+
+    var state: DNSProxyControllerState {
+        switch self {
+        case .disabled:
+            .disabled
+        case let .resumePreparationFailed(state, _):
+            state
+        case let .restoreFailed(state):
+            state
+        }
+    }
+}
+
+enum ProxyResumeStartupEvaluation: Equatable, Sendable {
+    case none
+    case pending(ProxyResumeRecord)
+    case failed(ProxyResumeFailureCode)
+    case recoveryRequired(ProxyResumeFailureCode)
+}
+
 struct DNSProxyTarget: Hashable, Sendable {
     let profileID: UUID
     let upstream: DNSUpstream
@@ -262,6 +286,9 @@ actor DNSProxyController {
     private var stagedMutationPreparationInProgress = false
     private var stagedMutationExecutionInProgress = false
     private var profileDeletionLeaseID: UUID?
+    private var resumeJournal: (any ProxyResumeJournalStoring)?
+    private var resumeAppConfigurationFingerprint: AppConfigurationFingerprint?
+    private var terminationResumePreparationError: String?
     private var presentationRevision: UInt64 = 0
     private var presentationPublishScheduled = false
     private var presentationChangeHandler: (@MainActor @Sendable (
@@ -315,6 +342,170 @@ actor DNSProxyController {
 
     func snapshot() -> DNSProxyControllerState {
         state
+    }
+
+    func configureResumeJournal(
+        _ journal: any ProxyResumeJournalStoring,
+        appConfigurationFingerprint: AppConfigurationFingerprint
+    ) {
+        resumeJournal = journal
+        resumeAppConfigurationFingerprint = appConfigurationFingerprint
+    }
+
+    func evaluateStartupResume() async -> ProxyResumeStartupEvaluation {
+        guard let resumeJournal, let appFingerprint = resumeAppConfigurationFingerprint else {
+            return .none
+        }
+        let record: ProxyResumeRecord
+        do {
+            switch try resumeJournal.load() {
+            case .missing:
+                return .none
+            case let .loaded(value):
+                record = value
+            case .newerSchema, .unsupportedSchema, .corrupt:
+                return .recoveryRequired(.outcomeUncertain)
+            }
+        } catch {
+            return .recoveryRequired(.outcomeUncertain)
+        }
+
+        guard record.appConfigurationFingerprint == appFingerprint else {
+            return .failed(.configurationChanged)
+        }
+        guard record.phase == .preparedForQuit || record.phase == .disabledConfirmed else {
+            return .failed(record.failureCode ?? .activationFailed)
+        }
+
+        do {
+            let snapshot = try await manager.loadSnapshot()
+            guard managerSnapshot(snapshot, matches: record) else {
+                return .failed(.managerChanged)
+            }
+            if snapshot.isEnabled {
+                guard case .active = state,
+                      activeGeneration == record.activeGeneration,
+                      activeTarget?.profileID == record.activeProfileID else {
+                    return .recoveryRequired(.outcomeUncertain)
+                }
+                try resumeJournal.discard(operationID: record.operationID)
+                return .none
+            }
+            return .pending(record)
+        } catch {
+            return .recoveryRequired(.outcomeUncertain)
+        }
+    }
+
+    func resumeAfterSafeQuit(
+        target: DNSProxyTarget,
+        record: ProxyResumeRecord,
+        appConfigurationFingerprint: AppConfigurationFingerprint
+    ) async -> ProxyControllerSnapshot {
+        guard !operationInProgress, !terminationRequested,
+              let resumeJournal,
+              resumeAppConfigurationFingerprint == appConfigurationFingerprint,
+              record.appConfigurationFingerprint == appConfigurationFingerprint else {
+            return makeSnapshot()
+        }
+
+        operationInProgress = true
+        let attemptID = UUID()
+        let generation = UUID()
+        var didEnableManager = false
+        var attemptedManagerEnable = false
+        var expectedDisabledSnapshot: DNSProxyManagerSnapshot?
+        defer { operationInProgress = false }
+        targetProfileID = target.profileID
+        state = .preparing(generation)
+
+        do {
+            let expected = try await manager.loadSnapshot()
+            expectedDisabledSnapshot = expected
+            guard !expected.isEnabled, managerSnapshot(expected, matches: record) else {
+                throw DNSProxyControllerError.managerConfigurationChangedDuringRollback
+            }
+            _ = try resumeJournal.claim(
+                operationID: record.operationID,
+                attemptID: attemptID
+            )
+            let schemaVersion = try await compatibleSchemaVersion(for: target.upstream)
+            try await validate(upstream: target.upstream)
+            let configuration = try ActiveProxyConfiguration(
+                generation: generation,
+                profileID: target.profileID,
+                upstream: target.upstream,
+                loggingMode: configuredLoggingMode,
+                schemaVersion: schemaVersion
+            )
+            let persisted = try PersistedProxyConfiguration(value: configuration)
+            state = .applying(generation)
+            attemptedManagerEnable = true
+            switch try await manager.saveEnabledConfiguration(
+                persisted,
+                providerBundleIdentifier: try providerBundleIdentifier(),
+                ifDisabledSnapshotMatches: expected
+            ) {
+            case let .enabled(enabledSnapshot):
+                didEnableManager = true
+                try await waitUntilReadyCancellable(
+                    configuration: persisted,
+                    timeout: readinessTimeout
+                )
+                let confirmed = try await manager.loadSnapshot()
+                guard confirmed == enabledSnapshot else {
+                    throw DNSProxyControllerError.managerConfigurationChangedDuringRollback
+                }
+                setActive(configuration)
+                try resumeJournal.discard(operationID: record.operationID)
+            case .configurationChanged:
+                throw DNSProxyControllerError.managerConfigurationChangedDuringRollback
+            }
+        } catch {
+            if didEnableManager {
+                do {
+                    try await disableManager(ifGenerationMatches: generation)
+                    clearPresentationForDisabledState()
+                } catch {
+                    requireSwitchRecovery(
+                        "Startup DNS Proxy resume could not be reconciled after activation failed."
+                    )
+                }
+            } else if attemptedManagerEnable {
+                let observed = try? await manager.loadSnapshot()
+                if let expectedDisabledSnapshot,
+                   observed == expectedDisabledSnapshot {
+                    clearPresentationForDisabledState()
+                } else {
+                    requireSwitchRecovery(
+                        "Startup DNS Proxy resume manager outcome could not be confirmed."
+                    )
+                }
+            } else {
+                clearPresentationForDisabledState()
+            }
+            try? resumeJournal.markFailed(
+                operationID: record.operationID,
+                attemptID: attemptID,
+                code: error is DNSProxyControllerError
+                    ? .activationFailed
+                    : .outcomeUncertain
+            )
+            if case .disabled = state {
+                lastSwitchFailure = ProxySwitchFailure(
+                    code: .targetWriteFailed,
+                    targetProfileID: target.profileID,
+                    activeProfileID: nil,
+                    providerErrorCode: nil,
+                    message: error.localizedDescription
+                )
+            }
+        }
+        return makeSnapshot()
+    }
+
+    func discardStartupResume() {
+        try? resumeJournal?.discard(operationID: nil)
     }
 
     func controllerSnapshot() -> ProxyControllerSnapshot {
@@ -945,6 +1136,12 @@ actor DNSProxyController {
     }
 
     func restoreSystemDNSForTermination() async -> DNSProxyControllerState {
+        await restoreSystemDNSForTerminationResult().state
+    }
+
+    func restoreSystemDNSForTerminationResult(
+        rememberActiveState: Bool = true
+    ) async -> DNSProxyTerminationRestoreResult {
         if
             let reserved = reservedActiveProfileMutation,
             !stagedMutationPreparationInProgress,
@@ -973,7 +1170,7 @@ actor DNSProxyController {
                         "The persisted Profile mutation could not be reconciled before termination: "
                             + error.localizedDescription
                     )
-                    return state
+                    return .restoreFailed(state)
                 }
             }
         }
@@ -996,7 +1193,7 @@ actor DNSProxyController {
                 state = .recoveryRequired(
                     "A previous DNS Proxy operation did not finish before the quit safety deadline."
                 )
-                return state
+                return .restoreFailed(state)
             }
             try? await Task.sleep(for: .milliseconds(10))
         }
@@ -1011,16 +1208,40 @@ actor DNSProxyController {
                 terminationCancellationRequested = false
             }
         }
-        return await performSystemDNSRestore()
+        terminationResumePreparationError = nil
+        if !rememberActiveState, let resumeJournal {
+            do {
+                try resumeJournal.discard(operationID: nil)
+            } catch {
+                terminationResumePreparationError = error.localizedDescription
+                return .resumePreparationFailed(state: state, message: error.localizedDescription)
+            }
+        }
+        let restored = await performSystemDNSRestore(
+            prepareResumeRecord: rememberActiveState
+        )
+        if let error = terminationResumePreparationError {
+            return .resumePreparationFailed(state: restored, message: error)
+        }
+        if restored == .disabled { return .disabled }
+        return .restoreFailed(restored)
     }
 
-    func cancelTerminationRequest() {
+    func cancelTerminationRequest() async {
         if terminationRestoreOwnsOperation {
             terminationCancellationRequested = true
         } else {
             terminationRequested = false
             terminationCancellationRequested = false
         }
+        guard !operationInProgress,
+              case .active = state,
+              let resumeJournal,
+              case let .loaded(record) = try? resumeJournal.load(),
+              let snapshot = try? await manager.loadSnapshot(),
+              snapshot.isEnabled,
+              managerSnapshot(snapshot, matches: record) else { return }
+        try? resumeJournal.discard(operationID: record.operationID)
     }
 
     func runtimeStatus() async throws -> ProxyRuntimeStatus {
@@ -1263,6 +1484,19 @@ actor DNSProxyController {
     ) throws -> Bool {
         snapshot.ownerIdentity?.providerBundleIdentifier == (try providerBundleIdentifier())
             && snapshot.persistedConfiguration == configuration
+    }
+
+    private func managerSnapshot(
+        _ snapshot: DNSProxyManagerSnapshot,
+        matches record: ProxyResumeRecord
+    ) -> Bool {
+        guard let persisted = snapshot.persistedConfiguration,
+              let owner = snapshot.ownerIdentity else { return false }
+        return owner.providerBundleIdentifier == record.providerBundleIdentifier
+            && owner.providerConfigurationFingerprint == record.ownerConfigurationFingerprint
+            && persisted.value.generation == record.activeGeneration
+            && persisted.value.profileID == record.activeProfileID
+            && persisted.fingerprint == record.activeConfigurationFingerprint
     }
 
     private func classifyRuntimeState(
@@ -2017,7 +2251,9 @@ actor DNSProxyController {
         )
     }
 
-    private func performSystemDNSRestore() async -> DNSProxyControllerState {
+    private func performSystemDNSRestore(
+        prepareResumeRecord: Bool = false
+    ) async -> DNSProxyControllerState {
         state = .stopping
         pendingTarget = nil
         targetProfileID = nil
@@ -2052,6 +2288,7 @@ actor DNSProxyController {
         }
 
         var lifecycleRequest: ProxyLifecycleRequest?
+        var preparedResumeOperationID: UUID?
         var quiescenceConfirmed = false
         do {
             let expectedProviderBundleIdentifier = try providerBundleIdentifier()
@@ -2075,6 +2312,42 @@ actor DNSProxyController {
                 throw DNSProxyControllerError.managerStateUnavailable(
                     "The active DNS Proxy runtime could not provide exact quiescence identity."
                 )
+            }
+
+            if prepareResumeRecord,
+               let resumeJournal,
+               let appConfigurationFingerprint = resumeAppConfigurationFingerprint,
+               let persisted = managerSnapshot.persistedConfiguration,
+               let owner = managerSnapshot.ownerIdentity,
+               let providerBundleIdentifier = owner.providerBundleIdentifier,
+               persisted.value.generation == generation,
+               persisted.fingerprint == fingerprint,
+               persisted.value.profileID == activeTarget?.profileID {
+                do {
+                    if case let .loaded(existing) = try resumeJournal.load(),
+                       existing.phase == .preparedForQuit,
+                       existing.appConfigurationFingerprint == appConfigurationFingerprint,
+                       self.managerSnapshot(managerSnapshot, matches: existing) {
+                        preparedResumeOperationID = existing.operationID
+                    } else {
+                        let record = ProxyResumeRecord(
+                            operationID: UUID(),
+                            phase: .preparedForQuit,
+                            appConfigurationFingerprint: appConfigurationFingerprint,
+                            providerBundleIdentifier: providerBundleIdentifier,
+                            ownerConfigurationFingerprint: owner.providerConfigurationFingerprint,
+                            activeGeneration: generation,
+                            activeConfigurationFingerprint: fingerprint,
+                            activeProfileID: persisted.value.profileID
+                        )
+                        try resumeJournal.prepare(record)
+                        preparedResumeOperationID = record.operationID
+                    }
+                } catch {
+                    terminationResumePreparationError = error.localizedDescription
+                    setActive(persisted.value)
+                    return state
+                }
             }
             let request = ProxyLifecycleRequest(
                 operationID: UUID(),
@@ -2174,6 +2447,15 @@ actor DNSProxyController {
         if quiescenceConfirmed {
             disabledRuntimeQuarantine = nil
             clearPresentationForDisabledState()
+            if let preparedResumeOperationID, let resumeJournal {
+                do {
+                    try resumeJournal.confirmDisabled(operationID: preparedResumeOperationID)
+                } catch {
+                    logger.error(
+                        "DNS Proxy resume confirmation could not be persisted: \(error.localizedDescription, privacy: .private)"
+                    )
+                }
+            }
         } else {
             disabledRuntimeQuarantine = DisabledRuntimeQuarantine(
                 expectedManagerSnapshot: managerSnapshot,

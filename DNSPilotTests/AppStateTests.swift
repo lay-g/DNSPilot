@@ -994,6 +994,36 @@ struct AppStateTests {
         #expect(exporter.contents?.contains("Profile: Office DNS") == true)
     }
 
+    @Test func pendingResumeWaitsForActiveSystemExtension() async throws {
+        let fixture = try Fixture()
+        let pendingSnapshot = ProductRuntimeSnapshot(
+            configuration: fixture.snapshot.configuration,
+            proxy: ProxyControllerSnapshot(
+                state: .disabled,
+                targetProfileID: nil,
+                activeProfileID: nil,
+                activeGeneration: nil,
+                lastSwitchFailure: nil
+            ),
+            network: fixture.snapshot.network,
+            locationAuthorization: fixture.snapshot.locationAuthorization,
+            startupFailure: nil,
+            diagnostics: fixture.snapshot.diagnostics,
+            loggingMode: fixture.snapshot.loggingMode,
+            proxyResumeState: .waitingForExtension
+        )
+        let backend = FakeProductRuntimeBackend(snapshot: pendingSnapshot)
+        let systemExtension = FakeSystemExtensionController(state: .checking)
+        let state = AppState(backend: backend, systemExtension: systemExtension)
+
+        await state.start()
+        #expect(backend.resumeAllowedValues.last == false)
+
+        systemExtension.send(.active)
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(backend.resumeAllowedValues.last == true)
+    }
+
 }
 
 @MainActor
@@ -1008,6 +1038,7 @@ private final class FakeProductRuntimeBackend: ProductRuntimeBacking {
     var terminationRestoreState = DNSProxyControllerState.disabled
     private(set) var terminationRestoreCount = 0
     private(set) var terminationCancelCount = 0
+    private(set) var resumeAllowedValues: [Bool] = []
     private var changeHandler: (@MainActor () -> Void)?
     private let events: EventRecorder?
 
@@ -1062,6 +1093,10 @@ private final class FakeProductRuntimeBackend: ProductRuntimeBacking {
 
     func cancelTerminationRequest() async {
         terminationCancelCount += 1
+    }
+
+    func setProxyResumeAllowed(_ allowed: Bool) async {
+        resumeAllowedValues.append(allowed)
     }
 
     func notifyChange() {

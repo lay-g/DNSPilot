@@ -30,11 +30,15 @@ Repeating one operation ID with identical bytes returns the cached terminal resp
 
 The Host validates response protocol, operation identity, Provider instance, disposition-specific fields, target or preserved-base identity, exact preserved bytes, and forbidden fields. A malformed response is an uncertain control outcome.
 
+Safe-Quit resume evidence is valid only together with a currently disabled manager whose provider Bundle identity, owner configuration fingerprint, retained generation, and retained Active configuration fingerprint exactly match the record. The record is durably claimed before enable. The Host then reloads, compares, saves, and finally reloads the manager again; any mismatch or uncertain save fails closed. The journal alone never authorizes a manager write.
+
 ## Data Minimization
 
 XPC never accepts Profile catalogs, Rules, SSIDs, file paths, arbitrary command strings, shell commands, or DNS query data. Runtime status is process-local evidence, not a durable configuration channel.
 
 Configuration and recovery files use private directories and restrictive permissions. DNS names, SSIDs, addresses, subnets, answers, endpoint paths, tokens, bootstrap addresses, and raw runtime payloads are private data.
+
+The lifecycle journal contains identity fingerprints and UUIDs only. It excludes upstream values, raw provider configuration, network context, and runtime payloads. Corrupt sources are preserved under the same private-file boundary.
 
 Default logs avoid those values. Debug Logging requires explicit warning and may expose them. Diagnostic summary copying is reduced; explicit export is treated as sensitive and requires confirmation.
 

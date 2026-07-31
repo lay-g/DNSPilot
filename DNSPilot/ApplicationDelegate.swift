@@ -4,8 +4,8 @@ import Synchronization
 
 final class DNSRestoreOperation: Sendable {
     private enum State {
-        case running([UUID: CheckedContinuation<DNSProxyControllerState?, Never>])
-        case finished(DNSProxyControllerState)
+        case running([UUID: CheckedContinuation<DNSProxyTerminationRestoreResult?, Never>])
+        case finished(DNSProxyTerminationRestoreResult)
     }
 
     private let state = Mutex(State.running([:]))
@@ -22,7 +22,7 @@ final class DNSRestoreOperation: Sendable {
     }
 
     static func start(
-        _ operation: @escaping @Sendable () async -> DNSProxyControllerState
+        _ operation: @escaping @Sendable () async -> DNSProxyTerminationRestoreResult
     ) -> DNSRestoreOperation {
         let restore = DNSRestoreOperation()
         Task {
@@ -31,10 +31,10 @@ final class DNSRestoreOperation: Sendable {
         return restore
     }
 
-    func value(timeout: Duration) async -> DNSProxyControllerState? {
+    func value(timeout: Duration) async -> DNSProxyTerminationRestoreResult? {
         let waiterID = UUID()
         return await withCheckedContinuation { continuation in
-            let result = state.withLock { state -> DNSProxyControllerState? in
+            let result = state.withLock { state -> DNSProxyTerminationRestoreResult? in
                 switch state {
                 case var .running(waiters):
                     waiters[waiterID] = continuation
@@ -56,9 +56,9 @@ final class DNSRestoreOperation: Sendable {
         }
     }
 
-    private func finish(with result: DNSProxyControllerState) {
+    private func finish(with result: DNSProxyTerminationRestoreResult) {
         let waiters = state.withLock { state -> [CheckedContinuation<
-            DNSProxyControllerState?,
+            DNSProxyTerminationRestoreResult?,
             Never
         >] in
             guard case let .running(waiters) = state else { return [] }
@@ -72,7 +72,7 @@ final class DNSRestoreOperation: Sendable {
 
     private func timeout(_ waiterID: UUID) {
         let waiter = state.withLock { state -> CheckedContinuation<
-            DNSProxyControllerState?,
+            DNSProxyTerminationRestoreResult?,
             Never
         >? in
             guard case var .running(waiters) = state else { return nil }
@@ -327,16 +327,23 @@ final class ApplicationDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func beginDNSRestore(for application: NSApplication) {
+    private func beginDNSRestore(
+        for application: NSApplication,
+        rememberActiveState: Bool = true
+    ) {
         let existingRestore = dnsRestoreOperation?.reusableForNewTerminationAttempt()
         if existingRestore == nil {
             dnsRestoreOperation = nil
         }
         let restore = existingRestore ?? DNSRestoreOperation.start { @MainActor [weak self] in
             guard let appState = self?.appState else {
-                return .recoveryRequired("DNSPilot runtime is unavailable during termination.")
+                return .restoreFailed(
+                    .recoveryRequired("DNSPilot runtime is unavailable during termination.")
+                )
             }
-            return await appState.restoreSystemDNSForTermination()
+            return await appState.restoreSystemDNSForTerminationResult(
+                rememberActiveState: rememberActiveState
+            )
         }
         dnsRestoreOperation = restore
 
@@ -355,19 +362,57 @@ final class ApplicationDelegate: NSObject, NSApplicationDelegate {
                 )
                 return
             }
-            if state == .disabled {
+            switch state {
+            case .disabled:
                 finishTermination(for: application, shouldTerminate: true)
                 return
-            }
-
-            if existingRestore != nil {
+            case let .resumePreparationFailed(_, message):
                 dnsRestoreOperation = nil
-                beginDNSRestore(for: application)
+                presentResumePreparationFailure(message, for: application)
+                return
+            case let .restoreFailed(controllerState):
+                if existingRestore != nil {
+                    dnsRestoreOperation = nil
+                    beginDNSRestore(
+                        for: application,
+                        rememberActiveState: rememberActiveState
+                    )
+                    return
+                }
+
+                dnsRestoreOperation = nil
+                presentRestoreFailure(controllerState, for: application)
                 return
             }
+        }
+    }
 
-            dnsRestoreOperation = nil
-            presentRestoreFailure(state, for: application)
+    private func presentResumePreparationFailure(
+        _ diagnostic: String,
+        for application: NSApplication
+    ) {
+        logger.error(
+            "DNS Proxy restart state could not be saved: \(diagnostic, privacy: .private)"
+        )
+        presentTerminationAlert(
+            style: .warning,
+            message: "DNS Proxy restart state could not be saved",
+            information: "Retry, or quit without automatically restoring DNS Proxy next time.",
+            buttons: ["Retry", "Quit Without Auto-Restore", "Cancel Quit"]
+        ) { [weak self, weak application] buttonIndex in
+            guard let self, let application else { return }
+            switch buttonIndex {
+            case 0:
+                beginDNSRestore(for: application)
+            case 1:
+                beginDNSRestore(for: application, rememberActiveState: false)
+            default:
+                terminationTask = Task { [weak self, weak application] in
+                    guard let self, let application, terminationPending else { return }
+                    await appState?.cancelTerminationRequest()
+                    finishTermination(for: application, shouldTerminate: false)
+                }
+            }
         }
     }
 

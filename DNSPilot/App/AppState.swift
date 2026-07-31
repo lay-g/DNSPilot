@@ -56,6 +56,35 @@ struct ProductRuntimeSnapshot: Equatable, Sendable {
     let startupFailure: ProductStartupFailure?
     let diagnostics: ProductDiagnosticsSnapshot
     let loggingMode: ProxyLoggingMode
+    let proxyResumeState: ProductProxyResumeState
+
+    init(
+        configuration: AppConfiguration?,
+        proxy: ProxyControllerSnapshot,
+        network: NetworkContext?,
+        locationAuthorization: LocationAuthorizationInput,
+        startupFailure: ProductStartupFailure?,
+        diagnostics: ProductDiagnosticsSnapshot,
+        loggingMode: ProxyLoggingMode,
+        proxyResumeState: ProductProxyResumeState = .none
+    ) {
+        self.configuration = configuration
+        self.proxy = proxy
+        self.network = network
+        self.locationAuthorization = locationAuthorization
+        self.startupFailure = startupFailure
+        self.diagnostics = diagnostics
+        self.loggingMode = loggingMode
+        self.proxyResumeState = proxyResumeState
+    }
+}
+
+enum ProductProxyResumeState: Equatable, Sendable {
+    case none
+    case waitingForExtension
+    case waitingForNetwork
+    case restoring
+    case failed(ProxyResumeFailureCode)
 }
 
 enum ProductDiagnosticsSnapshot: Equatable, Sendable {
@@ -330,7 +359,25 @@ protocol ProductRuntimeBacking: AnyObject {
     func performProductIntent(_ intent: ProductIntent) async -> ProductActionOutcome
     func setProductChangeHandler(_ handler: (@MainActor () -> Void)?)
     func restoreSystemDNSForTermination() async -> DNSProxyControllerState
+    func restoreSystemDNSForTerminationResult(
+        rememberActiveState: Bool
+    ) async -> DNSProxyTerminationRestoreResult
     func cancelTerminationRequest() async
+    func setProxyResumeAllowed(_ allowed: Bool) async
+    func retryProxyResume() async
+    func keepSystemDNSAfterResumeFailure() async
+}
+
+extension ProductRuntimeBacking {
+    func setProxyResumeAllowed(_ allowed: Bool) async {}
+    func retryProxyResume() async {}
+    func keepSystemDNSAfterResumeFailure() async {}
+    func restoreSystemDNSForTerminationResult(
+        rememberActiveState: Bool
+    ) async -> DNSProxyTerminationRestoreResult {
+        let state = await restoreSystemDNSForTermination()
+        return state == .disabled ? .disabled : .restoreFailed(state)
+    }
 }
 
 enum ProductSelectionSource: Equatable, Sendable {
@@ -418,6 +465,7 @@ final class AppState: ObservableObject {
     @Published private(set) var network: NetworkContext?
     @Published private(set) var locationAuthorization = LocationAuthorizationInput.notDetermined
     @Published private(set) var startupFailure: ProductStartupFailure?
+    @Published private(set) var proxyResumeState = ProductProxyResumeState.none
     @Published private(set) var actionFailure: ProductActionFailure?
     @Published private(set) var profileTestResult: ProductProfileTestResult?
     @Published private(set) var isPerformingAction = false
@@ -492,6 +540,7 @@ final class AppState: ObservableObject {
                 Task { @MainActor [weak self] in
                     await Task.yield()
                     self?.replaceBundledSystemExtensionIfSafe()
+                    await self?.coordinateProxyResume()
                 }
             }
             .store(in: &cancellables)
@@ -554,6 +603,7 @@ final class AppState: ObservableObject {
         startupCompleted = backendStarted
         if !backendStarted { didStart = false }
         replaceBundledSystemExtensionIfSafe()
+        await coordinateProxyResume()
     }
 
     func refresh() async {
@@ -575,6 +625,18 @@ final class AppState: ObservableObject {
         startupFailure = snapshot.startupFailure
         diagnostics = snapshot.diagnostics
         loggingMode = snapshot.loggingMode
+        proxyResumeState = snapshot.proxyResumeState
+    }
+
+    func retryProxyResume() async {
+        await backend.retryProxyResume()
+        await refresh()
+        await coordinateProxyResume()
+    }
+
+    func keepSystemDNSAfterResumeFailure() async {
+        await backend.keepSystemDNSAfterResumeFailure()
+        await refresh()
     }
 
     func navigate(to section: AppNavigationSection) {
@@ -684,6 +746,17 @@ final class AppState: ObservableObject {
               systemExtensionState == .updateRequired,
               !systemExtension.requestInProgress else { return }
         systemExtension.activate()
+    }
+
+    private func coordinateProxyResume() async {
+        guard startupCompleted, startupFailure == nil else {
+            await backend.setProxyResumeAllowed(false)
+            return
+        }
+        await backend.setProxyResumeAllowed(
+            systemExtensionState == .active && !systemExtension.requestInProgress
+        )
+        await refresh()
     }
 
     @discardableResult
@@ -816,6 +889,14 @@ final class AppState: ObservableObject {
 
     func restoreSystemDNSForTermination() async -> DNSProxyControllerState {
         await backend.restoreSystemDNSForTermination()
+    }
+
+    func restoreSystemDNSForTerminationResult(
+        rememberActiveState: Bool
+    ) async -> DNSProxyTerminationRestoreResult {
+        await backend.restoreSystemDNSForTerminationResult(
+            rememberActiveState: rememberActiveState
+        )
     }
 
     func cancelTerminationRequest() async {

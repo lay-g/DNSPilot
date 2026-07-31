@@ -14,7 +14,9 @@ Unit and contract tests cover:
 - Configuration schema, canonical encoding, fingerprints, atomic commit, corruption preservation, and compare-and-swap conflicts.
 - Automatic/Manual persistence, target coalescing, stale decisions, and session fencing.
 - Mutation journal authentication, compensation, crash recovery, and cleanup.
+- Safe-Quit resume journal encoding, phase fencing, corruption preservation, one-shot claims, and crash windows before and after manager disable.
 - Runtime payload validation, exact identity, replay, rate limits, rollback, quiescence, resume, and recovery classification.
+- Manual and Automatic startup resume, fresh-session network selection, Extension readiness gates, exact-disabled manager mismatch, and explicit Keep System DNS behavior.
 - Quit key-up, repeat rejection, timeout, cancellation, draft handling, and exactly-once dispatch.
 - Privacy-safe display identity and diagnostic redaction.
 

@@ -19,6 +19,7 @@ final class DNSPilotAppModel: ObservableObject, ProductRuntimeBacking {
     )
     @Published private(set) var requestedTargetProfileID: UUID?
     @Published private(set) var startupFailure: ProductStartupFailure?
+    @Published private(set) var proxyResumeState = ProductProxyResumeState.none
     private var diagnostics = ProductDiagnosticsSnapshot.unavailable("Not refreshed")
     private var proxyPresentationRevision: UInt64 = 0
     private let proxyController: DNSProxyController
@@ -34,6 +35,10 @@ final class DNSPilotAppModel: ObservableObject, ProductRuntimeBacking {
     private var startupGeneration: UInt64 = 0
     private var networkSessionEpoch: UInt64 = 0
     private var productChangeHandler: (@MainActor () -> Void)?
+    private var pendingResumeRecord: ProxyResumeRecord?
+    private var proxyResumeAllowed = false
+    private var proxyResumeJournal: (any ProxyResumeJournalStoring)?
+    private var proxyResumeAttemptInProgress = false
 
     var proxyState: DNSProxyControllerState {
         proxySnapshot.state
@@ -79,6 +84,12 @@ final class DNSPilotAppModel: ObservableObject, ProductRuntimeBacking {
             }
             let store = try configurationStoreFactory()
             let persisted = try loadOrCreateConfiguration(from: store)
+            let resumeJournal = ProxyResumeJournal(directoryURL: store.directoryURL)
+            proxyResumeJournal = resumeJournal
+            await proxyController.configureResumeJournal(
+                resumeJournal,
+                appConfigurationFingerprint: persisted.fingerprint
+            )
             let journal = ProfileMutationJournal(directoryURL: store.directoryURL)
             let mutationCoordinator = ProfileMutationCoordinator(
                 currentConfiguration: persisted,
@@ -105,6 +116,17 @@ final class DNSPilotAppModel: ObservableObject, ProductRuntimeBacking {
             try Task.checkCancellation()
 
             await refreshProxyPresentation()
+            switch await proxyController.evaluateStartupResume() {
+            case .none:
+                pendingResumeRecord = nil
+                proxyResumeState = .none
+            case let .pending(record):
+                pendingResumeRecord = record
+                proxyResumeState = .waitingForExtension
+            case let .failed(reason), let .recoveryRequired(reason):
+                pendingResumeRecord = nil
+                proxyResumeState = .failed(reason)
+            }
             let modeCoordinator = OperatingModeCoordinator(
                 modePersister: mutationCoordinator,
                 targetSubmitter: proxyController
@@ -183,7 +205,8 @@ final class DNSPilotAppModel: ObservableObject, ProductRuntimeBacking {
             locationAuthorization: ssidProvider?.authorizationStatus() ?? .notDetermined,
             startupFailure: startupFailure,
             diagnostics: diagnostics,
-            loggingMode: loggingMode
+            loggingMode: loggingMode,
+            proxyResumeState: proxyResumeState
         )
     }
 
@@ -566,12 +589,21 @@ final class DNSPilotAppModel: ObservableObject, ProductRuntimeBacking {
     }
 
     func restoreSystemDNS() async {
+        pendingResumeRecord = nil
+        proxyResumeState = .none
+        await proxyController.discardStartupResume()
         _ = await proxyController.restoreSystemDNS()
         await refreshProxyPresentation()
         requestedTargetProfileID = nil
     }
 
     func restoreSystemDNSForTermination() async -> DNSProxyControllerState {
+        await restoreSystemDNSForTerminationResult(rememberActiveState: true).state
+    }
+
+    func restoreSystemDNSForTerminationResult(
+        rememberActiveState: Bool
+    ) async -> DNSProxyTerminationRestoreResult {
         networkWorkspaceAdapter?.stop()
         if let operatingModeCoordinator {
             _ = await operatingModeCoordinator.fenceForTermination()
@@ -579,10 +611,55 @@ final class DNSPilotAppModel: ObservableObject, ProductRuntimeBacking {
         if let networkMonitor {
             await networkMonitor.stop()
         }
-        let state = await proxyController.restoreSystemDNSForTermination()
+        if let configuration = await profileMutationCoordinator?.configuration(),
+           let proxyResumeJournal {
+            await proxyController.configureResumeJournal(
+                proxyResumeJournal,
+                appConfigurationFingerprint: configuration.fingerprint
+            )
+        }
+        let result = await proxyController.restoreSystemDNSForTerminationResult(
+            rememberActiveState: rememberActiveState
+        )
         await refreshProxyPresentation()
         requestedTargetProfileID = nil
-        return state
+        return result
+    }
+
+    func setProxyResumeAllowed(_ allowed: Bool) async {
+        proxyResumeAllowed = allowed
+        guard pendingResumeRecord != nil else { return }
+        if !allowed {
+            proxyResumeState = .waitingForExtension
+            productChangeHandler?()
+            return
+        }
+        await attemptPendingResume()
+    }
+
+    func retryProxyResume() async {
+        guard let proxyResumeJournal else { return }
+        do {
+            let result = try proxyResumeJournal.load()
+            guard case let .loaded(record) = result else { return }
+            pendingResumeRecord = try proxyResumeJournal.prepareRetry(
+                operationID: record.operationID
+            )
+            proxyResumeState = proxyResumeAllowed
+                ? .waitingForNetwork
+                : .waitingForExtension
+            if proxyResumeAllowed { await attemptPendingResume() }
+        } catch {
+            proxyResumeState = .failed(.outcomeUncertain)
+            productChangeHandler?()
+        }
+    }
+
+    func keepSystemDNSAfterResumeFailure() async {
+        await proxyController.discardStartupResume()
+        pendingResumeRecord = nil
+        proxyResumeState = .none
+        productChangeHandler?()
     }
 
     func cancelTerminationRequest() async {
@@ -645,6 +722,62 @@ final class DNSPilotAppModel: ObservableObject, ProductRuntimeBacking {
         }
     }
 
+    private func attemptPendingResume() async {
+        guard proxyResumeAllowed,
+              !proxyResumeAttemptInProgress,
+              let record = pendingResumeRecord,
+              let mutationCoordinator = profileMutationCoordinator,
+              let proxyResumeJournal else { return }
+        proxyResumeAttemptInProgress = true
+        defer { proxyResumeAttemptInProgress = false }
+        let configuration = await mutationCoordinator.configuration()
+        let profileID: DNSProfile.ID
+        switch configuration.value.operatingMode {
+        case let .manual(manualProfileID):
+            profileID = manualProfileID
+        case .automatic:
+            guard let modeSnapshot = await operatingModeCoordinator?.snapshot(),
+                  modeSnapshot.isSessionActive,
+                  let context = modeSnapshot.latestNetworkContext,
+                  context.status == .satisfied,
+                  let defaultProfileID = configuration.value.defaultProfileID else {
+                proxyResumeState = .waitingForNetwork
+                productChangeHandler?()
+                return
+            }
+            profileID = RuleEngine.resolveProfile(
+                context: context,
+                rules: configuration.value.rules,
+                defaultProfileID: defaultProfileID
+            ).profileID
+        }
+        guard let profile = configuration.value.profiles.first(where: { $0.id == profileID }) else {
+            proxyResumeState = .failed(.profileUnavailable)
+            productChangeHandler?()
+            return
+        }
+
+        await proxyController.configureResumeJournal(
+            proxyResumeJournal,
+            appConfigurationFingerprint: configuration.fingerprint
+        )
+        proxyResumeState = .restoring
+        productChangeHandler?()
+        let snapshot = await proxyController.resumeAfterSafeQuit(
+            target: DNSProxyTarget(profileID: profile.id, upstream: profile.upstream),
+            record: record,
+            appConfigurationFingerprint: configuration.fingerprint
+        )
+        proxySnapshot = snapshot
+        if case .active = snapshot.state {
+            pendingResumeRecord = nil
+            proxyResumeState = .none
+        } else {
+            proxyResumeState = .failed(.activationFailed)
+        }
+        productChangeHandler?()
+    }
+
     private func handleGUISessionChange(_ active: Bool, epoch: UInt64) {
         networkSessionEpoch = epoch
         let callbackStartupGeneration = startupGeneration
@@ -674,6 +807,9 @@ final class DNSPilotAppModel: ObservableObject, ProductRuntimeBacking {
             event.context,
             sessionEpoch: event.sessionEpoch
         )
+        if proxyResumeAllowed, pendingResumeRecord != nil {
+            await attemptPendingResume()
+        }
         guard startupGeneration == expectedStartupGeneration else { return }
         let presentation = await proxyController.presentationSnapshot()
         guard startupGeneration == expectedStartupGeneration else { return }

@@ -15,6 +15,7 @@ struct OverviewView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 header
+                proxyResumeNotice
                 proxyRecoveryActions
                 extensionStatus
                 networkStatusNotice
@@ -88,7 +89,41 @@ struct OverviewView: View {
                 }
             ))
             .toggleStyle(.switch)
-            .disabled(appState.configurationWritesLocked || appState.profiles.isEmpty)
+            .disabled(
+                appState.configurationWritesLocked
+                    || appState.profiles.isEmpty
+                    || appState.proxyResumeState != .none
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var proxyResumeNotice: some View {
+        switch appState.proxyResumeState {
+        case .none:
+            EmptyView()
+        case .waitingForExtension:
+            Label("Waiting for System Extension", systemImage: "puzzlepiece.extension")
+                .foregroundStyle(.secondary)
+        case .waitingForNetwork:
+            Label("Waiting for Network to Restore DNS Proxy", systemImage: "network.slash")
+                .foregroundStyle(.secondary)
+        case .restoring:
+            Label("Restoring DNS Proxy", systemImage: "arrow.clockwise")
+                .foregroundStyle(.secondary)
+        case .failed:
+            VStack(alignment: .leading, spacing: 8) {
+                Text("DNS Proxy Was Not Restored").font(.headline)
+                Text("System DNS remains active. Retry after resolving the current configuration or Extension issue.")
+                    .foregroundStyle(.secondary)
+                HStack {
+                    Button("Retry") { Task { await appState.retryProxyResume() } }
+                    Button("Keep System DNS") {
+                        Task { await appState.keepSystemDNSAfterResumeFailure() }
+                    }
+                }
+            }
+            .disabled(appState.isPerformingAction)
         }
     }
 

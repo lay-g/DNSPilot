@@ -47,6 +47,11 @@ enum DNSProxyManagerEnableResult: Equatable, Sendable {
     case alreadyEnabled(DNSProxyManagerSnapshot)
 }
 
+enum DNSProxyManagerFencedEnableResult: Equatable, Sendable {
+    case enabled(DNSProxyManagerSnapshot)
+    case configurationChanged(DNSProxyManagerSnapshot)
+}
+
 enum DNSProxyManagerDisableResult: Equatable, Sendable {
     case disabled
     case alreadyDisabled
@@ -173,6 +178,12 @@ protocol DNSProxyManagerManaging: Sendable {
         providerBundleIdentifier: String
     ) async throws -> DNSProxyManagerEnableResult
 
+    func saveEnabledConfiguration(
+        _ configuration: PersistedProxyConfiguration,
+        providerBundleIdentifier: String,
+        ifDisabledSnapshotMatches expected: DNSProxyManagerSnapshot
+    ) async throws -> DNSProxyManagerFencedEnableResult
+
     func saveDisabled(
         ifGenerationMatches expectedGeneration: UUID?
     ) async throws -> DNSProxyManagerDisableResult
@@ -242,6 +253,53 @@ actor NetworkExtensionDNSProxyManager: DNSProxyManagerManaging {
             "DNS manager enable save completed: generation=\(configuration.generation.uuidString, privacy: .public)"
         )
         return .enabled
+    }
+
+    func saveEnabledConfiguration(
+        _ configuration: PersistedProxyConfiguration,
+        providerBundleIdentifier: String,
+        ifDisabledSnapshotMatches expected: DNSProxyManagerSnapshot
+    ) async throws -> DNSProxyManagerFencedEnableResult {
+        try await manager.loadFromPreferences()
+        let current = snapshot()
+        guard !current.isEnabled, current == expected else {
+            return .configurationChanged(current)
+        }
+
+        manager.providerProtocol = DNSProxyManagerConfiguration.makeProviderProtocol(
+            persistedConfiguration: configuration,
+            providerBundleIdentifier: providerBundleIdentifier
+        )
+        manager.localizedDescription = "DNSPilot"
+        manager.isEnabled = true
+        do {
+            try await saveToPreferences()
+        } catch let saveError {
+            let observed: DNSProxyManagerSnapshot
+            do {
+                try await manager.loadFromPreferences()
+                observed = snapshot()
+            } catch {
+                throw DNSProxyManagerClientError.configurationStale
+            }
+            if observed == expected { throw saveError }
+            if observed.isEnabled,
+               observed.persistedConfiguration == configuration,
+               observed.ownerIdentity?.providerBundleIdentifier == providerBundleIdentifier {
+                return .enabled(observed)
+            }
+            throw DNSProxyManagerClientError.configurationStale
+        }
+        try await manager.loadFromPreferences()
+        let confirmed = snapshot()
+        guard
+            confirmed.isEnabled,
+            confirmed.persistedConfiguration == configuration,
+            confirmed.ownerIdentity?.providerBundleIdentifier == providerBundleIdentifier
+        else {
+            throw DNSProxyManagerClientError.configurationStale
+        }
+        return .enabled(confirmed)
     }
 
     func saveDisabled(

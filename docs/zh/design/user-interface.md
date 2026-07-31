@@ -18,6 +18,8 @@ System Extension installation 与 DNS Proxy enablement 是独立状态。稳定�
 
 Overview 展示 DNS Proxy 状态与控制、Automatic/Manual、Target/Active Profile、selection source、当前网络、Profile test、诊断入口和恢复操作。
 
+Safe Quit 后的 startup resume 可以显示 `Waiting for System Extension`、`Waiting for Network` 或 `Restoring DNS Proxy`。在 exact Active proof 出现前，菜单栏继续显示 `DNS Proxy Off`。失败或被阻止的 attempt 提供 `Retry` 与 `Keep System DNS`，不得在后台持续重试。
+
 选择 Manual 会持久化请求的 Profile，并保持当前 Proxy On/Off 状态。切换失败保留 Target 与已确认 Active，并提供 Retry 和 `Use Active Profile (Manual)`。返回 Automatic 后立即计算最新有效 network context。
 
 ## Profiles 与 Rules
@@ -52,6 +54,8 @@ Setup 是独立流程：
 键盘 Quit 要求 2 秒内两次独立 `Command-Q`。忽略 auto-repeat，两次 key-down 之间必须有 key-up。第一次只显示 non-activating visual prompt 和 VoiceOver announcement。Timeout、Escape 或失去 keyboard context 后取消 armed。
 
 明确点击菜单项会立即开始 safe Quit。未保存 draft 需要独立 discard confirmation。确认 Quit 后阻止新 mutation，在有界时间内恢复 System DNS，只有得到 proof 后退出。失败时提供 Retry、Cancel Quit、Quit Anyway，并警告 DNS Proxy 可能仍 enabled。
+
+若 DNSPilot 无法耐久准备下次启动的 resume record，Quit 保持当前 runtime 不变，并提供 Retry、Quit Without Auto-Restore 与 Cancel Quit。选择 opt-out 后必须先 discard 不完整 resume intent，再使用正常 safe System DNS restoration 路径。
 
 ## 隐私与诊断
 
