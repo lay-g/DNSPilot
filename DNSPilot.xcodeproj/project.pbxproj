@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		6B5AF7AE300F05E80040DD6E /* DNS Proxy system extension in Embed System Extensions */ = {isa = PBXBuildFile; fileRef = 6B5AF7AF300F05E80040DD6E /* DNS Proxy system extension */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		6B5AF7A0300F05E80040DD6E /* NetworkExtension.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6B5AF79F300F05E80040DD6E /* NetworkExtension.framework */; };
 		B20000000000000000000001 /* AGDnsProxy in Frameworks */ = {isa = PBXBuildFile; productRef = B20000000000000000000008 /* AGDnsProxy */; };
 		B20000000000000000000002 /* AGDnsProxy in Frameworks */ = {isa = PBXBuildFile; productRef = B20000000000000000000009 /* AGDnsProxy */; };
@@ -50,11 +51,26 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		6B5AF7AD300F05E80040DD6E /* Embed System Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(SYSTEM_EXTENSIONS_FOLDER_PATH)";
+			dstSubfolderSpec = 16;
+			files = (
+				6B5AF7AE300F05E80040DD6E /* DNS Proxy system extension in Embed System Extensions */,
+			);
+			name = "Embed System Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		6B5AF76E300F052F0040DD6E /* DNSPilotDev.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DNSPilotDev.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6B5AF77B300F05300040DD6E /* DNSPilotTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DNSPilotTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		6B5AF785300F05300040DD6E /* DNSPilotUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DNSPilotUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		6B5AF79D300F05E80040DD6E /* DNSPilotDNSProxy.systemextension */ = {isa = PBXFileReference; explicitFileType = "wrapper.system-extension"; includeInIndex = 0; path = DNSPilotDNSProxy.systemextension; sourceTree = BUILT_PRODUCTS_DIR; };
+		6B5AF7AF300F05E80040DD6E /* DNS Proxy system extension */ = {isa = PBXFileReference; explicitFileType = "wrapper.system-extension"; includeInIndex = 0; path = "$(DNS_PROXY_PRODUCT_NAME).systemextension"; sourceTree = BUILT_PRODUCTS_DIR; };
 		6B5AF79F300F05E80040DD6E /* NetworkExtension.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = NetworkExtension.framework; path = System/Library/Frameworks/NetworkExtension.framework; sourceTree = SDKROOT; };
 		A10000000000000000000001 /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
 		A10000000000000000000002 /* DebugLocal.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = DebugLocal.xcconfig; sourceTree = "<group>"; };
@@ -405,30 +421,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
-
-/* Begin PBXShellScriptBuildPhase section */
-		6B5AF7AD300F05E80040DD6E /* Embed System Extensions */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"$(BUILT_PRODUCTS_DIR)/$(DNS_PROXY_PRODUCT_NAME).systemextension",
-			);
-			name = "Embed System Extensions";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"$(TARGET_BUILD_DIR)/$(SYSTEM_EXTENSIONS_FOLDER_PATH)",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "set -euo pipefail\n\nsource_path=\"${SCRIPT_INPUT_FILE_0}\"\ndestination_dir=\"${SCRIPT_OUTPUT_FILE_0}\"\ndestination_path=\"${destination_dir}/${DNS_PROXY_PRODUCT_NAME}.systemextension\"\n\n/bin/rm -rf \"${destination_dir}\"\n/bin/mkdir -p \"${destination_dir}\"\n/usr/bin/ditto \"${source_path}\" \"${destination_path}\"\n";
-			showEnvVarsInLog = 0;
-		};
-/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		6B5AF76A300F052F0040DD6E /* Sources */ = {
