@@ -38,7 +38,7 @@ Configuration and recovery files use private directories and restrictive permiss
 
 Default logs avoid those values. Debug Logging requires explicit warning and may expose them. Diagnostic summary copying is reduced; explicit export is treated as sensitive and requires confirmation.
 
-Underlying operational errors are logged as private by default and are not rendered directly in user-facing error text. Debug Logging and confirmed diagnostic export may contain detailed failures under their existing sensitive-data warnings.
+Underlying operational errors are logged as private by default and are not rendered directly in user-facing error text. User-facing failures may expose reviewed, stable error categories and non-sensitive codes, but never raw descriptions that can contain private configuration or implementation details. An unstructured dependency failure remains explicitly unclassified. Debug Logging and confirmed diagnostic export may contain detailed failures under their existing sensitive-data warnings.
 
 ## Failure Policy
 

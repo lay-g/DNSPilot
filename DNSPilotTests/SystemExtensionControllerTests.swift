@@ -88,8 +88,14 @@ struct SystemExtensionControllerTests {
     @Test func userDescriptionDoesNotExposeSystemErrorDetails() {
         let detail = "OSSystemExtensionErrorDomain error 9"
 
-        #expect(SystemExtensionController.State.failed(detail).userDescription == "System Extension operation failed")
-        #expect(SystemExtensionController.State.updateFailed(detail).userDescription == "System Extension update failed")
+        #expect(
+            SystemExtensionController.State.failed(detail).userDescription
+                == "macOS did not complete the System Extension request. Retry or open System Settings."
+        )
+        #expect(
+            SystemExtensionController.State.updateFailed(detail).userDescription
+                == "The System Extension update did not complete. Retry safely or review Diagnostics."
+        )
     }
 
     @Test func bundleVersionsUseNumericBuildOrdering() {

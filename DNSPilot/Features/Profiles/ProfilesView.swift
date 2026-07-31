@@ -13,6 +13,7 @@ struct ProfilesView: View {
     @State private var draft: ProfileDraft?
     @State private var editorOperation = EditorOperation.create
     @State private var deletionRequest: ProfileDeletionRequest?
+    @State private var profileTestTask: Task<Void, Never>?
 
     var body: some View {
         HSplitView {
@@ -39,7 +40,7 @@ struct ProfilesView: View {
                     Button("Edit") { appState.requestEditor(.editProfile(profile.id)) }
                     Button("Duplicate") { appState.requestEditor(.duplicateProfile(profile.id)) }
                     Button("Test") {
-                        Task { await appState.preflightProfile(ProfileDraft(profile: profile)) }
+                        test(profile)
                     }
                     Button("Make Default") {
                         Task { await appState.setDefaultProfile(profile.id) }
@@ -60,7 +61,7 @@ struct ProfilesView: View {
                         isDefault: profile.id == appState.configuration?.defaultProfileID,
                         edit: { appState.requestEditor(.editProfile(profile.id)) },
                         test: {
-                            Task { await appState.preflightProfile(ProfileDraft(profile: profile)) }
+                            test(profile)
                         },
                         duplicate: { appState.requestEditor(.duplicateProfile(profile.id)) },
                         makeDefault: { Task { await appState.setDefaultProfile(profile.id) } },
@@ -111,9 +112,13 @@ struct ProfilesView: View {
         .onAppear { handleEditorRequest(appState.editorRequest) }
         .onChange(of: appState.editorRequest) { _, request in handleEditorRequest(request) }
         .onChange(of: appState.draftDiscardGeneration) { _, _ in draft = nil }
+        .onDisappear {
+            profileTestTask?.cancel()
+            appState.cancelProfileTest()
+        }
         .safeAreaInset(edge: .bottom) {
             if let result = appState.profileTestResult {
-                Label(result, systemImage: "checkmark.circle")
+                Label(result.message, systemImage: "checkmark.circle")
                     .font(.caption)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
@@ -172,6 +177,13 @@ struct ProfilesView: View {
             activeProfileID: appState.proxy.activeProfileID,
             targetProfileID: appState.proxy.targetProfileID
         )
+    }
+
+    private func test(_ profile: DNSProfile) {
+        profileTestTask?.cancel()
+        profileTestTask = Task {
+            _ = await appState.preflightProfile(ProfileDraft(profile: profile))
+        }
     }
 }
 
@@ -250,10 +262,12 @@ private struct ProfileEditorView: View {
     }
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openSettings) private var openSettings
     @EnvironmentObject private var appState: AppState
     @State var draft: ProfileDraft
     @State private var validationError: ProfileDraftError?
     @State private var operationFailure: ProductActionFailure?
+    @State private var profileTestTask: Task<Void, Never>?
     @FocusState private var focusedField: Field?
     let operation: ProfilesView.EditorOperation
 
@@ -318,7 +332,7 @@ private struct ProfileEditorView: View {
             .formStyle(.grouped)
             Divider()
             HStack {
-                Button("Test") { Task { await testDraft() } }
+                Button("Test") { startProfileTest() }
                 Spacer()
                 Button("Cancel") { dismiss() }
                 Button("Save") {
@@ -331,16 +345,53 @@ private struct ProfileEditorView: View {
         .frame(width: 520, height: 390)
         .disabled(appState.isPerformingAction)
         .onAppear { appState.beginDraft(.profile) }
+        .onDisappear {
+            profileTestTask?.cancel()
+            appState.cancelProfileTest()
+        }
         .alert(
-            "Operation Failed",
+            operationFailure?.title ?? "Profile Action Failed",
             isPresented: Binding(
                 get: { operationFailure != nil },
                 set: { if !$0 { operationFailure = nil } }
             )
         ) {
+            if operationFailure?.recoveryActions.contains(.retry) == true {
+                Button(operationFailure?.action == .profileTest ? "Test Again" : "Try Again") {
+                    let action = operationFailure?.action
+                    operationFailure = nil
+                    if action == .profileTest { startProfileTest() }
+                    else { validateAndSave() }
+                }
+            }
+            if operationFailure?.recoveryActions.contains(.reconnect) == true {
+                Button("Reconnect") {
+                    operationFailure = nil
+                    Task { await appState.reconnect() }
+                }
+            }
+            if operationFailure?.recoveryActions.contains(.restoreSystemDNS) == true {
+                Button("Restore System DNS") {
+                    operationFailure = nil
+                    Task { await appState.restoreSystemDNS() }
+                }
+            }
+            if operationFailure?.recoveryActions.contains(.openDiagnostics) == true {
+                Button("Open Diagnostics") {
+                    operationFailure = nil
+                    appState.selectSettingsSection(.diagnostics)
+                    openSettings()
+                }
+            }
+            if operationFailure?.reason == .profileNotFound {
+                Button("Close Editor") {
+                    operationFailure = nil
+                    dismiss()
+                }
+            }
             Button("OK") { operationFailure = nil }
         } message: {
-            Text(operationFailure?.message ?? "Unknown error")
+            Text(operationFailure?.message ?? "DNSPilot could not load the Profile failure details. Open Diagnostics for more information.")
         }
     }
 
@@ -364,6 +415,10 @@ private struct ProfileEditorView: View {
             focusedField = field(for: error)
             return
         } catch {
+            handle(
+                appState.reportValidationFailure(error, action: operation.productAction),
+                dismissOnSuccess: false
+            )
             return
         }
         Task {
@@ -376,6 +431,11 @@ private struct ProfileEditorView: View {
         handle(await appState.preflightProfile(draft), dismissOnSuccess: false)
     }
 
+    private func startProfileTest() {
+        profileTestTask?.cancel()
+        profileTestTask = Task { await testDraft() }
+    }
+
     private func handle(
         _ outcome: ProductActionOutcome,
         dismissOnSuccess: Bool
@@ -385,7 +445,7 @@ private struct ProfileEditorView: View {
             if dismissOnSuccess { dismiss() }
         case let .failed(failure):
             appState.clearActionFailure()
-            operationFailure = failure
+            if failure.reason != .cancelled { operationFailure = failure }
         }
     }
 
@@ -426,6 +486,16 @@ private struct ProfileEditorView: View {
                 .font(.caption)
                 .foregroundStyle(.red)
                 .accessibilityLabel("Error: \(validationError.errorDescription ?? "Invalid value")")
+        }
+    }
+}
+
+private extension ProfilesView.EditorOperation {
+    var productAction: ProductAction {
+        switch self {
+        case .create: .profileCreate
+        case .edit: .profileEdit
+        case .duplicate: .profileDuplicate
         }
     }
 }

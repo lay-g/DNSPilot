@@ -2,14 +2,18 @@ import AGDnsProxy
 import Foundation
 import Synchronization
 
-enum UpstreamValidationError: LocalizedError, Sendable {
-    case rejected(String)
+enum ProfileTestFailure: Error, Equatable, Sendable {
+    case upstreamRejected(String)
 
-    var errorDescription: String? {
+    var diagnosticDescription: String {
         switch self {
-        case let .rejected(message):
-            "Upstream preflight failed: \(message)"
+        case let .upstreamRejected(description):
+            description
         }
+    }
+
+    static func dnsLibs(_ error: NSError) -> Self {
+        .upstreamRejected("\(error.domain)(\(error.code)): \(error.localizedDescription)")
     }
 }
 
@@ -88,7 +92,7 @@ final class UpstreamValidator: UpstreamValidating, Sendable {
                             ipv6Available: true,
                             offline: false
                         ) {
-                            throw UpstreamValidationError.rejected(error.localizedDescription)
+                            throw ProfileTestFailure.dnsLibs(error as NSError)
                         }
                         operation.complete(.success(()))
                     } catch {

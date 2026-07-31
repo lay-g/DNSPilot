@@ -57,7 +57,7 @@ Setup 是独立流程：
 
 Location 在需要 Wi-Fi SSID 时按上下文请求。Debug Logging 持续显示敏感数据警告。Diagnostic export 需要确认。About 展示 version、build、license、source、privacy、support、third-party notices 和 build origin。
 
-操作失败使用简短且可操作的用户文案。Alert、状态标签、tooltip 和降敏 diagnostic summary 不暴露底层错误链；完整详情通过日志边界记录。字段级校验仍保留具体原因，便于用户修正输入。
+操作失败必须说明用户尝试的操作、当前可获得的最具体稳定失败类别、已确认的结果状态和相关恢复动作，不使用 `Operation Failed` 等笼统标题。依赖只提供非结构化错误时，UI 必须说明失败的依赖阶段并把原因标记为未分类，不得猜测更具体的原因。Alert、状态标签、tooltip 和降敏 diagnostic summary 不暴露原始底层错误链；完整详情通过日志边界记录。字段级校验仍保留具体原因，便于用户修正输入。
 
 ## 无障碍与布局
 

@@ -36,7 +36,8 @@ struct OnboardingView: View {
     @State private var dnsEnableFailure: ProductActionFailure?
     @State private var customValidationError: ProfileDraftError?
     @State private var profileSubmissionInProgress = false
-    @State private var profileSubmissionFailureMessage: String?
+    @State private var profileSubmissionTask: Task<Void, Never>?
+    @State private var profileSubmissionFailure: ProductActionFailure?
     @State private var locationRequestInProgress = false
     @State private var onboardingPreparationInProgress = true
     @FocusState private var focusedCustomField: CustomField?
@@ -84,16 +85,38 @@ struct OnboardingView: View {
             revisitingStep = nil
         }
         .task { await prepareOnboarding() }
+        .onDisappear {
+            profileSubmissionTask?.cancel()
+            appState.cancelProfileTest()
+        }
         .alert(
-            "Profile Setup Failed",
+            profileSubmissionFailure?.title ?? "Profile Could Not Be Configured",
             isPresented: Binding(
-                get: { profileSubmissionFailureMessage != nil },
-                set: { if !$0 { profileSubmissionFailureMessage = nil } }
+                get: { profileSubmissionFailure != nil },
+                set: { if !$0 { profileSubmissionFailure = nil } }
             )
         ) {
-            Button("OK") { profileSubmissionFailureMessage = nil }
+            if profileSubmissionFailure?.recoveryActions.contains(.retry) == true {
+                Button(profileSubmissionFailure?.action == .profileTest ? "Test Again" : "Try Again") {
+                    profileSubmissionFailure = nil
+                    saveSelectedProfile()
+                }
+            }
+            if profileSubmissionFailure?.recoveryActions.contains(.reconnect) == true {
+                Button("Reconnect") {
+                    profileSubmissionFailure = nil
+                    Task { await appState.reconnect() }
+                }
+            }
+            if profileSubmissionFailure?.recoveryActions.contains(.restoreSystemDNS) == true {
+                Button("Restore System DNS") {
+                    profileSubmissionFailure = nil
+                    Task { await appState.restoreSystemDNS() }
+                }
+            }
+            Button("OK") { profileSubmissionFailure = nil }
         } message: {
-            Text(profileSubmissionFailureMessage ?? "Unknown error")
+            Text(profileSubmissionFailure?.message ?? "DNSPilot could not complete Profile setup.")
         }
     }
 
@@ -305,7 +328,7 @@ struct OnboardingView: View {
                 Link(privacyLink.label, destination: privacyLink.url)
                     .font(.caption)
             }
-            Button(selection == .custom ? "Configur Profile" : "Test and Continue") {
+            Button(selection == .custom ? "Configure Profile" : "Test and Continue") {
                 if selection == .custom {
                     isConfiguringCustomProfile = true
                     revisitingStep = nil
@@ -476,7 +499,8 @@ struct OnboardingView: View {
         if let profileID = selectedExistingProfileID,
            let profile = appState.profiles.first(where: { $0.id == profileID }) {
             profileSubmissionInProgress = true
-            Task {
+            profileSubmissionTask?.cancel()
+            profileSubmissionTask = Task {
                 defer { profileSubmissionInProgress = false }
                 guard profileOperationSucceeded(
                     await appState.preflightProfile(ProfileDraft(profile: profile))
@@ -501,11 +525,18 @@ struct OnboardingView: View {
                 focusedCustomField = customField(for: error)
                 return
             } catch {
+                let action: ProductAction = appState.profiles.contains { $0.id == draft.id }
+                    ? .profileEdit
+                    : .profileCreate
+                _ = profileOperationSucceeded(
+                    appState.reportValidationFailure(error, action: action)
+                )
                 return
             }
         }
         profileSubmissionInProgress = true
-        Task {
+        profileSubmissionTask?.cancel()
+        profileSubmissionTask = Task {
             defer { profileSubmissionInProgress = false }
             guard profileOperationSucceeded(await appState.preflightProfile(draft)) else { return }
             let outcome = appState.profiles.contains { $0.id == draft.id }
@@ -526,7 +557,7 @@ struct OnboardingView: View {
             return true
         case let .failed(failure):
             appState.clearActionFailure()
-            profileSubmissionFailureMessage = failure.message
+            if failure.reason != .cancelled { profileSubmissionFailure = failure }
             return false
         }
     }
@@ -602,7 +633,7 @@ struct OnboardingView: View {
         Task {
             let outcome = await appState.turnOnDNSProxy()
             if case let .failed(failure) = outcome {
-                dnsEnableFailure = failure
+                if failure.reason != .cancelled { dnsEnableFailure = failure }
                 appState.clearActionFailure()
             }
         }

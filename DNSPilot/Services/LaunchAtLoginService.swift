@@ -6,6 +6,7 @@ enum LaunchAtLoginStatus: Equatable, Sendable {
     case disabled
     case enabled
     case requiresApproval
+    case notFound
     case unavailable
     case failed(String)
 
@@ -13,7 +14,7 @@ enum LaunchAtLoginStatus: Equatable, Sendable {
         switch self {
         case .enabled, .requiresApproval:
             true
-        case .disabled, .unavailable, .failed:
+        case .disabled, .notFound, .unavailable, .failed:
             false
         }
     }
@@ -75,7 +76,7 @@ private final class SystemLaunchAtLoginRegistration: LaunchAtLoginRegistering {
         case .requiresApproval:
             .requiresApproval
         case .notFound:
-            .unavailable
+            .notFound
         @unknown default:
             .unavailable
         }

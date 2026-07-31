@@ -23,7 +23,16 @@ struct SettingsView: View {
                     Button("Open Login Items Settings") { appState.openLoginItemsSettings() }
                 }
                 if case .failed = appState.launchAtLoginStatus {
-                    Text("Launch at Login could not be changed.").foregroundStyle(.red)
+                    Text("DNSPilot could not complete the Launch at Login change. Open Login Items Settings and verify the current macOS status.")
+                        .foregroundStyle(.red)
+                }
+                if appState.launchAtLoginStatus == .notFound {
+                    Text("Launch at Login is unavailable because macOS could not find the app service. Reinstall DNSPilot in Applications, then try again.")
+                        .foregroundStyle(.red)
+                }
+                if appState.launchAtLoginStatus == .unavailable {
+                    Text("macOS returned an unrecognized Launch at Login status. Open Login Items Settings to review the current state.")
+                        .foregroundStyle(.red)
                 }
             }
             .formStyle(.grouped)
@@ -186,15 +195,39 @@ struct SettingsView: View {
             Text("DNS Proxy will be restored to System DNS first. The extension must be installed again before DNSPilot can be turned on.")
         }
         .alert(
-            "Operation Failed",
+            appState.settingsActionFailure?.title ?? "Settings Action Failed",
             isPresented: Binding(
                 get: { appState.settingsActionFailure != nil },
                 set: { if !$0 { appState.clearSettingsActionFailure() } }
             )
         ) {
+            if appState.settingsActionFailure?.recoveryActions.contains(.retry) == true {
+                Button("Try Again") {
+                    appState.clearSettingsActionFailure()
+                    Task { await appState.retrySettingsAction() }
+                }
+            }
+            if appState.settingsActionFailure?.recoveryActions.contains(.chooseAnotherLocation) == true {
+                Button("Choose Another Location") {
+                    appState.clearSettingsActionFailure()
+                    Task { await appState.retrySettingsAction() }
+                }
+            }
+            if appState.settingsActionFailure?.recoveryActions.contains(.openSystemSettings) == true {
+                Button("Open System Settings") {
+                    appState.clearSettingsActionFailure()
+                    appState.openSystemExtensionSettings()
+                }
+            }
+            if appState.settingsActionFailure?.recoveryActions.contains(.openDiagnostics) == true {
+                Button("Open Diagnostics") {
+                    appState.clearSettingsActionFailure()
+                    appState.selectSettingsSection(.diagnostics)
+                }
+            }
             Button("OK") { appState.clearSettingsActionFailure() }
         } message: {
-            Text(appState.settingsActionFailure?.message ?? "Unknown error")
+            Text(appState.settingsActionFailure?.message ?? "DNSPilot could not load the Settings failure details. Review Diagnostics for more information.")
         }
         .sheet(isPresented: $showsThirdPartyNotices) {
             ThirdPartyNoticesView()
@@ -233,7 +266,12 @@ struct SettingsView: View {
             LabeledContent("Last Stable Error", value: stableErrorDescription(errorCode))
             LabeledContent("Transition Sequence", value: sequence.map(String.init) ?? "Unavailable")
         case .unavailable:
-            LabeledContent("Runtime Details", value: "Unavailable")
+            LabeledContent("Runtime Details") {
+                VStack(alignment: .trailing, spacing: 6) {
+                    Text("DNSPilot could not contact the System Extension.")
+                    Button("Refresh") { Task { await appState.refreshDiagnostics() } }
+                }
+            }
         }
     }
 

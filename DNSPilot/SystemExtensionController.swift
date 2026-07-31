@@ -91,9 +91,9 @@ final class SystemExtensionController: NSObject, ObservableObject {
         var userDescription: String {
             switch self {
             case .updateFailed:
-                "System Extension update failed"
+                "The System Extension update did not complete. Retry safely or review Diagnostics."
             case .failed:
-                "System Extension operation failed"
+                "macOS did not complete the System Extension request. Retry or open System Settings."
             default:
                 description
             }

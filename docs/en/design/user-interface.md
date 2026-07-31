@@ -57,7 +57,7 @@ An explicit menu click starts safe Quit immediately. Unsaved drafts require a se
 
 Location is requested contextually for Wi-Fi SSID. Debug Logging displays a persistent sensitive-data warning. Diagnostic export requires confirmation. About shows version, build, license, source, privacy, support, third-party notices, and build origin.
 
-Operational failures use concise, actionable user text. Alerts, status labels, tooltips, and reduced diagnostic summaries never expose underlying error chains; full details are recorded through the logging boundary. Field-level validation remains specific so users can correct input.
+Operational failures identify the attempted action, the most specific stable failure category available, the confirmed resulting state, and a relevant recovery action. Generic titles such as `Operation Failed` are not used. If a dependency exposes only an unstructured error, the UI states which dependency stage failed and that the cause is unclassified instead of guessing a more specific cause. Alerts, status labels, tooltips, and reduced diagnostic summaries never expose raw underlying error chains; full details are recorded through the logging boundary. Field-level validation remains specific so users can correct input.
 
 ## Accessibility And Layout
 

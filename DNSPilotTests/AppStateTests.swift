@@ -99,31 +99,37 @@ struct AppStateTests {
     @Test func failedBackendIntentKeepsDraftAndPublishesStableFailure() async throws {
         let fixture = try Fixture()
         let backend = FakeProductRuntimeBackend(snapshot: fixture.snapshot)
-        backend.outcome = .failed(.conflict)
+        let failure = ProductActionFailure(action: .profileEdit, reason: .conflict)
+        backend.outcome = .failed(failure)
         let state = AppState(backend: backend)
         state.beginDraft(.profile)
 
         let outcome = await state.editProfile(ProfileDraft(profile: fixture.profile))
 
-        #expect(outcome == .failed(.conflict))
+        #expect(outcome == .failed(failure))
         #expect(state.activeDraft == .profile)
-        #expect(state.actionFailure == .conflict)
+        #expect(state.actionFailure == failure)
     }
 
     @Test func persistenceFailureRemainsVisibleAndCanBeRetried() async throws {
         let fixture = try Fixture()
         let backend = FakeProductRuntimeBackend(snapshot: fixture.snapshot)
-        backend.outcome = .failed(.rejected("Could not save configuration"))
+        let failure = ProductActionFailure(
+            action: .profileEdit,
+            reason: .persistenceFailed,
+            diagnosticDescription: "Could not save configuration"
+        )
+        backend.outcome = .failed(failure)
         let state = AppState(backend: backend)
         state.beginDraft(.profile)
         let draft = ProfileDraft(profile: fixture.profile)
 
         #expect(
             await state.editProfile(draft)
-                == .failed(.rejected("Could not save configuration"))
+                == .failed(failure)
         )
         #expect(state.activeDraft == .profile)
-        #expect(state.actionFailure == .rejected("Could not save configuration"))
+        #expect(state.actionFailure == failure)
 
         backend.outcome = .completed
         #expect(await state.editProfile(draft) == .completed)
@@ -131,12 +137,54 @@ struct AppStateTests {
         #expect(backend.intents == [.editProfile(fixture.profile), .editProfile(fixture.profile)])
     }
 
-    @Test func operationalFailureMessageDoesNotExposeDiagnosticDetails() {
+    @Test func operationalFailurePresentationIsSpecificAndDoesNotExposeDiagnosticDetails() {
         let detail = "Upstream exchange failed at internal/file.cc:51"
+        let failure = ProductActionFailure(
+            action: .profileTest,
+            reason: .upstreamTestUnclassified,
+            diagnosticDescription: detail
+        )
 
-        #expect(ProductActionFailure.rejected(detail).message == "The operation could not be completed. Try again.")
-        #expect(!ProductActionFailure.rejected(detail).message.contains(detail))
-        #expect(ProductActionFailure.rejected(detail).diagnosticDescription == detail)
+        #expect(failure.title == "Profile Test Failed")
+        #expect(failure.message.contains("DnsLibs"))
+        #expect(failure.message.contains("does not provide a safe structured cause"))
+        #expect(failure.recoveryActions == [.retry, .openDiagnostics])
+        #expect(!failure.message.contains(detail))
+        #expect(failure.diagnosticDescription == detail)
+    }
+
+    @Test func everyOperationalFailureUsesAnActionSpecificTitleAndSafeMessage() {
+        let detail = "https://dns.example/dns-query?token=secret internal/file.swift:51"
+
+        for action in ProductAction.allCases {
+            #expect(!action.failureTitle.contains("Operation Failed"))
+            #expect(!action.failureTitle.isEmpty)
+        }
+        for reason in ProductFailureReason.allCases {
+            let failure = ProductActionFailure(
+                action: .profileEdit,
+                reason: reason,
+                diagnosticDescription: detail
+            )
+            #expect(!failure.message.isEmpty)
+            #expect(!failure.message.contains("token=secret"))
+            #expect(!failure.message.contains("internal/file.swift"))
+            #expect(failure.diagnosticDescription == detail)
+        }
+    }
+
+    @Test func dnsLibsErrorClassificationUsesStableBoundaryWithoutParsingDescription() {
+        let error = NSError(
+            domain: "com.adguard.dnsproxy",
+            code: 13,
+            userInfo: [NSLocalizedDescriptionKey: "private upstream explanation"]
+        )
+
+        let failure = ProfileTestFailure.dnsLibs(error)
+
+        #expect(failure == .upstreamRejected(
+            "com.adguard.dnsproxy(13): private upstream explanation"
+        ))
     }
 
     @Test func startupFailureSeparatesUserTextFromDiagnosticDetails() {
@@ -145,6 +193,61 @@ struct AppStateTests {
 
         #expect(failure.message == "DNSPilot could not load its configuration.")
         #expect(failure.diagnosticDescription == detail)
+    }
+
+    @Test func realBackendProjectsDnsLibsPreflightFailureWithoutLeakingDetails() async throws {
+        let detail = "https://dns.example/dns-query?token=secret at internal/file.cc:51"
+        let backend = DNSPilotAppModel(
+            upstreamValidator: FakeUpstreamValidator {
+                throw ProfileTestFailure.upstreamRejected(detail)
+            }
+        )
+        let profile = try DNSProfile(
+            name: "Test",
+            upstream: .plain(PlainDNSConfiguration(
+                serverAddress: try IPAddress("192.0.2.53")
+            ))
+        )
+
+        let outcome = await backend.performProductIntent(.preflightProfile(profile))
+
+        guard case let .failed(failure) = outcome else {
+            Issue.record("Expected Profile Test failure")
+            return
+        }
+        #expect(failure.action == .profileTest)
+        #expect(failure.reason == .upstreamTestUnclassified)
+        #expect(failure.title == "Profile Test Failed")
+        #expect(!failure.message.contains("token=secret"))
+        #expect(!failure.message.contains("192.0.2.53"))
+        #expect(!failure.message.contains("internal/file.cc"))
+        #expect(failure.diagnosticDescription == detail)
+    }
+
+    @Test func proxySwitchCodesProjectStableReasons() {
+        #expect(ProxySwitchFailureCode.targetPreflightFailed.productFailureReason == .upstreamTestUnclassified)
+        #expect(ProxySwitchFailureCode.providerCompatibilityUnavailable.productFailureReason == .compatibilityUnavailable)
+        #expect(ProxySwitchFailureCode.oldGenerationChanged.productFailureReason == .targetChanged)
+        #expect(ProxySwitchFailureCode.managerStateUnavailable.productFailureReason == .managerStateUnavailable)
+        #expect(ProxySwitchFailureCode.targetWriteFailed.productFailureReason == .targetWriteFailed)
+        #expect(ProxySwitchFailureCode.targetReadinessTimedOut.productFailureReason == .readinessTimedOut)
+        #expect(ProxySwitchFailureCode.targetProviderFailed.productFailureReason == .providerFailed)
+    }
+
+    @Test func profileMutationFailuresProjectStableReasons() {
+        let id = UUID()
+        #expect(ProfileMutationFailure.operationInProgress.productFailureReason == .operationInProgress)
+        #expect(ProfileMutationFailure.operationConflict.productFailureReason == .conflict)
+        #expect(ProfileMutationFailure.expectedConfigurationMismatch.productFailureReason == .conflict)
+        #expect(ProfileMutationFailure.profileNotFound(id).productFailureReason == .profileNotFound)
+        #expect(ProfileMutationFailure.profileAlreadyExists(id).productFailureReason == .profileAlreadyExists)
+        #expect(ProfileMutationFailure.invalidDeletionPlan(.missingDefaultReplacement).productFailureReason == .invalidDeletionPlan)
+        #expect(ProfileMutationFailure.invalidConfiguration.productFailureReason == .invalidConfiguration)
+        #expect(ProfileMutationFailure.configurationCommitFailed.productFailureReason == .persistenceFailed)
+        #expect(ProfileMutationFailure.controllerPreparationFailed.productFailureReason == .runtimePreparationFailed)
+        #expect(ProfileMutationFailure.desiredPersistenceFailed.productFailureReason == .desiredConfigurationPersistenceFailed)
+        #expect(ProfileMutationFailure.journalWriteFailed.productFailureReason == .recoveryJournalWriteFailed)
+        #expect(ProfileMutationFailure.runtimeRejected.productFailureReason == .runtimeRejected)
     }
 
     @Test func successfulPreflightDoesNotClearUnsavedProfileDraft() async throws {
@@ -156,11 +259,101 @@ struct AppStateTests {
         #expect(await state.preflightProfile(ProfileDraft(profile: fixture.profile)) == .completed)
 
         #expect(state.activeDraft == .profile)
+        #expect(state.profileTestResult?.matches(fixture.profile) == true)
+        #expect(state.profileTestResult?.message == "\"Office DNS\" passed the DNS test.")
         #expect(backend.intents.count == 1)
         guard case .preflightProfile = backend.intents[0] else {
             Issue.record("Expected preflight intent")
             return
         }
+    }
+
+    @Test func cancelledProfileTestDoesNotPublishAnAlertOrSuccess() async throws {
+        let fixture = try Fixture()
+        let backend = FakeProductRuntimeBackend(snapshot: fixture.snapshot)
+        backend.outcome = .failed(ProductActionFailure(
+            action: .profileTest,
+            reason: .cancelled
+        ))
+        let state = AppState(backend: backend)
+
+        let outcome = await state.preflightProfile(ProfileDraft(profile: fixture.profile))
+
+        #expect(outcome == backend.outcome)
+        #expect(state.actionFailure == nil)
+        #expect(state.profileTestResult == nil)
+    }
+
+    @Test func invalidatedInFlightProfileTestCannotPublishLateSuccess() async throws {
+        let fixture = try Fixture()
+        let gate = AsyncGate()
+        let backend = FakeProductRuntimeBackend(snapshot: fixture.snapshot)
+        backend.intentGate = gate
+        let state = AppState(backend: backend)
+
+        let task = Task {
+            await state.preflightProfile(ProfileDraft(profile: fixture.profile))
+        }
+        while backend.intents.isEmpty { await Task.yield() }
+
+        state.cancelProfileTest()
+        task.cancel()
+        await gate.open()
+        _ = await task.value
+
+        #expect(state.profileTestResult == nil)
+    }
+
+    @Test func finalRecoveryStateOverridesOrdinarySwitchFailurePresentation() async throws {
+        let fixture = try Fixture()
+        let diagnostic = "manager write outcome uncertain"
+        let backend = FakeProductRuntimeBackend(snapshot: ProductRuntimeSnapshot(
+            configuration: fixture.snapshot.configuration,
+            proxy: ProxyControllerSnapshot(
+                state: .recoveryRequired(diagnostic),
+                targetProfileID: fixture.profile.id,
+                activeProfileID: fixture.profile.id,
+                activeGeneration: fixture.snapshot.proxy.activeGeneration,
+                lastSwitchFailure: nil
+            ),
+            network: fixture.snapshot.network,
+            locationAuthorization: .authorized,
+            startupFailure: nil,
+            diagnostics: .unavailable("Not refreshed"),
+            loggingMode: .default
+        ))
+        backend.outcome = .failed(ProductActionFailure(
+            action: .dnsProxyEnable,
+            reason: .targetWriteFailed,
+            diagnosticDescription: diagnostic
+        ))
+        let state = AppState(
+            backend: backend,
+            systemExtension: FakeSystemExtensionController(state: .active)
+        )
+
+        let outcome = await state.turnOnDNSProxy()
+
+        let expected = ProductActionFailure(
+            action: .dnsProxyEnable,
+            reason: .recoveryRequired,
+            diagnosticDescription: diagnostic
+        )
+        #expect(outcome == .failed(expected))
+        #expect(state.actionFailure == expected)
+        #expect(expected.recoveryActions == [.reconnect, .restoreSystemDNS])
+    }
+
+    @Test func successfulProfileEditInvalidatesPreviousTestResult() async throws {
+        let fixture = try Fixture()
+        let backend = FakeProductRuntimeBackend(snapshot: fixture.snapshot)
+        let state = AppState(backend: backend)
+
+        #expect(await state.preflightProfile(ProfileDraft(profile: fixture.profile)) == .completed)
+        #expect(state.profileTestResult != nil)
+
+        #expect(await state.editProfile(ProfileDraft(profile: fixture.profile)) == .completed)
+        #expect(state.profileTestResult == nil)
     }
 
     @Test func globalDraftDiscardPublishesDismissalGeneration() {
@@ -283,7 +476,10 @@ struct AppStateTests {
 
         let outcome = await state.turnOnDNSProxy()
 
-        #expect(outcome == .failed(.rejected("systemExtensionNotActive")))
+        #expect(outcome == .failed(ProductActionFailure(
+            action: .dnsProxyEnable,
+            reason: .systemExtensionNotActive
+        )))
         #expect(backend.intents.isEmpty)
     }
 
@@ -322,7 +518,10 @@ struct AppStateTests {
         let state = AppState(backend: backend)
         await state.start()
 
-        #expect(await state.setDefaultProfile(fixture.profile.id) == .failed(.recoveryRequired))
+        #expect(await state.setDefaultProfile(fixture.profile.id) == .failed(ProductActionFailure(
+            action: .defaultProfileUpdate,
+            reason: .recoveryRequired
+        )))
         #expect(backend.intents.isEmpty)
     }
 
@@ -440,8 +639,13 @@ struct AppStateTests {
 
         let outcome = await state.deactivateSystemExtensionSafely()
 
-        #expect(outcome == .failed(.rejected("Extension remained active")))
-        #expect(state.settingsActionFailure == .rejected("Extension remained active"))
+        let failure = ProductActionFailure(
+            action: .systemExtensionDeactivation,
+            reason: .unknown,
+            diagnosticDescription: "Extension remained active"
+        )
+        #expect(outcome == .failed(failure))
+        #expect(state.settingsActionFailure == failure)
     }
 
     @Test func restartPendingExtensionDeactivationPreservesCompletedOnboarding() async throws {
@@ -463,7 +667,11 @@ struct AppStateTests {
 
         #expect(
             await state.deactivateSystemExtensionSafely()
-                == .failed(.rejected("Restart required to complete System Extension change"))
+                == .failed(ProductActionFailure(
+                    action: .systemExtensionDeactivation,
+                    reason: .restartRequired,
+                    diagnosticDescription: "Restart required to complete System Extension change"
+                ))
         )
         #expect(defaults.bool(forKey: ProductWindowPolicy.onboardingCompletedKey))
         #expect(defaults.bool(forKey: ProductWindowPolicy.introductionCompletedKey))
@@ -474,15 +682,65 @@ struct AppStateTests {
 
     @Test func failedDNSRestoreNeverRequestsExtensionDeactivation() async {
         let backend = FakeProductRuntimeBackend(snapshot: .empty)
-        backend.outcome = .failed(.rejected("restore failed"))
+        let failure = ProductActionFailure(
+            action: .systemDNSRestore,
+            reason: .systemDNSRestoreUnconfirmed,
+            diagnosticDescription: "restore failed"
+        )
+        backend.outcome = .failed(failure)
         let extensionController = FakeSystemExtensionController(state: .active)
         let state = AppState(backend: backend, systemExtension: extensionController)
 
         #expect(
             await state.deactivateSystemExtensionSafely()
-                == .failed(.rejected("restore failed"))
+                == .failed(ProductActionFailure(
+                    action: .systemExtensionDeactivation,
+                    reason: .systemDNSRestoreUnconfirmed,
+                    diagnosticDescription: failure.diagnosticDescription
+                ))
         )
         #expect(extensionController.deactivationCount == 0)
+    }
+
+    @Test func extensionDeactivationRetryRepeatsTheWholeSafeOperation() async {
+        let restoreFailure = ProductActionFailure(
+            action: .systemDNSRestore,
+            reason: .systemDNSRestoreUnconfirmed,
+            diagnosticDescription: "restore failed"
+        )
+        let backend = FakeProductRuntimeBackend(snapshot: .empty)
+        backend.outcome = .failed(restoreFailure)
+        let extensionController = FakeSystemExtensionController(state: .active)
+        extensionController.deactivationResult = .inactive
+        let state = AppState(backend: backend, systemExtension: extensionController)
+
+        #expect(await state.deactivateSystemExtensionSafely() == .failed(ProductActionFailure(
+            action: .systemExtensionDeactivation,
+            reason: .systemDNSRestoreUnconfirmed,
+            diagnosticDescription: "restore failed"
+        )))
+        #expect(extensionController.deactivationCount == 0)
+
+        backend.outcome = .completed
+        #expect(await state.retrySettingsAction() == .completed)
+        #expect(extensionController.deactivationCount == 1)
+        #expect(backend.intents == [.restoreSystemDNS, .restoreSystemDNS])
+    }
+
+    @Test func debugLoggingRetryPreservesTheRequestedValue() async {
+        let failure = ProductActionFailure(
+            action: .debugLoggingUpdate,
+            reason: .runtimeRejected
+        )
+        let backend = FakeProductRuntimeBackend(snapshot: .empty)
+        backend.outcome = .failed(failure)
+        let state = AppState(backend: backend)
+
+        #expect(await state.setDebugLoggingEnabled(true) == .failed(failure))
+
+        backend.outcome = .completed
+        #expect(await state.retrySettingsAction() == .completed)
+        #expect(backend.intents == [.setDebugLogging(true), .setDebugLogging(true)])
     }
 
     @Test func extensionDeactivationRunsAfterSuccessfulDNSRestore() async {
@@ -629,7 +887,10 @@ struct AppStateTests {
 
         #expect(
             await state.updateSystemExtensionSafely()
-                == .failed(.rejected("systemExtensionUpdateUnavailable"))
+                == .failed(ProductActionFailure(
+                    action: .systemExtensionUpdate,
+                    reason: .systemExtensionOperationUnavailable
+                ))
         )
         #expect(extensionController.activationCount == 0)
     }
@@ -644,7 +905,10 @@ struct AppStateTests {
 
         #expect(
             await state.updateSystemExtensionSafely()
-                == .failed(.rejected("systemDNSRestoreUnconfirmed"))
+                == .failed(ProductActionFailure(
+                    action: .systemExtensionUpdate,
+                    reason: .systemDNSRestoreUnconfirmed
+                ))
         )
         #expect(extensionController.activationCount == 0)
     }

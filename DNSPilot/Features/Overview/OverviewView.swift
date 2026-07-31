@@ -9,6 +9,7 @@ struct OverviewView: View {
 
     @EnvironmentObject private var appState: AppState
     @Environment(\.openSettings) private var openSettings
+    @State private var profileTestTask: Task<Void, Never>?
 
     var body: some View {
         ScrollView {
@@ -26,11 +27,15 @@ struct OverviewView: View {
                     Spacer()
                     if let activeProfile {
                         Button("Test Active Profile") {
-                            Task { await appState.preflightProfile(ProfileDraft(profile: activeProfile)) }
+                            profileTestTask?.cancel()
+                            profileTestTask = Task {
+                                _ = await appState.preflightProfile(ProfileDraft(profile: activeProfile))
+                            }
                         }
                         .disabled(appState.configurationWritesLocked)
-                        if let result = appState.profileTestResult {
-                            Text(result)
+                        if let result = appState.profileTestResult,
+                           result.matches(activeProfile) {
+                            Text(result.message)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -53,6 +58,10 @@ struct OverviewView: View {
             .frame(maxWidth: 720, alignment: .leading)
         }
         .navigationTitle("Overview")
+        .onDisappear {
+            profileTestTask?.cancel()
+            appState.cancelProfileTest()
+        }
     }
 
     private var header: some View {
@@ -85,41 +94,59 @@ struct OverviewView: View {
 
     @ViewBuilder
     private var proxyRecoveryActions: some View {
-        if appState.proxy.lastSwitchFailure != nil {
-            HStack {
-                Button("Retry") {
-                    Task { await appState.turnOnDNSProxy() }
+        if case .recoveryRequired = appState.proxy.state {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("DNS Proxy state cannot be confirmed because ownership or manager state changed outside DNSPilot.")
+                    .foregroundStyle(.secondary)
+                HStack {
+                    Button("Reconnect") { Task { await appState.reconnect() } }
+                    Button("Restore System DNS") { Task { await appState.restoreSystemDNS() } }
+                    Button("Open Diagnostics") { openDiagnostics() }
                 }
-                if let activeProfileID = appState.proxy.activeProfileID,
-                   case let .manual(targetProfileID) = appState.configuration?.operatingMode,
-                   targetProfileID != activeProfileID {
-                    Button("Use Active Profile (Manual)") {
-                        Task {
-                            await appState.setOperatingMode(.manual(profileID: activeProfileID))
+            }
+            .disabled(appState.isPerformingAction)
+        } else if let switchFailure = appState.proxy.lastSwitchFailure {
+            let failure = switchFailure.productActionFailure
+            VStack(alignment: .leading, spacing: 8) {
+                Text(failure.title).font(.headline)
+                Text(failure.message).foregroundStyle(.secondary)
+                HStack {
+                    Button("Retry") {
+                        Task { await appState.turnOnDNSProxy() }
+                    }
+                    if let activeProfileID = appState.proxy.activeProfileID,
+                       case let .manual(targetProfileID) = appState.configuration?.operatingMode,
+                       targetProfileID != activeProfileID {
+                        Button("Use Active Profile (Manual)") {
+                            Task {
+                                await appState.setOperatingMode(.manual(profileID: activeProfileID))
+                            }
                         }
+                    }
+                    if failure.recoveryActions.contains(.restoreSystemDNS) {
+                        Button("Restore System DNS") {
+                            Task { await appState.restoreSystemDNS() }
+                        }
+                    }
+                    if failure.recoveryActions.contains(.openDiagnostics) {
+                        Button("Open Diagnostics") { openDiagnostics() }
                     }
                 }
             }
             .disabled(appState.isPerformingAction)
         } else {
             switch appState.proxy.state {
-            case .recoveryRequired:
+            case .failed, .degraded:
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("DNS Proxy ownership or manager state changed outside DNSPilot.")
-                        .foregroundStyle(.secondary)
+                    Text(proxyStateFailureMessage).foregroundStyle(.secondary)
                     HStack {
-                        Button("Reconnect") { Task { await appState.reconnect() } }
-                        Button("Keep Off") { Task { await appState.restoreSystemDNS() } }
+                        Button("Retry") { Task { await appState.turnOnDNSProxy() } }
+                        Button("Open Diagnostics") { openDiagnostics() }
                     }
                 }
                 .disabled(appState.isPerformingAction)
-            case .failed, .degraded:
-                HStack {
-                    Button("Retry") { Task { await appState.turnOnDNSProxy() } }
-                    Button("Open Diagnostics") { openDiagnostics() }
-                }
-                .disabled(appState.isPerformingAction)
-            case .disabled, .preparing, .applying, .repairing, .active, .stopping:
+            case .disabled, .preparing, .applying, .repairing, .active, .stopping,
+                 .recoveryRequired:
                 EmptyView()
             }
         }
@@ -192,8 +219,14 @@ struct OverviewView: View {
                 Button("Resume Setup") { appState.requestSetupWindow() }
             }
         case .failed:
-            LabeledContent("System Extension Error") {
-                Button("Retry") { appState.installSystemExtension() }
+            LabeledContent("System Extension Request Failed") {
+                VStack(alignment: .trailing, spacing: 6) {
+                    Text(appState.systemExtensionState.userDescription)
+                    HStack {
+                        Button("Open System Settings") { appState.openSystemExtensionSettings() }
+                        Button("Retry") { appState.installSystemExtension() }
+                    }
+                }
             }
         case .updateRequired:
             LabeledContent("System Extension Update Required") {
@@ -204,10 +237,13 @@ struct OverviewView: View {
             }
         case .updateFailed:
             LabeledContent("System Extension Update Failed") {
-                Button("Retry Safely") {
-                    Task { await appState.updateSystemExtensionSafely() }
+                VStack(alignment: .trailing, spacing: 6) {
+                    Text(appState.systemExtensionState.userDescription)
+                    Button("Retry Safely") {
+                        Task { await appState.updateSystemExtensionSafely() }
+                    }
+                    .disabled(appState.systemExtensionRequestInProgress)
                 }
-                .disabled(appState.systemExtensionRequestInProgress)
             }
         case .downgradeBlocked:
             LabeledContent(
@@ -310,5 +346,17 @@ struct OverviewView: View {
     private func openDiagnostics() {
         appState.selectSettingsSection(.diagnostics)
         openSettings()
+    }
+
+    private var proxyStateFailureMessage: String {
+        switch appState.proxy.state {
+        case .failed:
+            "DNS Proxy did not confirm an active Profile. Retry or review Diagnostics before changing configuration."
+        case .degraded:
+            "DNS Proxy is running in a limited state. Review Diagnostics, then retry or restore System DNS."
+        case .disabled, .preparing, .applying, .repairing, .active, .stopping,
+             .recoveryRequired:
+            ""
+        }
     }
 }

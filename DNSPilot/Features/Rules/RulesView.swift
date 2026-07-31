@@ -313,15 +313,33 @@ private struct RuleEditorView: View {
         .disabled(appState.isPerformingAction)
         .onAppear { appState.beginDraft(.rule) }
         .alert(
-            "Operation Failed",
+            operationFailure?.title ?? "Rule Action Failed",
             isPresented: Binding(
                 get: { operationFailure != nil },
                 set: { if !$0 { operationFailure = nil } }
             )
         ) {
+            if operationFailure?.recoveryActions.contains(.retry) == true {
+                Button("Try Again") {
+                    operationFailure = nil
+                    validateAndSave()
+                }
+            }
+            if operationFailure?.recoveryActions.contains(.reconnect) == true {
+                Button("Reconnect") {
+                    operationFailure = nil
+                    Task { await appState.reconnect() }
+                }
+            }
+            if operationFailure?.recoveryActions.contains(.restoreSystemDNS) == true {
+                Button("Restore System DNS") {
+                    operationFailure = nil
+                    Task { await appState.restoreSystemDNS() }
+                }
+            }
             Button("OK") { operationFailure = nil }
         } message: {
-            Text(operationFailure?.message ?? "Unknown error")
+            Text(operationFailure?.message ?? "DNSPilot could not load the Rule failure details. Open Diagnostics for more information.")
         }
     }
 
@@ -353,6 +371,11 @@ private struct RuleEditorView: View {
             focusedField = field(for: error)
             return
         } catch {
+            let outcome = appState.reportValidationFailure(error, action: .ruleSave)
+            if case let .failed(failure) = outcome {
+                appState.clearActionFailure()
+                operationFailure = failure
+            }
             return
         }
         Task {

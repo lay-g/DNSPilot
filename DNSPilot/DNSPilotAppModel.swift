@@ -194,22 +194,37 @@ final class DNSPilotAppModel: ObservableObject, ProductRuntimeBacking {
             do {
                 try await upstreamValidator.validate(profile.upstream)
                 outcome = .completed
+            } catch is CancellationError {
+                outcome = .failed(ProductActionFailure(
+                    action: .profileTest,
+                    reason: .cancelled
+                ))
+            } catch let failure as ProfileTestFailure {
+                outcome = .failed(ProductActionFailure(
+                    action: .profileTest,
+                    reason: .upstreamTestUnclassified,
+                    diagnosticDescription: failure.diagnosticDescription
+                ))
             } catch {
-                outcome = .failed(.rejected(error.localizedDescription))
+                outcome = .failed(ProductActionFailure(
+                    action: .profileTest,
+                    reason: .unknown,
+                    diagnosticDescription: error.localizedDescription
+                ))
             }
         case let .createProfile(profile):
-            outcome = await mutateProductProfile(.create(profile))
+            outcome = await mutateProductProfile(.create(profile), action: .profileCreate)
         case let .duplicateProfile(sourceProfileID, duplicate):
             outcome = await mutateProductProfile(.duplicate(
                 sourceProfileID: sourceProfileID,
                 duplicate: duplicate
-            ))
+            ), action: .profileDuplicate)
         case let .editProfile(profile):
-            outcome = await mutateProductProfile(.edit(profile))
+            outcome = await mutateProductProfile(.edit(profile), action: .profileEdit)
         case let .deleteProfile(profileID, plan):
             outcome = await deleteProductProfile(profileID: profileID, plan: plan)
         case let .saveRule(rule):
-            outcome = await mutateProductRouting { configuration in
+            outcome = await mutateProductRouting(action: .ruleSave) { configuration in
                 var rules = configuration.rules
                 if let index = rules.firstIndex(where: { $0.id == rule.id }) {
                     rules[index] = rule
@@ -219,11 +234,11 @@ final class DNSPilotAppModel: ObservableObject, ProductRuntimeBacking {
                 return (rules, configuration.defaultProfileID)
             }
         case let .deleteRule(ruleID):
-            outcome = await mutateProductRouting { configuration in
+            outcome = await mutateProductRouting(action: .ruleDelete) { configuration in
                 (configuration.rules.filter { $0.id != ruleID }, configuration.defaultProfileID)
             }
         case let .reorderRules(ruleIDs):
-            outcome = await mutateProductRouting { configuration in
+            outcome = await mutateProductRouting(action: .ruleReorder) { configuration in
                 guard ruleIDs.count == configuration.rules.count,
                       Set(ruleIDs) == Set(configuration.rules.map(\.id)) else { return nil }
                 let rulesByID = Dictionary(
@@ -232,7 +247,7 @@ final class DNSPilotAppModel: ObservableObject, ProductRuntimeBacking {
                 return (ruleIDs.compactMap { rulesByID[$0] }, configuration.defaultProfileID)
             }
         case let .setDefaultProfile(profileID):
-            outcome = await mutateProductRouting { configuration in
+            outcome = await mutateProductRouting(action: .defaultProfileUpdate) { configuration in
                 guard configuration.profiles.contains(where: { $0.id == profileID }) else {
                     return nil
                 }
@@ -248,17 +263,27 @@ final class DNSPilotAppModel: ObservableObject, ProductRuntimeBacking {
                 if startupFailure != nil {
                     startupFailure = nil
                     let restarted = await start()
-                    outcome = restarted ? .completed : .failed(.startupUnavailable)
+                    outcome = restarted ? .completed : .failed(ProductActionFailure(
+                        action: .systemDNSRestore,
+                        reason: .notReady
+                    ))
                 } else {
                     outcome = .completed
                 }
             } else {
-                outcome = .failed(.rejected("restoreSystemDNSFailed"))
+                outcome = .failed(ProductActionFailure(
+                    action: .systemDNSRestore,
+                    reason: .systemDNSRestoreUnconfirmed,
+                    diagnosticDescription: proxySnapshot.state.description
+                ))
             }
         case .reconnect:
             if startupFailure != nil {
                 startupFailure = nil
-                outcome = await start() ? .completed : .failed(.startupUnavailable)
+                outcome = await start() ? .completed : .failed(ProductActionFailure(
+                    action: .reconnect,
+                    reason: .notReady
+                ))
             } else {
                 _ = await proxyController.synchronizeState()
                 await refreshProxyPresentation()
@@ -266,22 +291,38 @@ final class DNSPilotAppModel: ObservableObject, ProductRuntimeBacking {
                 case .active, .disabled:
                     outcome = .completed
                 case .recoveryRequired:
-                    outcome = .failed(.recoveryRequired)
+                    outcome = .failed(ProductActionFailure(
+                        action: .reconnect,
+                        reason: .recoveryRequired,
+                        diagnosticDescription: proxySnapshot.state.description
+                    ))
                 case .preparing, .applying, .repairing, .stopping, .failed, .degraded:
-                    outcome = .failed(.rejected("reconnectFailed"))
+                    outcome = .failed(ProductActionFailure(
+                        action: .reconnect,
+                        reason: .reconnectUnresolved,
+                        diagnosticDescription: proxySnapshot.state.description
+                    ))
                 }
             }
         case .resetOnboardingConfiguration:
             await restoreSystemDNS()
             guard proxySnapshot.state == .disabled else {
-                outcome = .failed(.rejected("restoreSystemDNSFailed"))
+                outcome = .failed(ProductActionFailure(
+                    action: .onboardingReset,
+                    reason: .systemDNSRestoreUnconfirmed,
+                    diagnosticDescription: proxySnapshot.state.description
+                ))
                 break
             }
-            outcome = await mutateProductProfile(.reset)
+            outcome = await mutateProductProfile(.reset, action: .onboardingReset)
         case let .createNewConfiguration(recoveryArtifactURL):
             await restoreSystemDNS()
             guard proxySnapshot.state == .disabled else {
-                outcome = .failed(.rejected("restoreSystemDNSFailed"))
+                outcome = .failed(ProductActionFailure(
+                    action: .configurationReplace,
+                    reason: .systemDNSRestoreUnconfirmed,
+                    diagnosticDescription: proxySnapshot.state.description
+                ))
                 break
             }
             do {
@@ -291,9 +332,16 @@ final class DNSPilotAppModel: ObservableObject, ProductRuntimeBacking {
                     matching: recoveryArtifactURL
                 )
                 startupFailure = nil
-                outcome = await start() ? .completed : .failed(.startupUnavailable)
+                outcome = await start() ? .completed : .failed(ProductActionFailure(
+                    action: .configurationReplace,
+                    reason: .notReady
+                ))
             } catch {
-                outcome = .failed(.rejected(error.localizedDescription))
+                outcome = .failed(ProductActionFailure(
+                    action: .configurationReplace,
+                    reason: .persistenceFailed,
+                    diagnosticDescription: error.localizedDescription
+                ))
             }
         case .refreshDiagnostics:
             do {
@@ -324,7 +372,10 @@ final class DNSPilotAppModel: ObservableObject, ProductRuntimeBacking {
                 outcome = .completed
             } else {
                 await refreshProxyPresentation()
-                outcome = .failed(.rejected("debugLoggingUpdateFailed"))
+                outcome = .failed(ProductActionFailure(
+                    action: .debugLoggingUpdate,
+                    reason: .runtimeRejected
+                ))
             }
         case .requestLocationAuthorization:
             requestNetworkLocationAuthorization()
@@ -335,9 +386,12 @@ final class DNSPilotAppModel: ObservableObject, ProductRuntimeBacking {
     }
 
     private func mutateProductProfile(
-        _ intent: ProfileMutationIntent
+        _ intent: ProfileMutationIntent,
+        action: ProductAction
     ) async -> ProductActionOutcome {
-        guard let profileMutationCoordinator else { return .failed(.startupUnavailable) }
+        guard let profileMutationCoordinator else {
+            return .failed(ProductActionFailure(action: action, reason: .notReady))
+        }
         let current = await profileMutationCoordinator.configurationWriterSnapshot()
         let result = await profileMutationCoordinator.mutate(ProfileMutationRequest(
             operationID: UUID(),
@@ -350,14 +404,17 @@ final class DNSPilotAppModel: ObservableObject, ProductRuntimeBacking {
             await refreshProxyPresentation()
             return .completed
         case let .rejected(failure):
-            return switch failure {
-            case .expectedConfigurationMismatch, .configurationConflict, .operationConflict:
-                .failed(.conflict)
-            default:
-                .failed(.rejected(String(describing: failure)))
-            }
-        case .recoveryRequired:
-            return .failed(.recoveryRequired)
+            return .failed(ProductActionFailure(
+                action: action,
+                reason: failure.productFailureReason,
+                diagnosticDescription: String(describing: failure)
+            ))
+        case let .recoveryRequired(reason):
+            return .failed(ProductActionFailure(
+                action: action,
+                reason: .recoveryRequired,
+                diagnosticDescription: String(describing: reason)
+            ))
         }
     }
 
@@ -369,21 +426,30 @@ final class DNSPilotAppModel: ObservableObject, ProductRuntimeBacking {
             deleting: profileID
         ) else {
             await refreshProxyPresentation()
-            return .failed(.conflict)
+            return .failed(ProductActionFailure(
+                action: .profileDelete,
+                reason: .conflict
+            ))
         }
-        let outcome = await mutateProductProfile(.delete(profileID: profileID, plan: plan))
+        let outcome = await mutateProductProfile(
+            .delete(profileID: profileID, plan: plan),
+            action: .profileDelete
+        )
         await proxyController.releaseProfileDeletionLease(lease)
         await refreshProxyPresentation()
         return outcome
     }
 
     private func mutateProductRouting(
+        action: ProductAction,
         _ mutation: (AppConfiguration) -> ([DNSRule], DNSProfile.ID?)?
     ) async -> ProductActionOutcome {
-        guard let profileMutationCoordinator else { return .failed(.startupUnavailable) }
+        guard let profileMutationCoordinator else {
+            return .failed(ProductActionFailure(action: action, reason: .notReady))
+        }
         let current = await profileMutationCoordinator.configurationWriterSnapshot()
         guard let (rules, defaultProfileID) = mutation(current.configuration.value) else {
-            return .failed(.invalidConfiguration)
+            return .failed(ProductActionFailure(action: action, reason: .invalidConfiguration))
         }
         let result = await profileMutationCoordinator.replaceRulesAndDefault(
             rules: rules,
@@ -397,16 +463,21 @@ final class DNSPilotAppModel: ObservableObject, ProductRuntimeBacking {
             await refreshProxyPresentation()
             return .completed
         case .invalid:
-            return .failed(.invalidConfiguration)
+            return .failed(ProductActionFailure(action: action, reason: .invalidConfiguration))
         case .conflict:
-            return .failed(.conflict)
+            return .failed(ProductActionFailure(action: action, reason: .conflict))
         case .recoveryRequired:
-            return .failed(.recoveryRequired)
+            return .failed(ProductActionFailure(action: action, reason: .recoveryRequired))
         }
     }
 
     private func setProductOperatingMode(_ mode: OperatingMode) async -> ProductActionOutcome {
-        guard let operatingModeCoordinator else { return .failed(.startupUnavailable) }
+        guard let operatingModeCoordinator else {
+            return .failed(ProductActionFailure(
+                action: .operatingModeUpdate,
+                reason: .notReady
+            ))
+        }
         let result = await operatingModeCoordinator.setMode(mode)
         await refreshProxyPresentation()
         switch result {
@@ -414,16 +485,28 @@ final class DNSPilotAppModel: ObservableObject, ProductRuntimeBacking {
              .suppressed(.proxyInactive), .suppressed(.awaitingNetworkContext):
             return .completed
         case .conflict:
-            return .failed(.conflict)
+            return .failed(ProductActionFailure(
+                action: .operatingModeUpdate,
+                reason: .conflict
+            ))
         case .recoveryRequired:
-            return .failed(.recoveryRequired)
+            return .failed(ProductActionFailure(
+                action: .operatingModeUpdate,
+                reason: .recoveryRequired
+            ))
         case let .suppressed(reason):
-            return .failed(.rejected(String(describing: reason)))
+            return .failed(ProductActionFailure(
+                action: .operatingModeUpdate,
+                reason: .unknown,
+                diagnosticDescription: String(describing: reason)
+            ))
         }
     }
 
     private func turnOnDNSProxyFromCurrentSelection() async -> ProductActionOutcome {
-        guard let profileMutationCoordinator else { return .failed(.startupUnavailable) }
+        guard let profileMutationCoordinator else {
+            return .failed(ProductActionFailure(action: .dnsProxyEnable, reason: .notReady))
+        }
         let configuration = await profileMutationCoordinator.configuration().value
         let profileID: DNSProfile.ID
         switch configuration.operatingMode {
@@ -431,11 +514,17 @@ final class DNSPilotAppModel: ObservableObject, ProductRuntimeBacking {
             profileID = manualProfileID
         case .automatic:
             guard let defaultProfileID = configuration.defaultProfileID else {
-                return .failed(.invalidConfiguration)
+                return .failed(ProductActionFailure(
+                    action: .dnsProxyEnable,
+                    reason: .invalidConfiguration
+                ))
             }
             guard let context = await operatingModeCoordinator?.snapshot().latestNetworkContext,
                   context.status == .satisfied else {
-                return .failed(.networkUnavailable)
+                return .failed(ProductActionFailure(
+                    action: .dnsProxyEnable,
+                    reason: .networkUnavailable
+                ))
             }
             profileID = RuleEngine.resolveProfile(
                 context: context,
@@ -444,7 +533,10 @@ final class DNSPilotAppModel: ObservableObject, ProductRuntimeBacking {
             ).profileID
         }
         guard let profile = configuration.profiles.first(where: { $0.id == profileID }) else {
-            return .failed(.invalidConfiguration)
+            return .failed(ProductActionFailure(
+                action: .dnsProxyEnable,
+                reason: .invalidConfiguration
+            ))
         }
         _ = await proxyController.activate(DNSProxyTarget(
             profileID: profile.id,
@@ -452,7 +544,18 @@ final class DNSPilotAppModel: ObservableObject, ProductRuntimeBacking {
         ))
         await refreshProxyPresentation()
         if case .active = proxySnapshot.state { return .completed }
-        return .failed(.rejected("dnsProxyActivationFailed"))
+        if let failure = proxySnapshot.lastSwitchFailure {
+            return .failed(ProductActionFailure(
+                action: .dnsProxyEnable,
+                reason: failure.code.productFailureReason,
+                diagnosticDescription: failure.diagnosticSummary
+            ))
+        }
+        return .failed(ProductActionFailure(
+            action: .dnsProxyEnable,
+            reason: .unknown,
+            diagnosticDescription: proxySnapshot.state.description
+        ))
     }
 
     func apply(_ target: DNSProxyTarget) async {

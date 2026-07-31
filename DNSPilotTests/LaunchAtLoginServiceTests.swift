@@ -38,6 +38,11 @@ struct LaunchAtLoginServiceTests {
         #expect(service.status == .failed("Registration denied"))
         #expect(!service.status.isEnabled)
     }
+
+    @Test func unavailableStatusesDoNotClaimEnabled() {
+        #expect(!LaunchAtLoginStatus.notFound.isEnabled)
+        #expect(!LaunchAtLoginStatus.unavailable.isEnabled)
+    }
 }
 
 @MainActor

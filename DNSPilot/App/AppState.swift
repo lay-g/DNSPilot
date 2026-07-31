@@ -93,45 +93,227 @@ enum ProductIntent: Equatable, Sendable {
     case setDebugLogging(Bool)
 }
 
-enum ProductActionFailure: Equatable, Sendable {
-    case startupUnavailable
+enum ProductAction: String, CaseIterable, Equatable, Sendable {
+    case profileTest
+    case profileSwitch
+    case profileCreate
+    case profileDuplicate
+    case profileEdit
+    case profileDelete
+    case ruleSave
+    case ruleDelete
+    case ruleReorder
+    case defaultProfileUpdate
+    case operatingModeUpdate
+    case dnsProxyEnable
+    case systemDNSRestore
+    case reconnect
+    case onboardingReset
+    case configurationReplace
+    case diagnosticsRefresh
+    case diagnosticsExport
+    case locationAccessRequest
+    case debugLoggingUpdate
+    case systemExtensionUpdate
+    case systemExtensionDeactivation
+
+    var failureTitle: String {
+        switch self {
+        case .profileTest: "Profile Test Failed"
+        case .profileSwitch: "Profile Could Not Be Switched"
+        case .profileCreate: "Profile Could Not Be Created"
+        case .profileDuplicate: "Profile Could Not Be Duplicated"
+        case .profileEdit: "Profile Could Not Be Saved"
+        case .profileDelete: "Profile Could Not Be Deleted"
+        case .ruleSave: "Rule Could Not Be Saved"
+        case .ruleDelete: "Rule Could Not Be Deleted"
+        case .ruleReorder: "Rule Order Could Not Be Saved"
+        case .defaultProfileUpdate: "Default Profile Could Not Be Changed"
+        case .operatingModeUpdate: "Operating Mode Could Not Be Changed"
+        case .dnsProxyEnable: "DNS Proxy Could Not Be Enabled"
+        case .systemDNSRestore: "System DNS Restore Could Not Be Confirmed"
+        case .reconnect: "Reconnect Did Not Resolve DNS Proxy State"
+        case .onboardingReset: "Setup Could Not Be Reset"
+        case .configurationReplace: "New Configuration Could Not Be Created"
+        case .diagnosticsRefresh: "Runtime Diagnostics Are Unavailable"
+        case .diagnosticsExport: "Diagnostics Could Not Be Exported"
+        case .locationAccessRequest: "Location Access Could Not Be Requested"
+        case .debugLoggingUpdate: "Debug Logging Could Not Be Changed"
+        case .systemExtensionUpdate: "System Extension Could Not Be Updated"
+        case .systemExtensionDeactivation: "System Extension Could Not Be Deactivated"
+        }
+    }
+}
+
+enum ProductFailureReason: String, CaseIterable, Equatable, Sendable {
+    case cancelled
+    case notReady
     case networkUnavailable
     case invalidConfiguration
     case conflict
     case recoveryRequired
-    case rejected(String)
+    case operationInProgress
+    case upstreamTestUnclassified
+    case profileNotFound
+    case profileAlreadyExists
+    case invalidDeletionPlan
+    case persistenceFailed
+    case runtimePreparationFailed
+    case desiredConfigurationPersistenceFailed
+    case recoveryJournalWriteFailed
+    case runtimeRejected
+    case systemExtensionNotActive
+    case systemDNSRestoreUnconfirmed
+    case reconnectUnresolved
+    case systemExtensionOperationUnavailable
+    case restartRequired
+    case compatibilityUnavailable
+    case targetChanged
+    case managerStateUnavailable
+    case targetWriteFailed
+    case readinessTimedOut
+    case providerFailed
+    case unknown
+}
+
+enum ProductRecoveryAction: Equatable, Sendable {
+    case retry
+    case reconnect
+    case restoreSystemDNS
+    case openDiagnostics
+    case openSystemSettings
+    case chooseAnotherLocation
+}
+
+struct ProductActionFailure: Equatable, Sendable {
+    let action: ProductAction
+    let reason: ProductFailureReason
+    let diagnosticDescription: String
+
+    init(
+        action: ProductAction,
+        reason: ProductFailureReason,
+        diagnosticDescription: String? = nil
+    ) {
+        self.action = action
+        self.reason = reason
+        self.diagnosticDescription = diagnosticDescription ?? "\(action.rawValue):\(reason.rawValue)"
+    }
+
+    var title: String { action.failureTitle }
 
     var message: String {
-        switch self {
-        case .startupUnavailable:
-            "DNSPilot is not ready."
+        switch reason {
+        case .cancelled:
+            "The action was cancelled before it completed."
+        case .notReady:
+            "DNSPilot has not finished loading. Wait for startup to complete, then try again."
         case .networkUnavailable:
-            "Connect to a network before turning on DNS Proxy in Automatic mode."
+            "Automatic mode has no usable network connection. Connect to a network, then enable DNS Proxy again."
         case .invalidConfiguration:
-            "The requested configuration is invalid."
+            "The requested settings are invalid or incomplete. Review the current values before trying again."
         case .conflict:
-            "The configuration changed. Review the latest values and try again."
+            "The configuration changed while this action was running. Review the latest values before trying again."
         case .recoveryRequired:
-            "Configuration recovery is required before making changes."
-        case .rejected:
-            "The operation could not be completed. Try again."
+            "DNSPilot cannot safely change configuration until DNS Proxy state is reconciled. Reconnect or restore System DNS."
+        case .operationInProgress:
+            "Another DNSPilot action is still running. Wait for it to finish before trying again."
+        case .upstreamTestUnclassified:
+            "DnsLibs could not complete its upstream DNS test and does not provide a safe structured cause. Check the Profile address, protocol, port, bootstrap servers, and network connection, then test again."
+        case .profileNotFound:
+            "This Profile no longer exists. Close the editor and review the latest Profile list."
+        case .profileAlreadyExists:
+            "A Profile with this identity already exists. Reopen the latest Profile list before trying again."
+        case .invalidDeletionPlan:
+            "This Profile is still in use. Choose valid replacements for its Rules, Default selection, Manual target, and Active runtime before deleting it."
+        case .persistenceFailed:
+            if action == .diagnosticsExport {
+                "DNSPilot could not write the diagnostics file to the selected location. Choose another location and try again."
+            } else if [.profileCreate, .profileDuplicate, .profileEdit, .ruleSave].contains(action) {
+                "DNSPilot could not save the configuration. Your draft remains available; check available disk space and try again."
+            } else if action == .configurationReplace {
+                "DNSPilot could not create the replacement configuration. The existing recovery artifact was preserved; check available disk space and try again."
+            } else {
+                "DNSPilot could not save this configuration change. The previously stored configuration remains in use; check available disk space and try again."
+            }
+        case .runtimePreparationFailed:
+            "DNSPilot could not confirm the conditions required to prepare this Active Profile update. No new configuration was published; reconnect or restore System DNS if the current runtime state is uncertain."
+        case .desiredConfigurationPersistenceFailed:
+            "DNSPilot could not record the requested Active Profile configuration, so it was not applied."
+        case .recoveryJournalWriteFailed:
+            "DNSPilot could not record the recovery data required for this Active Profile change, so it was not applied."
+        case .runtimeRejected:
+            if action == .debugLoggingUpdate {
+                "The DNS runtime did not accept the Debug Logging change. Review the current runtime state in Diagnostics, then try again."
+            } else {
+                "The DNS runtime rejected the Active Profile change. DNSPilot rolled back to the previous configuration or restored System DNS."
+            }
+        case .systemExtensionNotActive:
+            "The DNSPilot System Extension is not active. Finish installation or approval in System Settings before enabling DNS Proxy."
+        case .systemDNSRestoreUnconfirmed:
+            "DNSPilot could not confirm that macOS returned to System DNS. Retry the restore or open Diagnostics before continuing."
+        case .reconnectUnresolved:
+            "DNSPilot still cannot confirm a stable DNS Proxy state. Restore System DNS before making more configuration changes."
+        case .systemExtensionOperationUnavailable:
+            "The System Extension is busy or is not in a state that allows this action. Check its current status before trying again."
+        case .restartRequired:
+            "System DNS was restored, but macOS requires a restart to finish deactivating the System Extension. Restart before attempting another extension change."
+        case .compatibilityUnavailable:
+            "The installed System Extension cannot apply this configuration. Update DNSPilot and the System Extension before trying again."
+        case .targetChanged:
+            "The DNS runtime identity changed before this request completed. Review the current Active and Target Profiles, then reconnect."
+        case .managerStateUnavailable:
+            "DNSPilot could not confirm the DNS Proxy manager state. Reconnect or restore System DNS before continuing."
+        case .targetWriteFailed:
+            "DNSPilot could not confirm that the target Profile was saved to DNS Proxy. Review the current Active and Target state before continuing."
+        case .readinessTimedOut:
+            "DNS Proxy did not report the target Profile ready within five seconds. Retry or open Diagnostics."
+        case .providerFailed:
+            "The System Extension could not start the target Profile. Review Diagnostics, then retry or restore System DNS."
+        case .unknown:
+            "DNSPilot could not complete this action because an unclassified internal failure occurred. Open Diagnostics for the recorded details."
         }
     }
 
-    var diagnosticDescription: String {
-        switch self {
-        case .startupUnavailable:
-            "startupUnavailable"
+    var recoveryActions: [ProductRecoveryAction] {
+        switch reason {
+        case .cancelled:
+            []
+        case .operationInProgress:
+            []
+        case .notReady, .desiredConfigurationPersistenceFailed, .recoveryJournalWriteFailed:
+            [.retry]
+        case .runtimePreparationFailed:
+            [.reconnect, .restoreSystemDNS, .openDiagnostics]
+        case .targetWriteFailed:
+            [.retry, .openDiagnostics]
+        case .persistenceFailed:
+            action == .diagnosticsExport ? [.chooseAnotherLocation] : [.retry]
         case .networkUnavailable:
-            "networkUnavailable"
+            [.retry]
         case .invalidConfiguration:
-            "invalidConfiguration"
-        case .conflict:
-            "conflict"
-        case .recoveryRequired:
-            "recoveryRequired"
-        case let .rejected(reason):
-            reason
+            []
+        case .conflict, .profileNotFound, .profileAlreadyExists, .invalidDeletionPlan:
+            []
+        case .targetChanged:
+            [.reconnect, .openDiagnostics]
+        case .recoveryRequired, .managerStateUnavailable:
+            [.reconnect, .restoreSystemDNS]
+        case .upstreamTestUnclassified:
+            [.retry, .openDiagnostics]
+        case .runtimeRejected:
+            action == .debugLoggingUpdate
+                ? [.retry, .openDiagnostics]
+                : [.retry, .restoreSystemDNS, .openDiagnostics]
+        case .systemExtensionNotActive, .systemExtensionOperationUnavailable,
+             .restartRequired, .compatibilityUnavailable:
+            [.openSystemSettings]
+        case .systemDNSRestoreUnconfirmed:
+            [.retry, .openDiagnostics]
+        case .reconnectUnresolved:
+            [.restoreSystemDNS, .openDiagnostics]
+        case .readinessTimedOut, .providerFailed, .unknown:
+            [.retry, .openDiagnostics]
         }
     }
 }
@@ -197,6 +379,24 @@ struct ProductEditorRequest: Equatable, Identifiable, Sendable {
     let kind: Kind
 }
 
+struct ProductProfileTestResult: Equatable, Sendable {
+    let profileID: DNSProfile.ID
+    let upstream: DNSUpstream
+    let message: String
+
+    func matches(_ profile: DNSProfile) -> Bool {
+        profileID == profile.id && upstream == profile.upstream
+    }
+}
+
+private enum SettingsRetryOperation {
+    case systemExtensionUpdate
+    case systemExtensionDeactivation
+    case diagnosticsExport
+    case debugLogging(Bool)
+    case systemDNSRestore
+}
+
 @MainActor
 final class AppState: ObservableObject {
     private static let logger = Logger(
@@ -219,7 +419,7 @@ final class AppState: ObservableObject {
     @Published private(set) var locationAuthorization = LocationAuthorizationInput.notDetermined
     @Published private(set) var startupFailure: ProductStartupFailure?
     @Published private(set) var actionFailure: ProductActionFailure?
-    @Published private(set) var profileTestResult: String?
+    @Published private(set) var profileTestResult: ProductProfileTestResult?
     @Published private(set) var isPerformingAction = false
     @Published private(set) var activeDraft: ProductDraftKind?
     @Published private(set) var draftDiscardGeneration: UInt64 = 0
@@ -236,6 +436,9 @@ final class AppState: ObservableObject {
     @Published private(set) var diagnostics = ProductDiagnosticsSnapshot.unavailable("Not refreshed")
     @Published private(set) var loggingMode = ProxyLoggingMode.default
     @Published private(set) var settingsActionFailure: ProductActionFailure?
+    private var retryIntent: ProductIntent?
+    private var profileTestGeneration: UInt64 = 0
+    private var settingsRetryOperation: SettingsRetryOperation?
     @Published var settingsSection: ProductSettingsSection {
         didSet { userDefaults.set(settingsSection.rawValue, forKey: ProductWindowPolicy.settingsSectionKey) }
     }
@@ -359,6 +562,11 @@ final class AppState: ObservableObject {
         let snapshot = await backend.productSnapshot()
         guard generation == refreshGeneration else { return }
         configuration = snapshot.configuration
+        if let result = profileTestResult,
+           snapshot.configuration?.profiles.contains(where: result.matches) != true {
+            profileTestGeneration &+= 1
+            profileTestResult = nil
+        }
         reconcileOnboardingMigration(with: snapshot.configuration)
         reconcileRequiredSetup(with: snapshot.configuration)
         proxy = snapshot.proxy
@@ -484,24 +692,43 @@ final class AppState: ObservableObject {
               startupFailure == nil,
               !systemExtensionRequestInProgress,
               systemExtensionState.requiresUpdate else {
-            return failSettingsAction(.rejected("systemExtensionUpdateUnavailable"))
+            return failSettingsAction(ProductActionFailure(
+                action: .systemExtensionUpdate,
+                reason: .systemExtensionOperationUnavailable
+            ), retryOperation: .systemExtensionUpdate)
         }
         guard !isPerformingAction else {
-            return failSettingsAction(.rejected("operationInProgress"))
+            return failSettingsAction(ProductActionFailure(
+                action: .systemExtensionUpdate,
+                reason: .operationInProgress
+            ), retryOperation: .systemExtensionUpdate)
         }
         if proxy.state != .disabled {
             let outcome = await restoreSystemDNS()
-            guard outcome == .completed else { return outcome }
+            guard outcome == .completed else {
+                return routeFailureToSettings(
+                    outcome,
+                    action: .systemExtensionUpdate,
+                    retryOperation: .systemExtensionUpdate
+                )
+            }
             guard proxy.state == .disabled else {
-                return failSettingsAction(.rejected("systemDNSRestoreUnconfirmed"))
+                return failSettingsAction(ProductActionFailure(
+                    action: .systemExtensionUpdate,
+                    reason: .systemDNSRestoreUnconfirmed
+                ), retryOperation: .systemExtensionUpdate)
             }
         }
         guard !isPerformingAction,
               !systemExtension.requestInProgress,
               systemExtensionState.requiresUpdate else {
-            return failSettingsAction(.rejected("systemExtensionUpdateUnavailable"))
+            return failSettingsAction(ProductActionFailure(
+                action: .systemExtensionUpdate,
+                reason: .systemExtensionOperationUnavailable
+            ), retryOperation: .systemExtensionUpdate)
         }
         systemExtension.activate()
+        settingsRetryOperation = nil
         return .completed
     }
 
@@ -512,13 +739,23 @@ final class AppState: ObservableObject {
     @discardableResult
     func deactivateSystemExtensionSafely() async -> ProductActionOutcome {
         guard !systemExtensionRequestInProgress, systemExtensionState.allowsDeactivation else {
-            return failSettingsAction(.rejected("systemExtensionOperationUnavailable"))
+            return failSettingsAction(ProductActionFailure(
+                action: .systemExtensionDeactivation,
+                reason: .systemExtensionOperationUnavailable
+            ), retryOperation: .systemExtensionDeactivation)
         }
         let outcome = await restoreSystemDNS()
-        guard outcome == .completed else { return outcome }
+        guard outcome == .completed else {
+            return routeFailureToSettings(
+                outcome,
+                action: .systemExtensionDeactivation,
+                retryOperation: .systemExtensionDeactivation
+            )
+        }
         let state = await systemExtension.deactivateAndWait()
         switch state {
         case .notInstalled, .inactive, .uninstalling:
+            settingsRetryOperation = nil
             userDefaults.set(true, forKey: ProductWindowPolicy.migrationEvaluatedKey)
             userDefaults.set(false, forKey: ProductWindowPolicy.onboardingCompletedKey)
             userDefaults.removeObject(forKey: ProductWindowPolicy.introductionCompletedKey)
@@ -526,12 +763,24 @@ final class AppState: ObservableObject {
             userDefaults.removeObject(forKey: ProductWindowPolicy.setupProfileIDKey)
             return .completed
         case .restartRequired:
-            return failSettingsAction(.rejected(state.description))
+            return failSettingsAction(ProductActionFailure(
+                action: .systemExtensionDeactivation,
+                reason: .restartRequired,
+                diagnosticDescription: state.description
+            ), retryOperation: .systemExtensionDeactivation)
         case let .failed(message):
-            return failSettingsAction(.rejected(message))
+            return failSettingsAction(ProductActionFailure(
+                action: .systemExtensionDeactivation,
+                reason: .unknown,
+                diagnosticDescription: message
+            ), retryOperation: .systemExtensionDeactivation)
         case .checking, .activating, .awaitingApproval, .active, .deactivating,
              .updateRequired, .updateFailed, .downgradeBlocked:
-            return failSettingsAction(.rejected("systemExtensionDeactivationFailed"))
+            return failSettingsAction(ProductActionFailure(
+                action: .systemExtensionDeactivation,
+                reason: .systemExtensionOperationUnavailable,
+                diagnosticDescription: state.description
+            ), retryOperation: .systemExtensionDeactivation)
         }
     }
 
@@ -583,9 +832,14 @@ final class AppState: ObservableObject {
     func exportDiagnostics() async -> ProductActionOutcome {
         do {
             _ = try await diagnosticExporter.export(diagnosticReport().export)
+            settingsRetryOperation = nil
             return .completed
         } catch {
-            return failSettingsAction(.rejected(error.localizedDescription))
+            return failSettingsAction(ProductActionFailure(
+                action: .diagnosticsExport,
+                reason: .persistenceFailed,
+                diagnosticDescription: error.localizedDescription
+            ), retryOperation: .diagnosticsExport)
         }
     }
 
@@ -625,14 +879,34 @@ final class AppState: ObservableObject {
 
     @discardableResult
     func createProfile(_ draft: ProfileDraft) async -> ProductActionOutcome {
-        await validatedProfileIntent(draft, clearsDraftOnSuccess: true) { .createProfile($0) }
+        await validatedProfileIntent(
+            draft,
+            action: .profileCreate,
+            clearsDraftOnSuccess: true
+        ) { .createProfile($0) }
     }
 
     @discardableResult
     func preflightProfile(_ draft: ProfileDraft) async -> ProductActionOutcome {
+        profileTestGeneration &+= 1
+        let generation = profileTestGeneration
         profileTestResult = nil
-        let outcome = await validatedProfileIntent(draft) { .preflightProfile($0) }
-        if outcome == .completed { profileTestResult = "Profile test passed." }
+        let profile: DNSProfile
+        do {
+            profile = try draft.profile()
+        } catch {
+            return failValidation(error, action: .profileTest)
+        }
+        let outcome = await submit(.preflightProfile(profile))
+        if outcome == .completed,
+           generation == profileTestGeneration,
+           !Task.isCancelled {
+            profileTestResult = ProductProfileTestResult(
+                profileID: profile.id,
+                upstream: profile.upstream,
+                message: "\"\(profile.name)\" passed the DNS test."
+            )
+        }
         return outcome
     }
 
@@ -641,14 +915,22 @@ final class AppState: ObservableObject {
         sourceProfileID: DNSProfile.ID,
         draft: ProfileDraft
     ) async -> ProductActionOutcome {
-        await validatedProfileIntent(draft, clearsDraftOnSuccess: true) {
+        await validatedProfileIntent(
+            draft,
+            action: .profileDuplicate,
+            clearsDraftOnSuccess: true
+        ) {
             .duplicateProfile(sourceProfileID: sourceProfileID, duplicate: $0)
         }
     }
 
     @discardableResult
     func editProfile(_ draft: ProfileDraft) async -> ProductActionOutcome {
-        await validatedProfileIntent(draft, clearsDraftOnSuccess: true) { .editProfile($0) }
+        await validatedProfileIntent(
+            draft,
+            action: .profileEdit,
+            clearsDraftOnSuccess: true
+        ) { .editProfile($0) }
     }
 
     @discardableResult
@@ -664,7 +946,7 @@ final class AppState: ObservableObject {
         do {
             return await submit(.saveRule(try draft.rule()), clearsDraftOnSuccess: true)
         } catch {
-            return failValidation(error)
+            return failValidation(error, action: .ruleSave)
         }
     }
 
@@ -691,7 +973,10 @@ final class AppState: ObservableObject {
     @discardableResult
     func turnOnDNSProxy() async -> ProductActionOutcome {
         guard systemExtensionState == .active else {
-            return failAction(.rejected("systemExtensionNotActive"))
+            return failAction(ProductActionFailure(
+                action: .dnsProxyEnable,
+                reason: .systemExtensionNotActive
+            ))
         }
         return await submit(.turnOnDNSProxy)
     }
@@ -699,6 +984,14 @@ final class AppState: ObservableObject {
     @discardableResult
     func restoreSystemDNS() async -> ProductActionOutcome {
         await submit(.restoreSystemDNS)
+    }
+
+    @discardableResult
+    func restoreSystemDNSFromSettings() async -> ProductActionOutcome {
+        routeFailureToSettings(
+            await restoreSystemDNS(),
+            retryOperation: .systemDNSRestore
+        )
     }
 
     @discardableResult
@@ -712,7 +1005,10 @@ final class AppState: ObservableObject {
 
     @discardableResult
     func setDebugLoggingEnabled(_ enabled: Bool) async -> ProductActionOutcome {
-        await submit(.setDebugLogging(enabled))
+        routeFailureToSettings(
+            await submit(.setDebugLogging(enabled)),
+            retryOperation: .debugLogging(enabled)
+        )
     }
 
     var systemExtensionVersion: String {
@@ -728,7 +1024,10 @@ final class AppState: ObservableObject {
     @discardableResult
     func createNewConfiguration() async -> ProductActionOutcome {
         guard case let .corruptConfiguration(_, recoveryArtifactURL) = startupFailure else {
-            return .failed(.startupUnavailable)
+            return .failed(ProductActionFailure(
+                action: .configurationReplace,
+                reason: .notReady
+            ))
         }
         return await submit(.createNewConfiguration(recoveryArtifactURL))
     }
@@ -745,8 +1044,60 @@ final class AppState: ObservableObject {
         settingsActionFailure = nil
     }
 
+    func cancelProfileTest() {
+        profileTestGeneration &+= 1
+        profileTestResult = nil
+    }
+
+    @discardableResult
+    func retryLastAction() async -> ProductActionOutcome {
+        guard let retryIntent else {
+            return .failed(ProductActionFailure(
+                action: .diagnosticsRefresh,
+                reason: .unknown,
+                diagnosticDescription: "retryIntentUnavailable"
+            ))
+        }
+        if case let .preflightProfile(profile) = retryIntent {
+            return await preflightProfile(ProfileDraft(profile: profile))
+        }
+        return await submit(retryIntent)
+    }
+
+    @discardableResult
+    func retrySettingsAction() async -> ProductActionOutcome {
+        guard let settingsRetryOperation else {
+            return failSettingsAction(ProductActionFailure(
+                action: .diagnosticsRefresh,
+                reason: .unknown,
+                diagnosticDescription: "settingsRetryOperationUnavailable"
+            ))
+        }
+        switch settingsRetryOperation {
+        case .systemExtensionUpdate:
+            return await updateSystemExtensionSafely()
+        case .systemExtensionDeactivation:
+            return await deactivateSystemExtensionSafely()
+        case .diagnosticsExport:
+            return await exportDiagnostics()
+        case let .debugLogging(enabled):
+            return await setDebugLoggingEnabled(enabled)
+        case .systemDNSRestore:
+            return await restoreSystemDNSFromSettings()
+        }
+    }
+
+    @discardableResult
+    func reportValidationFailure(
+        _ error: any Error,
+        action: ProductAction
+    ) -> ProductActionOutcome {
+        failValidation(error, action: action)
+    }
+
     private func validatedProfileIntent(
         _ draft: ProfileDraft,
+        action: ProductAction,
         clearsDraftOnSuccess: Bool = false,
         intent: (DNSProfile) -> ProductIntent
     ) async -> ProductActionOutcome {
@@ -756,7 +1107,7 @@ final class AppState: ObservableObject {
                 clearsDraftOnSuccess: clearsDraftOnSuccess
             )
         } catch {
-            return failValidation(error)
+            return failValidation(error, action: action)
         }
     }
 
@@ -765,36 +1116,71 @@ final class AppState: ObservableObject {
         clearsDraftOnSuccess: Bool = false
     ) async -> ProductActionOutcome {
         if case .recoveryRequired = proxy.state, !intent.isRecoveryAction {
-            actionFailure = .recoveryRequired
-            return .failed(.recoveryRequired)
+            retryIntent = nil
+            let failure = ProductActionFailure(
+                action: intent.action,
+                reason: .recoveryRequired
+            )
+            actionFailure = failure
+            return .failed(failure)
         }
         guard !isPerformingAction else {
-            return failAction(.rejected("operationInProgress"))
+            return failAction(ProductActionFailure(
+                action: intent.action,
+                reason: .operationInProgress
+            ))
         }
         isPerformingAction = true
         actionFailure = nil
         let outcome = await backend.performProductIntent(intent)
         await refresh()
         isPerformingAction = false
-        switch outcome {
+        let presentedOutcome: ProductActionOutcome
+        if case let .failed(failure) = outcome,
+           case .recoveryRequired = proxy.state,
+           !intent.isRecoveryAction {
+            presentedOutcome = .failed(ProductActionFailure(
+                action: intent.action,
+                reason: .recoveryRequired,
+                diagnosticDescription: failure.diagnosticDescription
+            ))
+        } else {
+            presentedOutcome = outcome
+        }
+        switch presentedOutcome {
         case .completed:
+            retryIntent = nil
+            if intent.action.invalidatesProfileTestResult {
+                profileTestGeneration &+= 1
+                profileTestResult = nil
+            }
             if clearsDraftOnSuccess { activeDraft = nil }
         case let .failed(failure):
             Self.logger.error(
                 "Product action failed: \(failure.diagnosticDescription, privacy: .private)"
             )
-            actionFailure = failure
+            if failure.reason != .cancelled {
+                retryIntent = intent
+                actionFailure = failure
+            }
         }
-        return outcome
+        return presentedOutcome
     }
 
-    private func failValidation(_ error: any Error) -> ProductActionOutcome {
+    private func failValidation(
+        _ error: any Error,
+        action: ProductAction
+    ) -> ProductActionOutcome {
         Self.logger.error(
             "Product validation failed: \(error.localizedDescription, privacy: .private)"
         )
-        let failure = ProductActionFailure.rejected(
-            (error as? any LocalizedError)?.errorDescription ?? error.localizedDescription
+        let failure = ProductActionFailure(
+            action: action,
+            reason: .invalidConfiguration,
+            diagnosticDescription: (error as? any LocalizedError)?.errorDescription
+                ?? error.localizedDescription
         )
+        retryIntent = nil
         actionFailure = failure
         return .failed(failure)
     }
@@ -803,16 +1189,40 @@ final class AppState: ObservableObject {
         Self.logger.error(
             "Product action rejected: \(failure.diagnosticDescription, privacy: .private)"
         )
+        retryIntent = nil
         actionFailure = failure
         return .failed(failure)
     }
 
-    private func failSettingsAction(_ failure: ProductActionFailure) -> ProductActionOutcome {
+    private func failSettingsAction(
+        _ failure: ProductActionFailure,
+        retryOperation: SettingsRetryOperation? = nil
+    ) -> ProductActionOutcome {
         Self.logger.error(
             "Settings action failed: \(failure.diagnosticDescription, privacy: .private)"
         )
+        settingsRetryOperation = retryOperation
         settingsActionFailure = failure
         return .failed(failure)
+    }
+
+    private func routeFailureToSettings(
+        _ outcome: ProductActionOutcome,
+        action: ProductAction? = nil,
+        retryOperation: SettingsRetryOperation
+    ) -> ProductActionOutcome {
+        guard case let .failed(failure) = outcome else {
+            settingsRetryOperation = nil
+            return outcome
+        }
+        let routedFailure = ProductActionFailure(
+            action: action ?? failure.action,
+            reason: failure.reason,
+            diagnosticDescription: failure.diagnosticDescription
+        )
+        actionFailure = nil
+        retryIntent = nil
+        return failSettingsAction(routedFailure, retryOperation: retryOperation)
     }
 
     private func openSystemSettings(_ urlString: String) {
@@ -855,7 +1265,30 @@ final class AppState: ObservableObject {
     }
 }
 
-private extension ProductIntent {
+extension ProductIntent {
+    var action: ProductAction {
+        switch self {
+        case .preflightProfile: .profileTest
+        case .createProfile: .profileCreate
+        case .duplicateProfile: .profileDuplicate
+        case .editProfile: .profileEdit
+        case .deleteProfile: .profileDelete
+        case .saveRule: .ruleSave
+        case .deleteRule: .ruleDelete
+        case .reorderRules: .ruleReorder
+        case .setDefaultProfile: .defaultProfileUpdate
+        case .setOperatingMode: .operatingModeUpdate
+        case .turnOnDNSProxy: .dnsProxyEnable
+        case .restoreSystemDNS: .systemDNSRestore
+        case .reconnect: .reconnect
+        case .resetOnboardingConfiguration: .onboardingReset
+        case .createNewConfiguration: .configurationReplace
+        case .refreshDiagnostics: .diagnosticsRefresh
+        case .requestLocationAuthorization: .locationAccessRequest
+        case .setDebugLogging: .debugLoggingUpdate
+        }
+    }
+
     var isRecoveryAction: Bool {
         switch self {
         case .restoreSystemDNS, .reconnect, .createNewConfiguration, .refreshDiagnostics:
@@ -866,5 +1299,63 @@ private extension ProductIntent {
               .setDebugLogging, .resetOnboardingConfiguration:
             false
         }
+    }
+}
+
+private extension ProductAction {
+    var invalidatesProfileTestResult: Bool {
+        switch self {
+        case .profileCreate, .profileDuplicate, .profileEdit, .profileDelete:
+            true
+        case .profileTest, .profileSwitch, .ruleSave, .ruleDelete, .ruleReorder,
+             .defaultProfileUpdate, .operatingModeUpdate, .dnsProxyEnable,
+             .systemDNSRestore, .reconnect, .onboardingReset, .configurationReplace,
+             .diagnosticsRefresh, .diagnosticsExport, .locationAccessRequest,
+             .debugLoggingUpdate, .systemExtensionUpdate, .systemExtensionDeactivation:
+            false
+        }
+    }
+}
+
+extension ProxySwitchFailureCode {
+    var productFailureReason: ProductFailureReason {
+        switch self {
+        case .targetPreflightFailed: .upstreamTestUnclassified
+        case .providerCompatibilityUnavailable: .compatibilityUnavailable
+        case .oldGenerationChanged: .targetChanged
+        case .managerStateUnavailable: .managerStateUnavailable
+        case .targetWriteFailed: .targetWriteFailed
+        case .targetReadinessTimedOut: .readinessTimedOut
+        case .targetProviderFailed: .providerFailed
+        }
+    }
+}
+
+extension ProfileMutationFailure {
+    var productFailureReason: ProductFailureReason {
+        switch self {
+        case .operationInProgress: .operationInProgress
+        case .operationConflict, .expectedConfigurationMismatch, .configurationConflict: .conflict
+        case .profileNotFound: .profileNotFound
+        case .profileAlreadyExists: .profileAlreadyExists
+        case .invalidDeletionPlan: .invalidDeletionPlan
+        case .invalidDuplicateIdentity, .invalidDuplicatePayload, .invalidConfiguration:
+            .invalidConfiguration
+        case .configurationCommitFailed: .persistenceFailed
+        case .controllerPreparationFailed: .runtimePreparationFailed
+        case .desiredPersistenceFailed: .desiredConfigurationPersistenceFailed
+        case .journalWriteFailed: .recoveryJournalWriteFailed
+        case .runtimeRejected: .runtimeRejected
+        }
+    }
+}
+
+extension ProxySwitchFailure {
+    var productActionFailure: ProductActionFailure {
+        ProductActionFailure(
+            action: .profileSwitch,
+            reason: code.productFailureReason,
+            diagnosticDescription: diagnosticSummary
+        )
     }
 }

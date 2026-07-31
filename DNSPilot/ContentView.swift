@@ -17,6 +17,7 @@ struct ProductWindowContent: View {
 @MainActor
 struct ContentView: View {
     @EnvironmentObject private var appState: AppState
+    @Environment(\.openSettings) private var openSettings
     @AppStorage("window.sidebarVisible") private var sidebarVisible = true
 
     var body: some View {
@@ -47,15 +48,46 @@ struct ContentView: View {
         }
         .onDisappear { appState.productWindowClosed(.main) }
         .alert(
-            "Operation Failed",
+            appState.actionFailure?.title ?? "DNSPilot Action Failed",
             isPresented: Binding(
                 get: { appState.actionFailure != nil },
                 set: { if !$0 { appState.clearActionFailure() } }
             )
         ) {
+            if appState.actionFailure?.recoveryActions.contains(.retry) == true {
+                Button(appState.actionFailure?.action == .profileTest ? "Test Again" : "Try Again") {
+                    appState.clearActionFailure()
+                    Task { await appState.retryLastAction() }
+                }
+            }
+            if appState.actionFailure?.recoveryActions.contains(.reconnect) == true {
+                Button("Reconnect") {
+                    appState.clearActionFailure()
+                    Task { await appState.reconnect() }
+                }
+            }
+            if appState.actionFailure?.recoveryActions.contains(.restoreSystemDNS) == true {
+                Button("Restore System DNS") {
+                    appState.clearActionFailure()
+                    Task { await appState.restoreSystemDNS() }
+                }
+            }
+            if appState.actionFailure?.recoveryActions.contains(.openSystemSettings) == true {
+                Button("Open System Settings") {
+                    appState.clearActionFailure()
+                    appState.openSystemExtensionSettings()
+                }
+            }
+            if appState.actionFailure?.recoveryActions.contains(.openDiagnostics) == true {
+                Button("Open Diagnostics") {
+                    appState.clearActionFailure()
+                    appState.selectSettingsSection(.diagnostics)
+                    openSettings()
+                }
+            }
             Button("OK") { appState.clearActionFailure() }
         } message: {
-            Text(appState.actionFailure?.message ?? "Unknown error")
+            Text(appState.actionFailure?.message ?? "DNSPilot could not load the failure details. Open Diagnostics for more information.")
         }
     }
 
