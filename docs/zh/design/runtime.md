@@ -4,13 +4,19 @@
 
 ## Runtime Identity
 
-每个 desired runtime 由一份 decoded `ActiveProxyConfiguration`、它的 exact binary property-list bytes，以及这些 bytes 的 SHA-256 fingerprint 表示。配置包含 schema version、generation UUID、Profile UUID、upstream 和 logging mode。
+每个 desired runtime 由一份 decoded `ActiveProxyConfiguration`、它的 exact binary property-list bytes，以及这些 bytes 的 SHA-256 fingerprint 表示。配置包含 schema version、generation UUID、Profile UUID、upstream、logging mode 和 DNS cache 设置。
 
 每个 generation 只编码一次。Manager 持久化、XPC mutation、runtime application、rollback 和 final verification 使用同一份 bytes。Generation 与 fingerprint 是相互独立的身份维度。
 
 只有 Provider instance、generation、fingerprint、`.ready` phase、兼容 control protocol 和最终 manager ownership reload 全部一致，runtime 才算已确认。
 
-Active Proxy schema capability 按 transport 区分：DoH 至少需要 schema 1，Plain DNS 至少需要 schema 2，DoT 至少需要 schema 3。Host 在编码 schema 1 之后新增的 transport 前先发现经过认证的 Provider capability，并且绝不发送 Provider 不支持的 upstream discriminator。Capability 不匹配时必须在预检或 manager mutation 前失败。
+Active Proxy schema capability 按 transport 区分：DoH 至少需要 schema 1，Plain DNS 至少需要 schema 2，DoT 至少需要 schema 3。Schema 1 至 3 隐含标准 DNS cache 配置；自定义容量或关闭 cache 需要 schema 4。Host 在编码需要更高 schema 的 transport 或 cache 设置前先发现经过认证的 Provider capability，绝不能静默丢弃用户请求的设置。Capability 不匹配时必须在预检或 manager mutation 前失败。
+
+## DNS Cache 变更
+
+普通 DNS 响应 cache 是全局设置。默认最多缓存 1,000 条响应；开启时容量接受 `1...10,000`，关闭时向 DnsLibs 传入容量零。Optimistic cache 始终关闭且不提供用户配置。
+
+Proxy Off 时保存只提交 App configuration，并在下次 enable 时生效。存在 exact Active runtime 时，保存使用与 Active Profile 编辑相同的 manager-enabled、authenticated single-engine mutation 和 compensation 路径；upstream 未变化时不重复 upstream preflight。Cache settings reapply 会丢弃旧 cache entry。只有 exact target runtime 与最终 manager verification 均成功后才发布成功；结果不确定时进入 recovery-required。
 
 ## Single-Engine Lifecycle
 
@@ -75,6 +81,6 @@ Lifecycle shutdown 阻止新切换意图，等待无法取消的 mutation，捕�
 
 确认 exact Active 后，safe Quit 在 quiescence 前耐久写入一次性 resume record，并在 final manager reload 后将 exact disable 标记为 confirmed。两个 phase 之间发生 crash 时，下次启动根据 record 与当前 exact manager state reconcile。任何 startup enable 前必须先耐久 claim record，每次启动最多自动尝试一次。
 
-启动先处理 Profile mutation recovery，再处理 safe Quit resume evidence。Exact enabled manager 只做 reconcile/adopt，不 stop/start。只有 owner identity、保留配置的 generation/fingerprint、App configuration identity 和 Extension readiness 都与 record 一致，exact disabled manager 才可以被 enable。Manual 使用持久化 Profile；Automatic 等待当前活动桌面 session 的 fresh network context 后重新计算 Rules。Missing、corrupt、claimed、foreign、changed 或 uncertain evidence 均不能授权自动 manager write。
+启动先处理 configuration mutation recovery，再处理 safe Quit resume evidence。Exact enabled manager 只做 reconcile/adopt，不 stop/start。只有 owner identity、保留配置的 generation/fingerprint、App configuration identity 和 Extension readiness 都与 record 一致，exact disabled manager 才可以被 enable。Manual 使用持久化 Profile；Automatic 等待当前活动桌面 session 的 fresh network context 后重新计算 Rules。Missing、corrupt、claimed、foreign、changed 或 uncertain evidence 均不能授权自动 manager write。
 
 正常 Quit 保留已安装的 System Extension。发生 Force Quit、crash 或断电后，系统管理的 DNS Proxy 可能保持 enabled，直到下次启动 reconcile persisted state 与 actual runtime，或用户恢复 System DNS。Manager stop/start 用于首次 enable、safe Quit resume、显式 restore、Quit、Extension replacement 和有界 lifecycle repair；普通 Profile 切换使用 manager enabled 的 single-engine reapply 路径。

@@ -34,6 +34,7 @@ struct SettingsView: View {
                     Text("macOS returned an unrecognized Launch at Login status. Open Login Items Settings to review the current state.")
                         .foregroundStyle(.red)
                 }
+                DNSCacheSettingsSection()
             }
             .formStyle(.grouped)
             .tabItem { Label("General", systemImage: "gear") }
@@ -278,6 +279,132 @@ struct SettingsView: View {
     private func stableErrorDescription(_ runtimeError: ProxyRuntimeErrorCode?) -> String {
         if let failure = appState.proxy.lastSwitchFailure { return failure.code.rawValue }
         return runtimeError?.rawValue ?? "None"
+    }
+}
+
+@MainActor
+private struct DNSCacheSettingsSection: View {
+    @EnvironmentObject private var appState: AppState
+    @State private var isEnabled = DNSCacheConfiguration.standard.isEnabled
+    @State private var maximumEntries = String(
+        DNSCacheConfiguration.standard.maximumEntries
+    )
+    @State private var baseline: DNSCacheConfiguration?
+    @State private var isApplying = false
+    @State private var resultMessage: String?
+
+    var body: some View {
+        Section("DNS Cache") {
+            Toggle("Cache DNS Responses", isOn: Binding(
+                get: { isEnabled },
+                set: { enabled in
+                    isEnabled = enabled
+                    if !enabled, draftConfiguration == nil {
+                        maximumEntries = String(
+                            baseline?.maximumEntries
+                                ?? DNSCacheConfiguration.defaultMaximumEntries
+                        )
+                    }
+                    resultMessage = nil
+                }
+            ))
+            .disabled(controlsAreDisabled)
+
+            LabeledContent("Maximum Cached Responses") {
+                TextField("Capacity", text: $maximumEntries)
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: 96)
+                    .disabled(!isEnabled || controlsAreDisabled)
+                    .onChange(of: maximumEntries) { _, _ in resultMessage = nil }
+            }
+
+            if isEnabled, draftConfiguration == nil {
+                Text("Enter a whole number from 1 through 10,000.")
+                    .foregroundStyle(.red)
+            }
+
+            HStack {
+                Button("Restore Default") {
+                    let standard = DNSCacheConfiguration.standard
+                    isEnabled = standard.isEnabled
+                    maximumEntries = String(standard.maximumEntries)
+                    resultMessage = nil
+                }
+                .disabled(controlsAreDisabled)
+
+                Spacer()
+
+                if isApplying {
+                    ProgressView()
+                        .controlSize(.small)
+                        .accessibilityLabel("Applying DNS cache settings")
+                }
+
+                Button("Save") {
+                    Task { await save() }
+                }
+                .disabled(!canSave)
+            }
+
+            if let resultMessage {
+                Text(resultMessage)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .task { synchronizeDraftIfNeeded() }
+        .onChange(of: appState.configuration?.dnsCacheConfiguration) { _, configuration in
+            guard !isApplying, !hasChanges, let configuration else { return }
+            synchronizeDraft(with: configuration)
+        }
+    }
+
+    private var draftConfiguration: DNSCacheConfiguration? {
+        guard let value = Int(maximumEntries) else { return nil }
+        return try? DNSCacheConfiguration(
+            isEnabled: isEnabled,
+            maximumEntries: value
+        )
+    }
+
+    private var hasChanges: Bool {
+        guard let baseline, let draftConfiguration else { return false }
+        return draftConfiguration != baseline
+    }
+
+    private var controlsAreDisabled: Bool {
+        isApplying || appState.configurationWritesLocked
+    }
+
+    private var canSave: Bool {
+        !controlsAreDisabled && hasChanges && draftConfiguration != nil
+    }
+
+    private func synchronizeDraftIfNeeded() {
+        guard baseline == nil,
+              let configuration = appState.configuration?.dnsCacheConfiguration else { return }
+        synchronizeDraft(with: configuration)
+    }
+
+    private func synchronizeDraft(with configuration: DNSCacheConfiguration) {
+        baseline = configuration
+        isEnabled = configuration.isEnabled
+        maximumEntries = String(configuration.maximumEntries)
+    }
+
+    private func save() async {
+        guard let draftConfiguration else { return }
+        isApplying = true
+        resultMessage = nil
+        let outcome = await appState.setDNSCacheConfiguration(draftConfiguration)
+        isApplying = false
+
+        guard case .completed = outcome else { return }
+        synchronizeDraft(with: draftConfiguration)
+        if case .active = appState.proxy.state {
+            resultMessage = "DNS cache settings applied."
+        } else {
+            resultMessage = "Saved. Applies when DNS Proxy is turned on."
+        }
     }
 }
 

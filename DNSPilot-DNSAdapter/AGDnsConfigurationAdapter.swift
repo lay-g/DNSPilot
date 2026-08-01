@@ -67,6 +67,9 @@ enum AGDnsConfigurationAdapter {
         result.filters = []
         result.listeners = []
         result.upstreamTimeoutMs = 5_000
+        result.dnsCacheSize = configuration.dnsCacheConfiguration.isEnabled
+            ? UInt(configuration.dnsCacheConfiguration.maximumEntries)
+            : 0
         result.optimisticCache = false
         result.enableParallelUpstreamQueries = false
         result.enableFallbackOnUpstreamsFailure = false

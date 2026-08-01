@@ -48,9 +48,9 @@ SSID denial disables only SSID conditions. Interface and subnet Rules continue t
 
 ## Configuration Storage
 
-Profiles, Rules, Default Profile, and operating mode live in one versioned `AppConfiguration` document. An empty document starts in Automatic mode and cannot enable the DNS Proxy until a valid Profile and Default Profile exist.
+Profiles, Rules, Default Profile, operating mode, and the global DNS cache configuration live in one versioned `AppConfiguration` document. The cache is enabled by default with a maximum of 1,000 responses. An enabled capacity is restricted to `1...10,000`; disabling the cache retains the last valid capacity for later reuse. An empty document starts in Automatic mode and cannot enable the DNS Proxy until a valid Profile and Default Profile exist.
 
-Loading validates schema support, duplicate identities, and every reference. Persisted schema 1 is migrated canonically to schema 2 in memory and changes the official file only through the normal atomic commit path. A newer schema enters read-only recovery and is never overwritten. Corrupt input is preserved before reset is offered.
+Loading validates schema support, duplicate identities, every reference, and cache bounds. Persisted schemas 1 and 2 are migrated canonically to schema 3 in memory with the standard cache configuration and change the official file only through the normal atomic commit path. A newer schema enters read-only recovery and is never overwritten. Corrupt input is preserved before reset is offered.
 
 Configuration is canonicalized, fingerprinted, and committed with compare-and-swap semantics using a private Application Support directory, restrictive permissions, durable temporary-file writes, and atomic replacement. `UserDefaults` is limited to UI preferences.
 
@@ -60,7 +60,7 @@ Deleting a referenced Profile requires an explicit replacement for Rules, Defaul
 
 ## Mutation Journal
 
-Profile mutations are serialized. Inactive changes need one atomic configuration commit. A change affecting the Active runtime uses a compensating transaction with:
+Configuration mutations are serialized. Inactive changes need one atomic configuration commit. A Profile or cache change affecting the Active runtime uses a compensating transaction with:
 
 - operation and runtime transaction identity;
 - old and draft configuration fingerprints;

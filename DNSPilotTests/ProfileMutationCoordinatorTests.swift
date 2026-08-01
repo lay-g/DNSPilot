@@ -111,6 +111,63 @@ struct ProfileMutationCoordinatorTests {
         #expect(try fixture.journal.load() == .missing)
     }
 
+    @Test func cacheUpdateCommitsInactiveAndReappliesActiveWithExactValue() async throws {
+        let cache = try DNSCacheConfiguration(isEnabled: false, maximumEntries: 2_500)
+
+        let inactiveFixture = try CoordinatorFixture(profileCount: 1)
+        let inactiveController = CoordinatorControllerFake(
+            activeProfileID: nil,
+            oldRuntime: try inactiveFixture.runtime(for: inactiveFixture.profiles[0])
+        )
+        let inactive = inactiveFixture.coordinator(controller: inactiveController)
+        let inactiveResult = await inactive.mutate(ProfileMutationRequest(
+            operationID: UUID(),
+            expectedConfigurationFingerprint: inactiveFixture.initial.fingerprint,
+            intent: .updateDNSCache(cache)
+        ))
+
+        #expect(inactiveResult.isCommitted)
+        #expect(await inactive.configuration().value.dnsCacheConfiguration == cache)
+        #expect(await inactiveController.events.isEmpty)
+
+        let activeFixture = try CoordinatorFixture(profileCount: 1, activeProfileIndex: 0)
+        let activeController = CoordinatorControllerFake(
+            activeProfileID: activeFixture.profiles[0].id,
+            oldRuntime: try activeFixture.runtime(for: activeFixture.profiles[0])
+        )
+        let active = activeFixture.coordinator(controller: activeController)
+        let activeResult = await active.mutate(ProfileMutationRequest(
+            operationID: UUID(),
+            expectedConfigurationFingerprint: activeFixture.initial.fingerprint,
+            intent: .updateDNSCache(cache)
+        ))
+
+        #expect(activeResult.isCommitted)
+        #expect(await active.configuration().value.dnsCacheConfiguration == cache)
+        #expect(await activeController.lastTarget?.dnsCacheConfiguration == cache)
+        #expect(await activeController.events == [.reserve, .persistDesired, .apply])
+        #expect(try activeFixture.journal.load() == .missing)
+    }
+
+    @Test func unchangedCacheUpdateDoesNotCreateRuntimeMutation() async throws {
+        let fixture = try CoordinatorFixture(profileCount: 1, activeProfileIndex: 0)
+        let controller = CoordinatorControllerFake(
+            activeProfileID: fixture.profiles[0].id,
+            oldRuntime: try fixture.runtime(for: fixture.profiles[0])
+        )
+        let coordinator = fixture.coordinator(controller: controller)
+
+        let result = await coordinator.mutate(ProfileMutationRequest(
+            operationID: UUID(),
+            expectedConfigurationFingerprint: fixture.initial.fingerprint,
+            intent: .updateDNSCache(.standard)
+        ))
+
+        #expect(result.isCommitted)
+        #expect(await controller.events.isEmpty)
+        #expect(fixture.store.events == [.encode])
+    }
+
     @Test func JSONCommitFailureCompensatesBeforeCleanup() async throws {
         let fixture = try CoordinatorFixture(profileCount: 1, activeProfileIndex: 0)
         fixture.store.nextCommitFailure = .injected
@@ -613,6 +670,7 @@ private actor CoordinatorControllerFake: ActiveProfileMutationControlling {
     private(set) var persistCallCount = 0
     private(set) var lastMutationID: UUID?
     private(set) var lastRuntimeOperationIDs: [UUID] = []
+    private(set) var lastTarget: DNSProxyTarget?
     private(set) var recoveryGoals: [ActiveProfileMutationRecoveryGoal] = []
 
     init(
@@ -642,10 +700,12 @@ private actor CoordinatorControllerFake: ActiveProfileMutationControlling {
         events.append(.reserve)
         lastMutationID = mutationID
         lastRuntimeOperationIDs.append(runtimeOperationID)
+        lastTarget = target
         let draft = try PersistedProxyConfiguration(value: ActiveProxyConfiguration(
             generation: UUID(),
             profileID: target.profileID,
-            upstream: target.upstream
+            upstream: target.upstream,
+            dnsCacheConfiguration: target.dnsCacheConfiguration
         ))
         return ActiveProfileMutationReservation(
             mutationID: mutationID,

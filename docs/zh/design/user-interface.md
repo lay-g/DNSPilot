@@ -8,6 +8,8 @@ DNSPilot 是安静、原生的 macOS utility，包含一个管理窗口、一个
 
 管理窗口使用两列 NavigationSplitView，包含 Overview、Profiles、Rules。Settings 包含 General、Privacy、Diagnostics、About。使用原生 list、form、sheet、alert、menu、segmented control、toggle、系统字体、语义色和 SF Symbols。颜色不能单独表达状态。
 
+General 包含 staged DNS Cache section。Cache 默认开启，最多保存 1,000 条响应。用户可以关闭，或输入 1 到 10,000 的精确容量。关闭时保留最后一个合法容量并禁用输入字段；Restore Default 恢复为开启和 1,000。Save 只校验一次并且最多触发一次 runtime mutation。应用期间禁用相关控件。Proxy Off 时保存要说明设置将在下次 enable 时生效；Active 时只有 exact runtime confirmation 后才能显示成功。失败后保留已确认值和 draft，供用户修正或重试。
+
 ## 状态语言
 
 UI 展示可观察的运行状态：`DNS Proxy On`、`DNS Proxy Off`、`Preparing`、`Applying`、`Restoring System DNS`、`Recovery Required` 和 `Error`。

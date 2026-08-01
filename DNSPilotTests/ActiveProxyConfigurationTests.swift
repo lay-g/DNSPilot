@@ -112,7 +112,8 @@ struct ActiveProxyConfigurationTests {
                 serverName: "DNS.Example.Test",
                 port: 8853,
                 bootstrapServers: [IPAddress("192.0.2.53")]
-            ))
+            )),
+            schemaVersion: 3
         )
 
         let data = try configuration.propertyListData()
@@ -124,7 +125,43 @@ struct ActiveProxyConfigurationTests {
 
         #expect(decoded == configuration)
         #expect(decoded.schemaVersion == 3)
+        #expect(decoded.dnsCacheConfiguration == .standard)
+        #expect(payload["dnsCacheConfiguration"] == nil)
         #expect(upstream["kind"] as? String == "tls")
+    }
+
+    @Test func schemaFourRoundTripPreservesExactCacheConfiguration() throws {
+        let cache = try DNSCacheConfiguration(isEnabled: false, maximumEntries: 2_500)
+        let configuration = try ActiveProxyConfiguration(
+            generation: generation,
+            profileID: profileID,
+            upstream: .fixedCloudflare,
+            dnsCacheConfiguration: cache
+        )
+
+        let data = try configuration.propertyListData()
+        let decoded = try ActiveProxyConfiguration.decodePropertyList(data)
+        let payload = try #require(
+            PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any]
+        )
+
+        #expect(decoded.schemaVersion == 4)
+        #expect(decoded.dnsCacheConfiguration == cache)
+        #expect(payload["dnsCacheConfiguration"] != nil)
+    }
+
+    @Test func legacySchemasRejectNonstandardCacheConfiguration() throws {
+        let custom = try DNSCacheConfiguration(isEnabled: true, maximumEntries: 2_000)
+
+        #expect(throws: ActiveProxyConfigurationError.unsupportedLegacyDNSCacheConfiguration) {
+            try ActiveProxyConfiguration(
+                generation: generation,
+                profileID: profileID,
+                upstream: .fixedCloudflare,
+                dnsCacheConfiguration: custom,
+                schemaVersion: 3
+            )
+        }
     }
 
     @Test func schemasOneAndTwoRejectDoT() throws {

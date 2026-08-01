@@ -12,6 +12,7 @@ Unit 与 contract test 覆盖：
 - Plain DNS、DoT 与 DoH 的模型校验、adapter wire mapping、bootstrap conversion 和按 transport 区分的 schema capability gating。
 - Rule 顺序、AND/OR、SSID availability 和 Default fallback。
 - Configuration schema、canonical encoding、fingerprint、atomic commit、损坏保留和 compare-and-swap conflict。
+- DNS cache 默认值、范围、关闭、schema migration、adapter mapping、capability gating、cache-hit 行为、settings reapply 和 rollback。
 - Automatic/Manual 持久化、target coalescing、stale decision 和 session fencing。
 - Mutation journal authentication、compensation、crash recovery 和 cleanup。
 - Safe Quit resume journal encoding、phase fencing、损坏保留、一次性 claim，以及 manager disable 前后的 crash window。
@@ -30,7 +31,7 @@ Build-only 成功不能证明 code signing、entitlement authorization、System 
 
 ## 集成验证
 
-受控 DNS/DoH fixture 验证真实 DnsLibs 行为，包括 UDP/TCP fallback、HTTP connection reuse、bootstrap、cancellation、resource limit、重复 lifecycle、rollback 和 stop。Fixture 使用保留地址与 synthetic domain。
+受控 DNS/DoH fixture 验证真实 DnsLibs 行为，包括 UDP/TCP fallback、HTTP connection reuse、bootstrap、cache hit 与 bypass、cancellation、resource limit、重复 lifecycle、rollback 和 stop。Fixture 使用保留地址与 synthetic domain。
 
 ## 签名运行时验证
 

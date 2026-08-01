@@ -81,9 +81,34 @@ struct AGDnsConfigurationAdapterTests {
         #expect(result.filters.isEmpty)
         #expect(result.listeners.isEmpty)
         #expect(result.upstreamTimeoutMs == 5_000)
+        #expect(result.dnsCacheSize == 1_000)
         #expect(result.optimisticCache == false)
         #expect(result.enableParallelUpstreamQueries == false)
         #expect(result.enableFallbackOnUpstreamsFailure == false)
         #expect(result.enableHttp3 == false)
+    }
+
+    @Test func mapsCustomAndDisabledCacheCapacityExactly() throws {
+        let custom = try ActiveProxyConfiguration(
+            generation: UUID(),
+            profileID: UUID(),
+            upstream: .fixedCloudflare,
+            dnsCacheConfiguration: DNSCacheConfiguration(
+                isEnabled: true,
+                maximumEntries: 4_321
+            )
+        )
+        let disabled = try ActiveProxyConfiguration(
+            generation: UUID(),
+            profileID: UUID(),
+            upstream: .fixedCloudflare,
+            dnsCacheConfiguration: DNSCacheConfiguration(
+                isEnabled: false,
+                maximumEntries: 4_321
+            )
+        )
+
+        #expect(try AGDnsConfigurationAdapter.makeProxyConfig(from: custom).dnsCacheSize == 4_321)
+        #expect(try AGDnsConfigurationAdapter.makeProxyConfig(from: disabled).dnsCacheSize == 0)
     }
 }

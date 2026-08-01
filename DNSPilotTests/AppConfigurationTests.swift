@@ -6,7 +6,7 @@ struct AppConfigurationTests {
     private let profileID = UUID(uuidString: "40000000-0000-0000-0000-000000000001")!
     private let ruleID = UUID(uuidString: "50000000-0000-0000-0000-000000000001")!
 
-    @Test func schemaTwoRoundTripPreservesModelsAndStableSetEncoding() throws {
+    @Test func schemaThreeRoundTripPreservesModelsCacheAndStableSetEncoding() throws {
         let profile = try makeProfile()
         let rule = try DNSRule(
             id: ruleID,
@@ -18,7 +18,11 @@ struct AppConfigurationTests {
             profiles: [profile],
             rules: [rule],
             defaultProfileID: profile.id,
-            operatingMode: .manual(profileID: profile.id)
+            operatingMode: .manual(profileID: profile.id),
+            dnsCacheConfiguration: try DNSCacheConfiguration(
+                isEnabled: false,
+                maximumEntries: 2_500
+            )
         )
 
         let encoder = JSONEncoder()
@@ -36,10 +40,11 @@ struct AppConfigurationTests {
     @Test func emptyInitialConfigurationIsValid() throws {
         let configuration = try AppConfiguration()
 
-        #expect(configuration.schemaVersion == 2)
+        #expect(configuration.schemaVersion == 3)
         #expect(configuration.profiles.isEmpty)
         #expect(configuration.defaultProfileID == nil)
         #expect(configuration.operatingMode == .automatic)
+        #expect(configuration.dnsCacheConfiguration == .standard)
     }
 
     @Test func rejectsUnsupportedSchemaAndDuplicateIDs() throws {
@@ -51,8 +56,8 @@ struct AppConfigurationTests {
             profileID: profile.id
         )
 
-        #expect(throws: AppConfigurationError.unsupportedSchemaVersion(3)) {
-            try AppConfiguration(schemaVersion: 3)
+        #expect(throws: AppConfigurationError.unsupportedSchemaVersion(4)) {
+            try AppConfiguration(schemaVersion: 4)
         }
         #expect(throws: AppConfigurationError.duplicateProfileID(profile.id)) {
             try AppConfiguration(profiles: [profile, profile])
@@ -68,6 +73,7 @@ struct AppConfigurationTests {
             JSONSerialization.jsonObject(with: JSONEncoder().encode(current)) as? [String: Any]
         )
         payload["schemaVersion"] = 1
+        payload.removeValue(forKey: "dnsCacheConfiguration")
 
         let migrated = try JSONDecoder().decode(
             AppConfiguration.self,
@@ -76,6 +82,26 @@ struct AppConfigurationTests {
 
         #expect(migrated.schemaVersion == AppConfiguration.currentSchemaVersion)
         #expect(migrated.profiles == current.profiles)
+        #expect(migrated.dnsCacheConfiguration == .standard)
+    }
+
+    @Test func cacheConfigurationValidatesBoundsAndDecodedPayload() throws {
+        #expect(try DNSCacheConfiguration(isEnabled: true, maximumEntries: 1).maximumEntries == 1)
+        #expect(
+            try DNSCacheConfiguration(isEnabled: false, maximumEntries: 10_000).maximumEntries
+                == 10_000
+        )
+        #expect(throws: DNSCacheConfigurationError.invalidMaximumEntries(0)) {
+            try DNSCacheConfiguration(isEnabled: true, maximumEntries: 0)
+        }
+        #expect(throws: DNSCacheConfigurationError.invalidMaximumEntries(10_001)) {
+            try DNSCacheConfiguration(isEnabled: false, maximumEntries: 10_001)
+        }
+
+        let invalid = Data(#"{"isEnabled":true,"maximumEntries":0}"#.utf8)
+        #expect(throws: DNSCacheConfigurationError.invalidMaximumEntries(0)) {
+            try JSONDecoder().decode(DNSCacheConfiguration.self, from: invalid)
+        }
     }
 
     @Test func rejectsMissingDefaultManualAndRuleReferences() throws {

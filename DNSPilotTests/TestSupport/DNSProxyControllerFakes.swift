@@ -529,6 +529,7 @@ enum FakeRuntimeReapplyOutcome: Sendable {
 
 actor FakeRuntimeSession: ProxyRuntimeStatusProviding, ProxyRuntimeControlling {
     private let providerInstanceID: UUID
+    private let maximumConfigurationSchemaVersion: Int
     private var activeConfiguration: PersistedProxyConfiguration?
     private var quiescedConfiguration: PersistedProxyConfiguration?
     private var outcomes: [FakeRuntimeReapplyOutcome]
@@ -541,11 +542,13 @@ actor FakeRuntimeSession: ProxyRuntimeStatusProviding, ProxyRuntimeControlling {
     init(
         activeConfiguration: PersistedProxyConfiguration?,
         providerInstanceID: UUID = UUID(),
+        maximumConfigurationSchemaVersion: Int = ActiveProxyConfiguration.currentSchemaVersion,
         outcomes: [FakeRuntimeReapplyOutcome] = [.applied],
         beforeResume: @escaping @Sendable (ProxyLifecycleRequest) async -> Void = { _ in }
     ) {
         self.activeConfiguration = activeConfiguration
         self.providerInstanceID = providerInstanceID
+        self.maximumConfigurationSchemaVersion = maximumConfigurationSchemaVersion
         self.outcomes = outcomes
         self.beforeResume = beforeResume
     }
@@ -559,8 +562,7 @@ actor FakeRuntimeSession: ProxyRuntimeStatusProviding, ProxyRuntimeControlling {
                     phase: .idle,
                     errorCode: nil,
                     updatedAt: Date(timeIntervalSince1970: 0),
-                    maximumConfigurationSchemaVersion: ActiveProxyConfiguration
-                        .currentSchemaVersion,
+                    maximumConfigurationSchemaVersion: maximumConfigurationSchemaVersion,
                     runtimeControlProtocolVersion: DNSProxyXPCContract
                         .currentRuntimeControlProtocolVersion,
                     providerInstanceID: providerInstanceID,
@@ -572,8 +574,7 @@ actor FakeRuntimeSession: ProxyRuntimeStatusProviding, ProxyRuntimeControlling {
                 phase: .failed,
                 errorCode: .internalFailure,
                 updatedAt: Date(timeIntervalSince1970: 0),
-                maximumConfigurationSchemaVersion: ActiveProxyConfiguration
-                    .currentSchemaVersion,
+                maximumConfigurationSchemaVersion: maximumConfigurationSchemaVersion,
                 runtimeControlProtocolVersion: DNSProxyXPCContract
                     .currentRuntimeControlProtocolVersion,
                 providerInstanceID: providerInstanceID
@@ -584,8 +585,7 @@ actor FakeRuntimeSession: ProxyRuntimeStatusProviding, ProxyRuntimeControlling {
             phase: .ready,
             errorCode: nil,
             updatedAt: Date(timeIntervalSince1970: 0),
-            maximumConfigurationSchemaVersion: ActiveProxyConfiguration
-                .currentSchemaVersion,
+            maximumConfigurationSchemaVersion: maximumConfigurationSchemaVersion,
             runtimeControlProtocolVersion: DNSProxyXPCContract
                 .currentRuntimeControlProtocolVersion,
             providerInstanceID: providerInstanceID,

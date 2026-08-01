@@ -36,7 +36,7 @@ The runtime switching layer is Extension-owned and reached through authenticated
 
 | Fact | Owner | Persistence |
 | --- | --- | --- |
-| Profiles, Rules, Default Profile, mode | Host `AppConfiguration` | Durable |
+| Profiles, Rules, Default Profile, mode, DNS cache settings | Host `AppConfiguration` | Durable |
 | Desired runtime configuration | `NEDNSProxyManager.providerConfiguration` | Durable |
 | Actual runtime and last confirmed bytes | `ProxyLifecycleController` | Process-local |
 | Runtime phase and evidence | `RuntimeStatusStore` | Process-local |
@@ -52,7 +52,7 @@ The lifecycle journal records only that DNSPilot prepared or completed an exact 
 
 The Host and Extension use a build-identity-derived Mach service as their sole communication channel. The App Group entitlement authorizes only the Mach service namespace. Host configuration remains in private Application Support storage, and runtime status remains process-local in the Extension.
 
-The Extension receives one immutable `ActiveProxyConfiguration` containing schema version, generation and Profile identity, upstream configuration, and runtime logging mode.
+The Extension receives one immutable `ActiveProxyConfiguration` containing schema version, generation and Profile identity, upstream configuration, runtime logging mode, and DNS cache settings.
 
 ## Dependency Boundary
 

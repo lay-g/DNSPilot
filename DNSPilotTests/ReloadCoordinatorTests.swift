@@ -32,6 +32,17 @@ struct ReloadCoordinatorTests {
         #expect(loggingPlan.scope.isEmpty)
         #expect(loggingPlan.loggingModeChanged)
 
+        let cacheTarget = try makeLifecycleConfiguration(
+            profileID: profileID,
+            dnsCacheConfiguration: DNSCacheConfiguration(
+                isEnabled: false,
+                maximumEntries: 1_000
+            )
+        )
+        let cachePlan = DNSProxyReloadPlan(active: old, target: cacheTarget)
+        #expect(cachePlan.scope == .settings)
+        #expect(!cachePlan.loggingModeChanged)
+
         let identityTarget = try makeLifecycleConfiguration(
             profileID: profileID,
             address: "1.1.1.1"

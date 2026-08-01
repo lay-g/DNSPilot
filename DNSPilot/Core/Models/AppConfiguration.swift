@@ -63,20 +63,22 @@ enum AppConfigurationError: LocalizedError, Equatable, Sendable {
 }
 
 struct AppConfiguration: Codable, Equatable, Sendable {
-    static let currentSchemaVersion = 2
+    static let currentSchemaVersion = 3
 
     let schemaVersion: Int
     let profiles: [DNSProfile]
     let rules: [DNSRule]
     let defaultProfileID: DNSProfile.ID?
     let operatingMode: OperatingMode
+    let dnsCacheConfiguration: DNSCacheConfiguration
 
     init(
         schemaVersion: Int = Self.currentSchemaVersion,
         profiles: [DNSProfile] = [],
         rules: [DNSRule] = [],
         defaultProfileID: DNSProfile.ID? = nil,
-        operatingMode: OperatingMode = .automatic
+        operatingMode: OperatingMode = .automatic,
+        dnsCacheConfiguration: DNSCacheConfiguration = .standard
     ) throws {
         guard schemaVersion == Self.currentSchemaVersion else {
             throw AppConfigurationError.unsupportedSchemaVersion(schemaVersion)
@@ -107,6 +109,7 @@ struct AppConfiguration: Codable, Equatable, Sendable {
         self.rules = rules
         self.defaultProfileID = defaultProfileID
         self.operatingMode = operatingMode
+        self.dnsCacheConfiguration = dnsCacheConfiguration
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -115,6 +118,7 @@ struct AppConfiguration: Codable, Equatable, Sendable {
         case rules
         case defaultProfileID
         case operatingMode
+        case dnsCacheConfiguration
     }
 
     init(from decoder: any Decoder) throws {
@@ -127,7 +131,10 @@ struct AppConfiguration: Codable, Equatable, Sendable {
             profiles: container.decode([DNSProfile].self, forKey: .profiles),
             rules: container.decode([DNSRule].self, forKey: .rules),
             defaultProfileID: container.decodeIfPresent(DNSProfile.ID.self, forKey: .defaultProfileID),
-            operatingMode: container.decode(OperatingMode.self, forKey: .operatingMode)
+            operatingMode: container.decode(OperatingMode.self, forKey: .operatingMode),
+            dnsCacheConfiguration: decodedSchemaVersion == Self.currentSchemaVersion
+                ? container.decode(DNSCacheConfiguration.self, forKey: .dnsCacheConfiguration)
+                : .standard
         )
     }
 }

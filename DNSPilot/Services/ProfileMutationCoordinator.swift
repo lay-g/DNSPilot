@@ -24,6 +24,7 @@ enum ProfileMutationIntent: Equatable, Sendable {
     case duplicate(sourceProfileID: DNSProfile.ID, duplicate: DNSProfile)
     case edit(DNSProfile)
     case delete(profileID: DNSProfile.ID, plan: ProfileDeletionPlan)
+    case updateDNSCache(DNSCacheConfiguration)
     case reset
 }
 
@@ -58,6 +59,7 @@ enum ProfileMutationFailure: Equatable, Sendable {
     case configurationConflict
     case configurationCommitFailed
     case controllerPreparationFailed
+    case providerCompatibilityUnavailable
     case desiredPersistenceFailed
     case journalWriteFailed
     case runtimeRejected
@@ -205,7 +207,8 @@ actor ProfileMutationCoordinator {
                 profiles: current.profiles,
                 rules: rules,
                 defaultProfileID: defaultProfileID,
-                operatingMode: current.operatingMode
+                operatingMode: current.operatingMode,
+                dnsCacheConfiguration: current.dnsCacheConfiguration
             )
             let persisted = try configurationStore.encode(value)
             guard persisted != currentConfiguration else {
@@ -317,7 +320,8 @@ actor ProfileMutationCoordinator {
                 profiles: current.profiles,
                 rules: current.rules,
                 defaultProfileID: current.defaultProfileID,
-                operatingMode: mode
+                operatingMode: mode,
+                dnsCacheConfiguration: current.dnsCacheConfiguration
             )
             let persisted = try configurationStore.encode(value)
             try configurationStore.commit(
@@ -379,6 +383,10 @@ actor ProfileMutationCoordinator {
             return remember(.rejected(failure.mutationFailure), for: request)
         } catch {
             return remember(.rejected(.invalidConfiguration), for: request)
+        }
+
+        guard draft != currentConfiguration else {
+            return remember(.committed(currentConfiguration), for: request)
         }
 
         let activeTarget = activeRuntimeTarget(
@@ -513,6 +521,8 @@ actor ProfileMutationCoordinator {
                 mutationID: request.operationID,
                 runtimeOperationID: runtimeOperationID
             )
+        } catch DNSProxyControllerError.unsupportedProviderConfigurationSchema {
+            return remember(.rejected(.providerCompatibilityUnavailable), for: request)
         } catch {
             return remember(.rejected(.controllerPreparationFailed), for: request)
         }
@@ -727,6 +737,7 @@ actor ProfileMutationCoordinator {
         var rules = configuration.rules
         var defaultProfileID = configuration.defaultProfileID
         var operatingMode = configuration.operatingMode
+        var dnsCacheConfiguration = configuration.dnsCacheConfiguration
 
         switch intent {
         case let .create(profile):
@@ -815,18 +826,22 @@ actor ProfileMutationCoordinator {
                 throw DraftFailure(.invalidDeletionPlan(.unexpectedActiveReplacement))
             }
             profiles.removeAll { $0.id == profileID }
+        case let .updateDNSCache(configuration):
+            dnsCacheConfiguration = configuration
         case .reset:
             profiles.removeAll()
             rules.removeAll()
             defaultProfileID = nil
             operatingMode = .automatic
+            dnsCacheConfiguration = .standard
         }
 
         return try AppConfiguration(
             profiles: profiles,
             rules: rules,
             defaultProfileID: defaultProfileID,
-            operatingMode: operatingMode
+            operatingMode: operatingMode,
+            dnsCacheConfiguration: dnsCacheConfiguration
         )
     }
 
@@ -842,12 +857,18 @@ actor ProfileMutationCoordinator {
             targetID = profile.id
         case let .delete(profileID, plan) where profileID == activeProfileID:
             targetID = plan.activeReplacementProfileID
+        case .updateDNSCache:
+            targetID = activeProfileID
         default:
             targetID = nil
         }
         guard let targetID,
               let profile = draft.profiles.first(where: { $0.id == targetID }) else { return nil }
-        return DNSProxyTarget(profileID: profile.id, upstream: profile.upstream)
+        return DNSProxyTarget(
+            profileID: profile.id,
+            upstream: profile.upstream,
+            dnsCacheConfiguration: draft.dnsCacheConfiguration
+        )
     }
 
     private func runtimeIdentity(

@@ -743,6 +743,29 @@ struct AppStateTests {
         #expect(backend.intents == [.setDebugLogging(true), .setDebugLogging(true)])
     }
 
+    @Test func dnsCacheRetryPreservesTheExactRequestedConfiguration() async throws {
+        let configuration = try DNSCacheConfiguration(
+            isEnabled: false,
+            maximumEntries: 2_500
+        )
+        let failure = ProductActionFailure(
+            action: .dnsCacheUpdate,
+            reason: .runtimeRejected
+        )
+        let backend = FakeProductRuntimeBackend(snapshot: .empty)
+        backend.outcome = .failed(failure)
+        let state = AppState(backend: backend)
+
+        #expect(await state.setDNSCacheConfiguration(configuration) == .failed(failure))
+
+        backend.outcome = .completed
+        #expect(await state.retrySettingsAction() == .completed)
+        #expect(backend.intents == [
+            .setDNSCacheConfiguration(configuration),
+            .setDNSCacheConfiguration(configuration),
+        ])
+    }
+
     @Test func extensionDeactivationRunsAfterSuccessfulDNSRestore() async {
         let events = EventRecorder()
         let backend = FakeProductRuntimeBackend(snapshot: .empty, events: events)

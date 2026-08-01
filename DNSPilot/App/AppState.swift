@@ -120,6 +120,7 @@ enum ProductIntent: Equatable, Sendable {
     case refreshDiagnostics
     case requestLocationAuthorization
     case setDebugLogging(Bool)
+    case setDNSCacheConfiguration(DNSCacheConfiguration)
 }
 
 enum ProductAction: String, CaseIterable, Equatable, Sendable {
@@ -143,6 +144,7 @@ enum ProductAction: String, CaseIterable, Equatable, Sendable {
     case diagnosticsExport
     case locationAccessRequest
     case debugLoggingUpdate
+    case dnsCacheUpdate
     case systemExtensionUpdate
     case systemExtensionDeactivation
 
@@ -168,6 +170,7 @@ enum ProductAction: String, CaseIterable, Equatable, Sendable {
         case .diagnosticsExport: "Diagnostics Could Not Be Exported"
         case .locationAccessRequest: "Location Access Could Not Be Requested"
         case .debugLoggingUpdate: "Debug Logging Could Not Be Changed"
+        case .dnsCacheUpdate: "DNS Cache Settings Could Not Be Changed"
         case .systemExtensionUpdate: "System Extension Could Not Be Updated"
         case .systemExtensionDeactivation: "System Extension Could Not Be Deactivated"
         }
@@ -266,7 +269,9 @@ struct ProductActionFailure: Equatable, Sendable {
                 "DNSPilot could not save this configuration change. The previously stored configuration remains in use; check available disk space and try again."
             }
         case .runtimePreparationFailed:
-            "DNSPilot could not confirm the conditions required to prepare this Active Profile update. No new configuration was published; reconnect or restore System DNS if the current runtime state is uncertain."
+            action == .dnsCacheUpdate
+                ? "DNSPilot could not confirm the conditions required to prepare this DNS cache update. No new configuration was published; reconnect or restore System DNS if the current runtime state is uncertain."
+                : "DNSPilot could not confirm the conditions required to prepare this Active Profile update. No new configuration was published; reconnect or restore System DNS if the current runtime state is uncertain."
         case .desiredConfigurationPersistenceFailed:
             "DNSPilot could not record the requested Active Profile configuration, so it was not applied."
         case .recoveryJournalWriteFailed:
@@ -274,6 +279,8 @@ struct ProductActionFailure: Equatable, Sendable {
         case .runtimeRejected:
             if action == .debugLoggingUpdate {
                 "The DNS runtime did not accept the Debug Logging change. Review the current runtime state in Diagnostics, then try again."
+            } else if action == .dnsCacheUpdate {
+                "The DNS runtime did not accept the DNS cache change. DNSPilot restored the previous cache configuration or entered recovery."
             } else {
                 "The DNS runtime rejected the Active Profile change. DNSPilot rolled back to the previous configuration or restored System DNS."
             }
@@ -441,6 +448,7 @@ private enum SettingsRetryOperation {
     case systemExtensionDeactivation
     case diagnosticsExport
     case debugLogging(Bool)
+    case dnsCache(DNSCacheConfiguration)
     case systemDNSRestore
 }
 
@@ -1092,6 +1100,16 @@ final class AppState: ObservableObject {
         )
     }
 
+    @discardableResult
+    func setDNSCacheConfiguration(
+        _ configuration: DNSCacheConfiguration
+    ) async -> ProductActionOutcome {
+        routeFailureToSettings(
+            await submit(.setDNSCacheConfiguration(configuration)),
+            retryOperation: .dnsCache(configuration)
+        )
+    }
+
     var systemExtensionVersion: String {
         guard installedSystemExtensionVersion != "Unavailable" else {
             return bundledSystemExtensionVersion
@@ -1163,6 +1181,8 @@ final class AppState: ObservableObject {
             return await exportDiagnostics()
         case let .debugLogging(enabled):
             return await setDebugLoggingEnabled(enabled)
+        case let .dnsCache(configuration):
+            return await setDNSCacheConfiguration(configuration)
         case .systemDNSRestore:
             return await restoreSystemDNSFromSettings()
         }
@@ -1367,6 +1387,7 @@ extension ProductIntent {
         case .refreshDiagnostics: .diagnosticsRefresh
         case .requestLocationAuthorization: .locationAccessRequest
         case .setDebugLogging: .debugLoggingUpdate
+        case .setDNSCacheConfiguration: .dnsCacheUpdate
         }
     }
 
@@ -1377,7 +1398,7 @@ extension ProductIntent {
         case .preflightProfile, .createProfile, .duplicateProfile, .editProfile,
               .deleteProfile, .saveRule, .deleteRule, .reorderRules, .setDefaultProfile,
               .setOperatingMode, .turnOnDNSProxy, .requestLocationAuthorization,
-              .setDebugLogging, .resetOnboardingConfiguration:
+              .setDebugLogging, .setDNSCacheConfiguration, .resetOnboardingConfiguration:
             false
         }
     }
@@ -1392,7 +1413,8 @@ private extension ProductAction {
              .defaultProfileUpdate, .operatingModeUpdate, .dnsProxyEnable,
              .systemDNSRestore, .reconnect, .onboardingReset, .configurationReplace,
              .diagnosticsRefresh, .diagnosticsExport, .locationAccessRequest,
-             .debugLoggingUpdate, .systemExtensionUpdate, .systemExtensionDeactivation:
+             .debugLoggingUpdate, .dnsCacheUpdate, .systemExtensionUpdate,
+             .systemExtensionDeactivation:
             false
         }
     }
@@ -1424,6 +1446,7 @@ extension ProfileMutationFailure {
             .invalidConfiguration
         case .configurationCommitFailed: .persistenceFailed
         case .controllerPreparationFailed: .runtimePreparationFailed
+        case .providerCompatibilityUnavailable: .compatibilityUnavailable
         case .desiredPersistenceFailed: .desiredConfigurationPersistenceFailed
         case .journalWriteFailed: .recoveryJournalWriteFailed
         case .runtimeRejected: .runtimeRejected

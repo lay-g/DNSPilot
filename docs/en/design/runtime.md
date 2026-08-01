@@ -4,13 +4,19 @@
 
 ## Runtime Identity
 
-Each desired runtime is represented by one decoded `ActiveProxyConfiguration`, its exact binary property-list bytes, and the SHA-256 fingerprint of those bytes. The configuration contains schema version, generation UUID, Profile UUID, upstream, and logging mode.
+Each desired runtime is represented by one decoded `ActiveProxyConfiguration`, its exact binary property-list bytes, and the SHA-256 fingerprint of those bytes. The configuration contains schema version, generation UUID, Profile UUID, upstream, logging mode, and DNS cache settings.
 
 Encoding occurs once per generation. Manager persistence, XPC mutation, runtime application, rollback, and final verification use the same bytes. Generation and fingerprint are independent identity dimensions.
 
 A runtime is confirmed only when Provider instance, generation, fingerprint, `.ready` phase, compatible control protocol, and final manager ownership reload all agree.
 
-Active Proxy schema capability is transport-specific: DoH requires schema 1, Plain DNS requires schema 2, and DoT requires schema 3. The Host discovers authenticated Provider capability before encoding transports newer than schema 1 and never sends an unsupported upstream discriminator. Capability mismatch fails before preflight or manager mutation.
+Active Proxy schema capability is transport-specific: DoH requires schema 1, Plain DNS requires schema 2, and DoT requires schema 3. Schema 1 through 3 imply the standard DNS cache configuration; custom capacity or disabled cache requires schema 4. The Host discovers authenticated Provider capability before encoding a transport or cache setting that needs a newer schema and never silently drops a requested setting. Capability mismatch fails before preflight or manager mutation.
+
+## DNS Cache Changes
+
+The ordinary DNS response cache is global. It defaults to 1,000 responses, accepts an enabled capacity of `1...10,000`, and is disabled by passing a capacity of zero to DnsLibs. Optimistic cache remains disabled and is not user-configurable.
+
+Saving while the Proxy is off commits the application configuration and takes effect on the next enable. Saving while an exact Active runtime exists uses the same manager-enabled, authenticated single-engine mutation and compensation path as an Active Profile edit, but does not repeat upstream preflight when the upstream is unchanged. A cache settings reapply discards old cache entries. Success is published only after exact target runtime and final manager verification; uncertain outcomes enter recovery-required state.
 
 ## Single-Engine Lifecycle
 
@@ -75,6 +81,6 @@ If disable explicitly fails while the exact manager remains enabled, exact runti
 
 When exact Active state is confirmed, safe Quit durably prepares a one-shot resume record before quiescence and marks the exact disable as confirmed after the final manager reload. A crash between those phases is reconciled from the record and the current exact manager state. A record is claimed durably before any startup enable and is automatically attempted at most once per launch.
 
-Startup processes Profile mutation recovery before safe-Quit resume evidence. An exact enabled manager is reconciled and adopted without stop/start. An exact disabled manager may be enabled only when owner identity, retained configuration generation and fingerprint, application-configuration identity, and Extension readiness agree with the record. Manual mode uses its persisted Profile. Automatic mode waits for a fresh network context from the current active desktop session and reevaluates Rules. Missing, corrupt, claimed, foreign, changed, or uncertain evidence never authorizes an automatic manager write.
+Startup processes configuration mutation recovery before safe-Quit resume evidence. An exact enabled manager is reconciled and adopted without stop/start. An exact disabled manager may be enabled only when owner identity, retained configuration generation and fingerprint, application-configuration identity, and Extension readiness agree with the record. Manual mode uses its persisted Profile. Automatic mode waits for a fresh network context from the current active desktop session and reevaluates Rules. Missing, corrupt, claimed, foreign, changed, or uncertain evidence never authorizes an automatic manager write.
 
 Normal Quit leaves the System Extension installed. After Force Quit, crash, or power loss, the system-managed DNS Proxy may remain enabled until the next launch reconciles persisted state and actual runtime or the user restores System DNS. Manager stop/start is used for initial enablement, safe-Quit resume, explicit restore, Quit, Extension replacement, and bounded lifecycle repair; ordinary Profile switching uses the enabled single-engine reapply path.

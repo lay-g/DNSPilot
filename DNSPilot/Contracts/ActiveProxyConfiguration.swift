@@ -11,6 +11,7 @@ enum ActiveProxyConfigurationError: LocalizedError, Equatable, Sendable {
     case invalidDoHEndpoint
     case missingBootstrapServers
     case missingDoTBootstrapServers
+    case unsupportedLegacyDNSCacheConfiguration
     case invalidPropertyListStructure
 
     var errorDescription: String? {
@@ -35,6 +36,8 @@ enum ActiveProxyConfigurationError: LocalizedError, Equatable, Sendable {
             "A DNS-over-HTTPS hostname endpoint requires at least one bootstrap server."
         case .missingDoTBootstrapServers:
             "A DNS-over-TLS hostname requires at least one bootstrap server."
+        case .unsupportedLegacyDNSCacheConfiguration:
+            "Custom DNS cache settings require proxy configuration schema version 4."
         case .invalidPropertyListStructure:
             "The proxy configuration property list has an invalid structure."
         }
@@ -266,13 +269,64 @@ private func requireURL(_ value: String) throws -> URL {
     return url
 }
 
+enum DNSCacheConfigurationError: LocalizedError, Equatable, Sendable {
+    case invalidMaximumEntries(Int)
+
+    var errorDescription: String? {
+        switch self {
+        case let .invalidMaximumEntries(value):
+            "The DNS cache capacity must be between 1 and 10000, got \(value)."
+        }
+    }
+}
+
+struct DNSCacheConfiguration: Codable, Equatable, Hashable, Sendable {
+    static let defaultMaximumEntries = 1_000
+    static let maximumAllowedEntries = 10_000
+    static let standard = Self(
+        isEnabled: true,
+        validatedMaximumEntries: defaultMaximumEntries
+    )
+
+    let isEnabled: Bool
+    let maximumEntries: Int
+
+    init(
+        isEnabled: Bool = true,
+        maximumEntries: Int = Self.defaultMaximumEntries
+    ) throws {
+        guard (1...Self.maximumAllowedEntries).contains(maximumEntries) else {
+            throw DNSCacheConfigurationError.invalidMaximumEntries(maximumEntries)
+        }
+        self.init(isEnabled: isEnabled, validatedMaximumEntries: maximumEntries)
+    }
+
+    private init(isEnabled: Bool, validatedMaximumEntries: Int) {
+        self.isEnabled = isEnabled
+        maximumEntries = validatedMaximumEntries
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case isEnabled
+        case maximumEntries
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        try self.init(
+            isEnabled: container.decode(Bool.self, forKey: .isEnabled),
+            maximumEntries: container.decode(Int.self, forKey: .maximumEntries)
+        )
+    }
+}
+
 enum ProxyLoggingMode: String, Codable, Sendable {
     case `default`
     case debug
 }
 
 struct ActiveProxyConfiguration: Codable, Equatable, Sendable {
-    static let currentSchemaVersion = 3
+    static let currentSchemaVersion = 4
     static let providerConfigurationKey = "DNSPilotActiveProxyConfiguration"
     static let vendorDataOptionKey = "VendorData"
 
@@ -281,12 +335,14 @@ struct ActiveProxyConfiguration: Codable, Equatable, Sendable {
     let profileID: UUID
     let upstream: DNSUpstream
     let loggingMode: ProxyLoggingMode
+    let dnsCacheConfiguration: DNSCacheConfiguration
 
     init(
         generation: UUID,
         profileID: UUID,
         upstream: DNSUpstream,
         loggingMode: ProxyLoggingMode = .default,
+        dnsCacheConfiguration: DNSCacheConfiguration = .standard,
         schemaVersion: Int = Self.currentSchemaVersion
     ) throws {
         guard (1...Self.currentSchemaVersion).contains(schemaVersion) else {
@@ -305,11 +361,16 @@ struct ActiveProxyConfiguration: Codable, Equatable, Sendable {
         } else if schemaVersion == 2, case .tls = upstream {
             throw ActiveProxyConfigurationError.unsupportedLegacyUpstreamKind("tls")
         }
+        if schemaVersion < Self.currentSchemaVersion,
+           dnsCacheConfiguration != .standard {
+            throw ActiveProxyConfigurationError.unsupportedLegacyDNSCacheConfiguration
+        }
         self.schemaVersion = schemaVersion
         self.generation = generation
         self.profileID = profileID
         self.upstream = upstream
         self.loggingMode = loggingMode
+        self.dnsCacheConfiguration = dnsCacheConfiguration
     }
 
     func propertyListData() throws -> Data {
@@ -328,13 +389,16 @@ struct ActiveProxyConfiguration: Codable, Equatable, Sendable {
         return try PropertyListDecoder().decode(Self.self, from: data)
     }
 
-    private static let propertyListKeys: Set<String> = [
+    private static let legacyPropertyListKeys: Set<String> = [
         "schemaVersion",
         "generation",
         "profileID",
         "upstream",
         "loggingMode",
     ]
+    private static let currentPropertyListKeys = legacyPropertyListKeys.union([
+        "dnsCacheConfiguration",
+    ])
     private static let legacyUpstreamKeys: Set<String> = [
         "kind",
         "address",
@@ -368,7 +432,12 @@ struct ActiveProxyConfiguration: Codable, Equatable, Sendable {
         guard (1...currentSchemaVersion).contains(schemaVersion) else {
             throw ActiveProxyConfigurationError.unsupportedSchemaVersion(schemaVersion)
         }
-        try requireExactKeys(propertyListKeys, in: configuration)
+        try requireExactKeys(
+            schemaVersion == currentSchemaVersion
+                ? currentPropertyListKeys
+                : legacyPropertyListKeys,
+            in: configuration
+        )
         guard let upstream = configuration["upstream"] as? [String: Any] else {
             throw ActiveProxyConfigurationError.invalidPropertyListStructure
         }
@@ -388,7 +457,7 @@ struct ActiveProxyConfiguration: Codable, Equatable, Sendable {
         switch kind {
         case "plain":
             try requireExactKeys(plainConfigurationKeys, in: nestedConfiguration)
-        case "tls" where schemaVersion == currentSchemaVersion:
+        case "tls" where schemaVersion >= 3:
             try requireExactKeys(doTConfigurationKeys, in: nestedConfiguration)
         case "https":
             try requireExactKeys(doHConfigurationKeys, in: nestedConfiguration)
@@ -412,6 +481,7 @@ struct ActiveProxyConfiguration: Codable, Equatable, Sendable {
         case profileID
         case upstream
         case loggingMode
+        case dnsCacheConfiguration
     }
 
     private struct LegacyDNSUpstream: Codable {
@@ -431,6 +501,11 @@ struct ActiveProxyConfiguration: Codable, Equatable, Sendable {
         let decodedGeneration = try container.decode(UUID.self, forKey: .generation)
         let decodedProfileID = try container.decode(UUID.self, forKey: .profileID)
         let decodedLoggingMode = try container.decode(ProxyLoggingMode.self, forKey: .loggingMode)
+        let decodedDNSCacheConfiguration = if decodedSchemaVersion == Self.currentSchemaVersion {
+            try container.decode(DNSCacheConfiguration.self, forKey: .dnsCacheConfiguration)
+        } else {
+            DNSCacheConfiguration.standard
+        }
 
         switch decodedSchemaVersion {
         case 1:
@@ -441,14 +516,16 @@ struct ActiveProxyConfiguration: Codable, Equatable, Sendable {
                     container.decode(LegacyDNSUpstream.self, forKey: .upstream)
                 ),
                 loggingMode: decodedLoggingMode,
+                dnsCacheConfiguration: decodedDNSCacheConfiguration,
                 schemaVersion: 1
             )
-        case 2, Self.currentSchemaVersion:
+        case 2, 3, Self.currentSchemaVersion:
             try self.init(
                 generation: decodedGeneration,
                 profileID: decodedProfileID,
                 upstream: container.decode(DNSUpstream.self, forKey: .upstream),
                 loggingMode: decodedLoggingMode,
+                dnsCacheConfiguration: decodedDNSCacheConfiguration,
                 schemaVersion: decodedSchemaVersion
             )
         default:
@@ -476,12 +553,15 @@ struct ActiveProxyConfiguration: Codable, Equatable, Sendable {
                 ),
                 forKey: .upstream
             )
-        case 2, Self.currentSchemaVersion:
+        case 2, 3, Self.currentSchemaVersion:
             try container.encode(upstream, forKey: .upstream)
         default:
             throw ActiveProxyConfigurationError.unsupportedSchemaVersion(schemaVersion)
         }
         try container.encode(loggingMode, forKey: .loggingMode)
+        if schemaVersion == Self.currentSchemaVersion {
+            try container.encode(dnsCacheConfiguration, forKey: .dnsCacheConfiguration)
+        }
     }
 
     private static func migrateLegacyUpstream(_ legacy: LegacyDNSUpstream) throws -> DNSUpstream {

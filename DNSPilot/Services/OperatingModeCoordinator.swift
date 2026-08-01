@@ -109,6 +109,10 @@ actor OperatingModeCoordinator {
         }
     }
 
+    func synchronizeConfigurationFromWriter() async {
+        configurationSnapshot = await modePersister.configurationWriterSnapshot()
+    }
+
     func setMode(_ mode: OperatingMode) async -> OperatingModeDecisionResult {
         guard !isTerminationFenced else { return .suppressed(.terminationFenced) }
         guard configurationSnapshot != nil else {
@@ -269,9 +273,16 @@ actor OperatingModeCoordinator {
         ) else {
             return .suppressed(.missingProfile(profileID))
         }
-        let target = DNSProxyTarget(profileID: profile.id, upstream: profile.upstream)
-        guard let configuration = configurationSnapshot,
-              let lease = await modePersister.acquireOperatingModeSubmissionLease(
+        guard let configuration = configurationSnapshot else {
+            return .suppressed(.staleDecision)
+        }
+        let target = DNSProxyTarget(
+            profileID: profile.id,
+            upstream: profile.upstream,
+            dnsCacheConfiguration: configuration.configuration.value.dnsCacheConfiguration
+        )
+        guard
+               let lease = await modePersister.acquireOperatingModeSubmissionLease(
                   expectedConfigurationFingerprint: configuration.configuration.fingerprint,
                   expectedConfigurationRevision: configuration.revision
               ) else {

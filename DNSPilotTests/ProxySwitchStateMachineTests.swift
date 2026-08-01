@@ -703,7 +703,7 @@ struct ProxySwitchStateMachineTests {
         )
 
         #expect(result.activeProfileID == old.profileID)
-        #expect(attempted.value.schemaVersion == 3)
+        #expect(attempted.value.schemaVersion == ActiveProxyConfiguration.currentSchemaVersion)
         #expect(await manager.currentSnapshot.activeConfiguration?.schemaVersion == 1)
         #expect(await manager.disableSaveCount == 0)
     }

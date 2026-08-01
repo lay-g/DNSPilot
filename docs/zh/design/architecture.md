@@ -36,7 +36,7 @@ Runtime switching layer 属于 Extension，通过 authenticated Mach XPC 访问�
 
 | 事实 | Owner | 持久化 |
 | --- | --- | --- |
-| Profiles、Rules、Default、mode | Host `AppConfiguration` | 持久化 |
+| Profiles、Rules、Default、mode、DNS cache 设置 | Host `AppConfiguration` | 持久化 |
 | Desired runtime configuration | `NEDNSProxyManager.providerConfiguration` | 持久化 |
 | Actual runtime 与最后确认 bytes | `ProxyLifecycleController` | 进程内 |
 | Runtime phase 与 evidence | `RuntimeStatusStore` | 进程内 |
@@ -52,7 +52,7 @@ Lifecycle journal 只记录 DNSPilot 在 safe Quit 中准备或完成了一次 e
 
 Host 和 Extension 只通过由构建身份派生的 Mach service 通信。App Group entitlement 只授权 Mach service namespace。Host 配置保存在私有 Application Support storage，runtime status 保存在 Extension 进程内。
 
-Extension 接收一份 immutable `ActiveProxyConfiguration`，内容包括 schema version、generation 与 Profile identity、upstream 配置和 runtime logging mode。
+Extension 接收一份 immutable `ActiveProxyConfiguration`，内容包括 schema version、generation 与 Profile identity、upstream 配置、runtime logging mode 和 DNS cache 设置。
 
 ## 依赖边界
 

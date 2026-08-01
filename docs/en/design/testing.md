@@ -12,6 +12,7 @@ Unit and contract tests cover:
 - Plain DNS, DoT, and DoH model validation, adapter wire mapping, bootstrap conversion, and transport-specific schema capability gating.
 - Rule ordering, AND/OR semantics, SSID availability, and Default fallback.
 - Configuration schema, canonical encoding, fingerprints, atomic commit, corruption preservation, and compare-and-swap conflicts.
+- DNS cache defaults, bounds, disablement, schema migration, adapter mapping, capability gating, cache-hit behavior, settings reapply, and rollback.
 - Automatic/Manual persistence, target coalescing, stale decisions, and session fencing.
 - Mutation journal authentication, compensation, crash recovery, and cleanup.
 - Safe-Quit resume journal encoding, phase fencing, corruption preservation, one-shot claims, and crash windows before and after manager disable.
@@ -30,7 +31,7 @@ Build-only success cannot prove code signing, entitlement authorization, System 
 
 ## Integration Validation
 
-Controlled DNS and DoH fixtures validate real DnsLibs behavior: UDP/TCP fallback, HTTP connection reuse, bootstrap, cancellation, resource limits, repeated lifecycle operations, rollback, and stop. Fixtures use reserved addresses and synthetic domains.
+Controlled DNS and DoH fixtures validate real DnsLibs behavior: UDP/TCP fallback, HTTP connection reuse, bootstrap, cache hits and bypass, cancellation, resource limits, repeated lifecycle operations, rollback, and stop. Fixtures use reserved addresses and synthetic domains.
 
 ## Signed Runtime Validation
 

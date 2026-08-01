@@ -400,6 +400,11 @@ final class DNSPilotAppModel: ObservableObject, ProductRuntimeBacking {
                     reason: .runtimeRejected
                 ))
             }
+        case let .setDNSCacheConfiguration(configuration):
+            outcome = await mutateProductProfile(
+                .updateDNSCache(configuration),
+                action: .dnsCacheUpdate
+            )
         case .requestLocationAuthorization:
             requestNetworkLocationAuthorization()
             outcome = .completed
@@ -423,7 +428,11 @@ final class DNSPilotAppModel: ObservableObject, ProductRuntimeBacking {
         ))
         switch result {
         case .committed:
-            _ = await operatingModeCoordinator?.bootstrapFromWriter()
+            if case .updateDNSCache = intent {
+                await operatingModeCoordinator?.synchronizeConfigurationFromWriter()
+            } else {
+                _ = await operatingModeCoordinator?.bootstrapFromWriter()
+            }
             await refreshProxyPresentation()
             return .completed
         case let .rejected(failure):
@@ -563,7 +572,8 @@ final class DNSPilotAppModel: ObservableObject, ProductRuntimeBacking {
         }
         _ = await proxyController.activate(DNSProxyTarget(
             profileID: profile.id,
-            upstream: profile.upstream
+            upstream: profile.upstream,
+            dnsCacheConfiguration: configuration.dnsCacheConfiguration
         ))
         await refreshProxyPresentation()
         if case .active = proxySnapshot.state { return .completed }
@@ -764,7 +774,11 @@ final class DNSPilotAppModel: ObservableObject, ProductRuntimeBacking {
         proxyResumeState = .restoring
         productChangeHandler?()
         let snapshot = await proxyController.resumeAfterSafeQuit(
-            target: DNSProxyTarget(profileID: profile.id, upstream: profile.upstream),
+            target: DNSProxyTarget(
+                profileID: profile.id,
+                upstream: profile.upstream,
+                dnsCacheConfiguration: configuration.value.dnsCacheConfiguration
+            ),
             record: record,
             appConfigurationFingerprint: configuration.fingerprint
         )

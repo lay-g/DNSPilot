@@ -8,6 +8,8 @@ DNSPilot is a quiet, native macOS utility with one management window, one standa
 
 The management window uses a two-column navigation split view with Overview, Profiles, and Rules. Settings contains General, Privacy, Diagnostics, and About. Use native lists, forms, sheets, alerts, menus, segmented controls, toggles, system typography, semantic colors, and SF Symbols. Color never carries status alone.
 
+General includes a staged DNS Cache section. Cache is enabled by default with a maximum of 1,000 responses. Users may disable it or enter an exact capacity from 1 through 10,000. Disabling retains the last valid capacity and disables its field; Restore Default reenables cache at 1,000. Save validates once and performs at most one runtime mutation. While applying, related controls are disabled. A Proxy-off save states that the setting applies on the next enable. An Active save reports success only after exact runtime confirmation; failure preserves the confirmed value and the draft for correction or retry.
+
 ## State Language
 
 The UI presents observable runtime states: `DNS Proxy On`, `DNS Proxy Off`, `Preparing`, `Applying`, `Restoring System DNS`, `Recovery Required`, and `Error`.

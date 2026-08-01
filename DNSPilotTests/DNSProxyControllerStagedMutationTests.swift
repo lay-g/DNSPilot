@@ -49,6 +49,66 @@ struct DNSProxyControllerStagedMutationTests {
         #expect(await runtime.requests.isEmpty)
     }
 
+    @Test func cacheOnlyReservationSkipsPreflightAndRequiresSchemaFour() async throws {
+        let old = try stagedConfiguration(profileID: UUID(), upstream: .fixedCloudflare)
+        let persisted = try PersistedProxyConfiguration(value: old)
+        let manager = FakeDNSProxyManager(isEnabled: true, persistedConfiguration: persisted)
+        let validator = FakeUpstreamValidator { throw FakeTestError.unavailable }
+        let runtime = FakeRuntimeSession(activeConfiguration: persisted)
+        let controller = makeController(
+            manager: manager,
+            validator: validator,
+            statusProvider: runtime,
+            runtimeController: runtime
+        )
+        _ = await controller.synchronizeState()
+        let cache = try DNSCacheConfiguration(isEnabled: false, maximumEntries: 2_500)
+        let target = DNSProxyTarget(
+            profileID: old.profileID,
+            upstream: old.upstream,
+            dnsCacheConfiguration: cache
+        )
+
+        let reservation = try await controller.reserveActiveProfileMutation(
+            to: target,
+            mutationID: UUID(),
+            runtimeOperationID: UUID()
+        )
+
+        #expect(reservation.draftConfiguration.value.dnsCacheConfiguration == cache)
+        #expect(await validator.validationCount == 0)
+        #expect(await manager.currentSnapshot.persistedConfiguration == persisted)
+
+        let legacyRuntime = FakeRuntimeSession(
+            activeConfiguration: persisted,
+            maximumConfigurationSchemaVersion: 3
+        )
+        let legacyController = makeController(
+            manager: manager,
+            validator: validator,
+            statusProvider: legacyRuntime,
+            runtimeController: legacyRuntime
+        )
+        _ = await legacyController.synchronizeState()
+
+        do {
+            _ = try await legacyController.reserveActiveProfileMutation(
+                to: target,
+                mutationID: UUID(),
+                runtimeOperationID: UUID()
+            )
+            Issue.record("Expected schema 4 cache configuration to be rejected")
+        } catch let error as DNSProxyControllerError {
+            guard case let .unsupportedProviderConfigurationSchema(required, available) = error else {
+                Issue.record("Expected a schema compatibility error, got \(error)")
+                return
+            }
+            #expect(required == 4)
+            #expect(available == 3)
+        }
+        #expect(await validator.validationCount == 0)
+    }
+
     @Test func secondReservationIsRejected() async throws {
         let fixture = try await makeStagedFixture()
         _ = try await fixture.controller.reserveActiveProfileMutation(

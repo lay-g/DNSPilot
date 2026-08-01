@@ -1,4 +1,5 @@
 import AGDnsProxy
+import Darwin
 import Foundation
 import Synchronization
 import Testing
@@ -208,6 +209,43 @@ struct AGDnsSingleEngineReapplyTests {
         #expect(maximumThreads <= baseline.threadCount + 8, "\(summary)")
     }
 
+    @Test("DNS response cache can be sized and disabled")
+    func dnsResponseCacheCanBeSizedAndDisabled() async throws {
+        let server = try LoopbackDNSServer()
+        defer { server.stop() }
+        let upstreamAddress = "127.0.0.1:\(server.port)"
+        let recorder = CacheEventRecorder()
+        let enabled = try Self.makeConfiguration(
+            blockingAddress: Self.oldAddress,
+            filterRule: "",
+            upstreamAddress: upstreamAddress
+        )
+        enabled.dnsCacheSize = 1_000
+        let fixture = try ReapplyFixture(
+            configuration: enabled,
+            cacheEventRecorder: recorder
+        )
+        defer { fixture.stop() }
+
+        #expect(try await fixture.answerAddress(for: Self.domain) == Self.oldAddress)
+        #expect(try await fixture.answerAddress(for: Self.domain) == Self.oldAddress)
+        try await recorder.waitForCount(2)
+        #expect(server.queryCount == 1)
+        #expect(recorder.cacheHits.prefix(2).elementsEqual([false, true]))
+
+        let disabled = try Self.makeConfiguration(
+            blockingAddress: Self.oldAddress,
+            filterRule: "",
+            upstreamAddress: upstreamAddress
+        )
+        disabled.dnsCacheSize = 0
+        let reapply = fixture.reapply(disabled, options: .settings)
+        #expect(reapply.applied)
+        #expect(reapply.issue == nil)
+        #expect(try await fixture.answerAddress(for: Self.domain) == Self.oldAddress)
+        #expect(server.queryCount == 2)
+    }
+
     private static func makeConfiguration(
         blockingAddress: String,
         filterRule: String,
@@ -261,8 +299,17 @@ private final class ReapplyFixture: @unchecked Sendable {
     private let flowManager: AGDnsAppProxyFlowManager
     private var isStopped = false
 
-    init(configuration: AGDnsProxyConfig) throws {
+    init(
+        configuration: AGDnsProxyConfig,
+        cacheEventRecorder: CacheEventRecorder? = nil
+    ) throws {
         let events = AGDnsProxyEvents()
+        if let cacheEventRecorder {
+            events.onRequestProcessed = { event in
+                guard let event else { return }
+                cacheEventRecorder.record(cacheHit: event.cacheHit)
+            }
+        }
 
         var initializationIssue: NSError?
         guard let proxy = AGDnsProxy(
@@ -346,6 +393,148 @@ private final class ReapplyFixture: @unchecked Sendable {
 
     deinit {
         stop()
+    }
+}
+
+private final class CacheEventRecorder: @unchecked Sendable {
+    private let recordedCacheHits = Mutex<[Bool]>([])
+
+    var cacheHits: [Bool] {
+        recordedCacheHits.withLock { $0 }
+    }
+
+    func record(cacheHit: Bool) {
+        recordedCacheHits.withLock { $0.append(cacheHit) }
+    }
+
+    func waitForCount(_ expectedCount: Int) async throws {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(1))
+        while cacheHits.count < expectedCount {
+            guard clock.now < deadline else {
+                throw ReapplyGateError.eventTimedOut
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+    }
+}
+
+private final class LoopbackDNSServer: @unchecked Sendable {
+    private let fileDescriptor: Int32
+    private let queryCounter = Mutex<Int>(0)
+    private let queue = DispatchQueue(label: "DNSPilotTests.LoopbackDNSServer")
+    private let running = Mutex<Bool>(true)
+    let port: UInt16
+
+    var queryCount: Int {
+        queryCounter.withLock { $0 }
+    }
+
+    init() throws {
+        let fileDescriptor = Darwin.socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
+        guard fileDescriptor >= 0 else {
+            throw ReapplyGateError.socketFailure("socket", errno)
+        }
+
+        var address = sockaddr_in()
+        address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+        address.sin_family = sa_family_t(AF_INET)
+        address.sin_port = 0
+        address.sin_addr = in_addr(s_addr: inet_addr("127.0.0.1"))
+        let bindResult = withUnsafePointer(to: &address) { pointer in
+            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                Darwin.bind(fileDescriptor, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+            }
+        }
+        guard bindResult == 0 else {
+            let code = errno
+            Darwin.close(fileDescriptor)
+            throw ReapplyGateError.socketFailure("bind", code)
+        }
+
+        var boundAddress = sockaddr_in()
+        var boundLength = socklen_t(MemoryLayout<sockaddr_in>.size)
+        let nameResult = withUnsafeMutablePointer(to: &boundAddress) { pointer in
+            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                Darwin.getsockname(fileDescriptor, $0, &boundLength)
+            }
+        }
+        guard nameResult == 0 else {
+            let code = errno
+            Darwin.close(fileDescriptor)
+            throw ReapplyGateError.socketFailure("getsockname", code)
+        }
+
+        self.fileDescriptor = fileDescriptor
+        port = UInt16(bigEndian: boundAddress.sin_port)
+        queue.async { [weak self] in
+            self?.serve()
+        }
+    }
+
+    func stop() {
+        let wasRunning = running.withLock { running in
+            let wasRunning = running
+            running = false
+            return wasRunning
+        }
+        if wasRunning {
+            Darwin.close(fileDescriptor)
+        }
+    }
+
+    private func serve() {
+        while running.withLock({ $0 }) {
+            var request = [UInt8](repeating: 0, count: 512)
+            var clientAddress = sockaddr_storage()
+            var clientLength = socklen_t(MemoryLayout<sockaddr_storage>.size)
+            let received = withUnsafeMutablePointer(to: &clientAddress) { pointer in
+                pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { client in
+                    Darwin.recvfrom(
+                        fileDescriptor,
+                        &request,
+                        request.count,
+                        0,
+                        client,
+                        &clientLength
+                    )
+                }
+            }
+            guard received > 0 else { continue }
+            request.removeSubrange(Int(received)..<request.count)
+            guard let response = Self.response(for: request) else { continue }
+            queryCounter.withLock { $0 += 1 }
+            response.withUnsafeBytes { bytes in
+                withUnsafePointer(to: &clientAddress) { pointer in
+                    pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { client in
+                        _ = Darwin.sendto(
+                            fileDescriptor,
+                            bytes.baseAddress,
+                            bytes.count,
+                            0,
+                            client,
+                            clientLength
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private static func response(for request: [UInt8]) -> [UInt8]? {
+        guard request.count > 12 else { return nil }
+        var response = Array(request.prefix(2))
+        response += [0x81, 0x80, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00]
+        response += request.dropFirst(12)
+        response += [
+            0xc0, 0x0c,
+            0x00, 0x01,
+            0x00, 0x01,
+            0x00, 0x00, 0x00, 0x3c,
+            0x00, 0x04,
+            192, 0, 2, 10,
+        ]
+        return response
     }
 }
 
@@ -509,20 +698,26 @@ private enum DNSWireResponse {
 
 private enum ReapplyGateError: Error, CustomStringConvertible, Sendable {
     case defaultConfigurationUnavailable
+    case eventTimedOut
     case initializationFailed(String)
     case invalidDNSResponse(String)
     case responseTimedOut
+    case socketFailure(String, Int32)
 
     var description: String {
         switch self {
         case .defaultConfigurationUnavailable:
             "AGDnsProxyConfig.getDefault() returned nil"
+        case .eventTimedOut:
+            "AGDnsProxy request event timed out"
         case let .initializationFailed(message):
             "AGDnsProxy initialization failed: \(message)"
         case let .invalidDNSResponse(message):
             "Invalid DNS response: \(message)"
         case .responseTimedOut:
             "DNS response callback timed out"
+        case let .socketFailure(operation, code):
+            "\(operation) failed with errno \(code)"
         }
     }
 }

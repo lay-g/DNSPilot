@@ -32,7 +32,8 @@ struct DNSProxyReloadPlan: Equatable, Sendable {
         var scope: DNSProxyReloadScope = []
         let loggingModeChanged = active.value.loggingMode != target.value.loggingMode
 
-        if active.value.upstream != target.value.upstream {
+        if active.value.upstream != target.value.upstream
+            || active.value.dnsCacheConfiguration != target.value.dnsCacheConfiguration {
             scope.insert(.settings)
         }
 

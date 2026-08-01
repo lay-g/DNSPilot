@@ -86,6 +86,17 @@ enum ProxyResumeStartupEvaluation: Equatable, Sendable {
 struct DNSProxyTarget: Hashable, Sendable {
     let profileID: UUID
     let upstream: DNSUpstream
+    let dnsCacheConfiguration: DNSCacheConfiguration
+
+    init(
+        profileID: UUID,
+        upstream: DNSUpstream,
+        dnsCacheConfiguration: DNSCacheConfiguration = .standard
+    ) {
+        self.profileID = profileID
+        self.upstream = upstream
+        self.dnsCacheConfiguration = dnsCacheConfiguration
+    }
 }
 
 enum ProxySwitchFailureCode: String, Equatable, Sendable {
@@ -429,13 +440,14 @@ actor DNSProxyController {
                 operationID: record.operationID,
                 attemptID: attemptID
             )
-            let schemaVersion = try await compatibleSchemaVersion(for: target.upstream)
+            let schemaVersion = try await compatibleSchemaVersion(for: target)
             try await validate(upstream: target.upstream)
             let configuration = try ActiveProxyConfiguration(
                 generation: generation,
                 profileID: target.profileID,
                 upstream: target.upstream,
                 loggingMode: configuredLoggingMode,
+                dnsCacheConfiguration: target.dnsCacheConfiguration,
                 schemaVersion: schemaVersion
             )
             let persisted = try PersistedProxyConfiguration(value: configuration)
@@ -818,15 +830,18 @@ actor DNSProxyController {
                 )
             }
 
-            let schemaVersion = try await compatibleSchemaVersion(for: target.upstream)
+            let schemaVersion = try await compatibleSchemaVersion(for: target)
             try checkForTerminationRequest()
-            try await validate(upstream: target.upstream)
+            if oldConfiguration.value.upstream != target.upstream {
+                try await validate(upstream: target.upstream)
+            }
             try checkForTerminationRequest()
             let draftValue = try ActiveProxyConfiguration(
                 generation: UUID(),
                 profileID: target.profileID,
                 upstream: target.upstream,
                 loggingMode: configuredLoggingMode,
+                dnsCacheConfiguration: target.dnsCacheConfiguration,
                 schemaVersion: schemaVersion
             )
             let draftConfiguration = try PersistedProxyConfiguration(value: draftValue)
@@ -1636,12 +1651,13 @@ actor DNSProxyController {
         let targetConfiguration: ActiveProxyConfiguration
         let targetPersistedConfiguration: PersistedProxyConfiguration
         do {
-            let schemaVersion = try await compatibleSchemaVersion(for: target.upstream)
+            let schemaVersion = try await compatibleSchemaVersion(for: target)
             targetConfiguration = try ActiveProxyConfiguration(
                 generation: targetGeneration,
                 profileID: target.profileID,
                 upstream: target.upstream,
                 loggingMode: configuredLoggingMode,
+                dnsCacheConfiguration: target.dnsCacheConfiguration,
                 schemaVersion: schemaVersion
             )
             targetPersistedConfiguration = try PersistedProxyConfiguration(
@@ -3248,9 +3264,22 @@ actor DNSProxyController {
         }
     }
 
-    private func compatibleSchemaVersion(for upstream: DNSUpstream) async throws -> Int {
-        switch upstream {
+    private func compatibleSchemaVersion(for target: DNSProxyTarget) async throws -> Int {
+        let transportMinimum: Int
+        switch target.upstream {
         case .https:
+            transportMinimum = 1
+        case .plain:
+            transportMinimum = 2
+        case .tls:
+            transportMinimum = 3
+        }
+        let minimumSchemaVersion = max(
+            transportMinimum,
+            target.dnsCacheConfiguration == .standard ? 1 : 4
+        )
+
+        if minimumSchemaVersion == 1 {
             let maximumSchemaVersion: Int?
             do {
                 let clock = ContinuousClock()
@@ -3264,17 +3293,16 @@ actor DNSProxyController {
                 maximumSchemaVersion = nil
             }
             return min(maximumSchemaVersion ?? 1, Self.currentConfigurationSchemaVersion)
-        case .plain, .tls:
-            let minimumSchemaVersion = if case .plain = upstream { 2 } else { 3 }
-            let maximumSchemaVersion = try await waitForProviderSchemaCapability()
-            guard maximumSchemaVersion >= minimumSchemaVersion else {
-                throw DNSProxyControllerError.unsupportedProviderConfigurationSchema(
-                    required: minimumSchemaVersion,
-                    available: maximumSchemaVersion
-                )
-            }
-            return min(maximumSchemaVersion, Self.currentConfigurationSchemaVersion)
         }
+
+        let maximumSchemaVersion = try await waitForProviderSchemaCapability()
+        guard maximumSchemaVersion >= minimumSchemaVersion else {
+            throw DNSProxyControllerError.unsupportedProviderConfigurationSchema(
+                required: minimumSchemaVersion,
+                available: maximumSchemaVersion
+            )
+        }
+        return min(maximumSchemaVersion, Self.currentConfigurationSchemaVersion)
     }
 
     private func waitForProviderSchemaCapability() async throws -> Int {
@@ -3400,7 +3428,8 @@ actor DNSProxyController {
     ) {
         activeTarget = DNSProxyTarget(
             profileID: configuration.profileID,
-            upstream: configuration.upstream
+            upstream: configuration.upstream,
+            dnsCacheConfiguration: configuration.dnsCacheConfiguration
         )
         activeGeneration = configuration.generation
         activeLoggingMode = configuration.loggingMode

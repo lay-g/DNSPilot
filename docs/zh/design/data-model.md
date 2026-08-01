@@ -48,9 +48,9 @@ SSID 权限拒绝只禁用 SSID 条件；接口和子网 Rule 继续工作。网
 
 ## 配置存储
 
-Profiles、Rules、Default Profile 和 operating mode 存在一个 versioned `AppConfiguration` 文档。初始空配置使用 Automatic，在至少存在一个有效 Profile 和 Default Profile 前不能启用 DNS Proxy。
+Profiles、Rules、Default Profile、operating mode 和全局 DNS cache 配置存在一个 versioned `AppConfiguration` 文档。Cache 默认开启，最多保存 1,000 条响应；开启时容量限制为 `1...10,000`，关闭后仍保留最后一个合法容量供再次开启使用。初始空配置使用 Automatic，在至少存在一个有效 Profile 和 Default Profile 前不能启用 DNS Proxy。
 
-加载时校验 schema、重复 identity 和全部引用。持久化 schema 1 在内存中 canonical migration 为 schema 2，并且只通过正常 atomic commit path 修改正式文件。更高 schema 进入只读恢复，绝不被旧版本覆盖。损坏输入在提供 reset 前必须保留。
+加载时校验 schema、重复 identity、全部引用和 cache 范围。持久化 schema 1 和 2 在内存中使用标准 cache 配置 canonical migration 为 schema 3，并且只通过正常 atomic commit path 修改正式文件。更高 schema 进入只读恢复，绝不被旧版本覆盖。损坏输入在提供 reset 前必须保留。
 
 配置采用 canonical encoding 与 fingerprint，通过 compare-and-swap 提交；使用私有 Application Support 目录、严格权限、durable 临时写入和原子替换。`UserDefaults` 只保存 UI preference。
 
@@ -60,7 +60,7 @@ Profiles、Rules、Default Profile 和 operating mode 存在一个 versioned `Ap
 
 ## Mutation Journal
 
-Profile mutation 串行执行。Inactive 修改只需要一次原子配置提交。影响 Active runtime 的修改使用 compensating transaction，记录：
+Configuration mutation 串行执行。Inactive 修改只需要一次原子配置提交。影响 Active runtime 的 Profile 或 cache 修改使用 compensating transaction，记录：
 
 - operation 与 runtime transaction identity；
 - old/draft configuration fingerprint；
