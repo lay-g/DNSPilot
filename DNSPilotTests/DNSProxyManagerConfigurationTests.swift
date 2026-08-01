@@ -4,6 +4,14 @@ import Testing
 @testable import DNSPilot
 
 struct DNSProxyManagerConfigurationTests {
+    @Test func unitTestProcessCannotLoadLiveManager() async {
+        let manager = NetworkExtensionDNSProxyManager()
+
+        await #expect(throws: DNSProxyManagerClientError.unitTestProcess) {
+            _ = try await manager.loadSnapshot()
+        }
+    }
+
     @Test func providerConfigurationUsesStableEncodedDataKey() throws {
         let configuration = try ActiveProxyConfiguration(
             generation: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,

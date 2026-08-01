@@ -3,6 +3,18 @@ import Testing
 @testable import DNSPilot
 
 struct ConfigurationStoreTests {
+    @Test func unitTestProcessCannotOpenLiveConfigurationStore() {
+        #expect(AppRuntimeEnvironment.isUnitTestProcess)
+        #expect(throws: ConfigurationStoreError.liveStoreUnavailableInTests) {
+            _ = try ConfigurationStore.live()
+        }
+    }
+
+    @MainActor
+    @Test func unitTestDefaultsAreSeparatedFromProductionDefaults() {
+        #expect(AppRuntimeEnvironment.defaultUserDefaults() !== UserDefaults.standard)
+    }
+
     @Test func missingStoreProvidesCanonicalEmptyConfiguration() throws {
         try withTemporaryStore { store, _ in
             let result = try store.load()

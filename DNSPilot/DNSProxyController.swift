@@ -83,6 +83,25 @@ enum ProxyResumeStartupEvaluation: Equatable, Sendable {
     case recoveryRequired(ProxyResumeFailureCode)
 }
 
+enum ProxyResumeManagerMismatchField: String, Hashable, Sendable {
+    case persistedConfigurationUnavailable
+    case ownerIdentityUnavailable
+    case providerBundleIdentifier
+    case ownerConfigurationFingerprint
+    case localizedDescriptionFingerprint
+    case activeGeneration
+    case activeProfileID
+    case activeConfigurationFingerprint
+}
+
+enum ProxyResumeExtensionUpgradeDecision: Equatable, Sendable {
+    case notNeeded
+    case submitted(ProxyResumeRecord)
+    case confirmed(ProxyResumeRecord)
+    case blocked(ProxyResumeFailureCode)
+    case recoveryRequired(ProxyResumeFailureCode)
+}
+
 struct DNSProxyTarget: Hashable, Sendable {
     let profileID: UUID
     let upstream: DNSUpstream
@@ -390,7 +409,16 @@ actor DNSProxyController {
 
         do {
             let snapshot = try await manager.loadSnapshot()
-            guard managerSnapshot(snapshot, matches: record) else {
+            let mismatches = managerSnapshotMismatches(snapshot, record: record)
+            let upgradeCanReconcile = record.extensionUpgrade.map { upgrade in
+                upgrade.phase != .replacementConfirmed
+                    && !snapshot.isEnabled
+                    && mismatches.isSubset(of: Self.extensionReplacementAllowedMismatches)
+            } ?? false
+            guard mismatches.isEmpty || upgradeCanReconcile else {
+                logger.error(
+                    "Startup DNS Proxy resume manager mismatch: \(Self.mismatchDescription(mismatches), privacy: .public)"
+                )
                 return .failed(.managerChanged)
             }
             if snapshot.isEnabled {
@@ -433,7 +461,10 @@ actor DNSProxyController {
         do {
             let expected = try await manager.loadSnapshot()
             expectedDisabledSnapshot = expected
-            guard !expected.isEnabled, managerSnapshot(expected, matches: record) else {
+            guard !expected.isEnabled,
+                  managerSnapshotMismatches(expected, record: record).isEmpty,
+                  record.extensionUpgrade?.phase != .prepared,
+                  record.extensionUpgrade?.phase != .replacementSubmitted else {
                 throw DNSProxyControllerError.managerConfigurationChangedDuringRollback
             }
             _ = try resumeJournal.claim(
@@ -518,6 +549,100 @@ actor DNSProxyController {
 
     func discardStartupResume() {
         try? resumeJournal?.discard(operationID: nil)
+    }
+
+    func prepareStartupResumeExtensionUpgrade(
+        source: ProxyResumeExtensionBuildIdentity,
+        target: ProxyResumeExtensionBuildIdentity
+    ) async -> ProxyResumeExtensionUpgradeDecision {
+        guard let resumeJournal else { return .notNeeded }
+        do {
+            guard case let .loaded(record) = try resumeJournal.load() else {
+                return .notNeeded
+            }
+            guard record.phase == .preparedForQuit || record.phase == .disabledConfirmed else {
+                return .blocked(.activationFailed)
+            }
+            let snapshot = try await manager.loadSnapshot()
+            guard !snapshot.isEnabled else { return .blocked(.managerChanged) }
+            let mismatches = managerSnapshotMismatches(snapshot, record: record)
+            guard mismatches.isEmpty else {
+                logger.error(
+                    "Extension upgrade preparation manager mismatch: \(Self.mismatchDescription(mismatches), privacy: .public)"
+                )
+                return .blocked(.managerChanged)
+            }
+            guard let owner = snapshot.ownerIdentity else {
+                return .blocked(.managerChanged)
+            }
+            let prepared = try resumeJournal.prepareExtensionUpgrade(
+                operationID: record.operationID,
+                source: source,
+                target: target,
+                localizedDescriptionFingerprint: owner.localizedDescriptionFingerprint
+            )
+            guard let upgrade = prepared.extensionUpgrade else {
+                return .recoveryRequired(.outcomeUncertain)
+            }
+            let submitted = try resumeJournal.markExtensionUpgradeSubmitted(
+                operationID: prepared.operationID,
+                upgradeOperationID: upgrade.operationID,
+                attemptID: upgrade.replacementAttemptID ?? UUID()
+            )
+            return .submitted(submitted)
+        } catch {
+            logger.error(
+                "Extension upgrade preparation failed: \(error.localizedDescription, privacy: .private(mask: .hash))"
+            )
+            return .recoveryRequired(.outcomeUncertain)
+        }
+    }
+
+    func confirmStartupResumeExtensionUpgrade(
+        target: ProxyResumeExtensionBuildIdentity
+    ) async -> ProxyResumeExtensionUpgradeDecision {
+        guard let resumeJournal else { return .notNeeded }
+        do {
+            guard case let .loaded(record) = try resumeJournal.load(),
+                  let upgrade = record.extensionUpgrade else {
+                return .notNeeded
+            }
+            guard upgrade.target == target else { return .blocked(.extensionUnavailable) }
+            if upgrade.phase == .replacementConfirmed {
+                let snapshot = try await manager.loadSnapshot()
+                guard !snapshot.isEnabled,
+                      managerSnapshotMismatches(snapshot, record: record).isEmpty else {
+                    return .blocked(.managerChanged)
+                }
+                return .confirmed(record)
+            }
+            guard upgrade.phase == .replacementSubmitted else {
+                return .blocked(.extensionUnavailable)
+            }
+            let snapshot = try await manager.loadSnapshot()
+            guard !snapshot.isEnabled, let owner = snapshot.ownerIdentity else {
+                return .blocked(.managerChanged)
+            }
+            let mismatches = managerSnapshotMismatches(snapshot, record: record)
+            guard mismatches.isSubset(of: Self.extensionReplacementAllowedMismatches) else {
+                logger.error(
+                    "Extension upgrade reconciliation manager mismatch: \(Self.mismatchDescription(mismatches), privacy: .public)"
+                )
+                return .blocked(.managerChanged)
+            }
+            let confirmed = try resumeJournal.confirmExtensionUpgrade(
+                operationID: record.operationID,
+                upgradeOperationID: upgrade.operationID,
+                ownerConfigurationFingerprint: owner.providerConfigurationFingerprint,
+                localizedDescriptionFingerprint: owner.localizedDescriptionFingerprint
+            )
+            return .confirmed(confirmed)
+        } catch {
+            logger.error(
+                "Extension upgrade reconciliation failed: \(error.localizedDescription, privacy: .private(mask: .hash))"
+            )
+            return .recoveryRequired(.outcomeUncertain)
+        }
     }
 
     func controllerSnapshot() -> ProxyControllerSnapshot {
@@ -1252,10 +1377,10 @@ actor DNSProxyController {
         guard !operationInProgress,
               case .active = state,
               let resumeJournal,
-              case let .loaded(record) = try? resumeJournal.load(),
-              let snapshot = try? await manager.loadSnapshot(),
-              snapshot.isEnabled,
-              managerSnapshot(snapshot, matches: record) else { return }
+               case let .loaded(record) = try? resumeJournal.load(),
+               let snapshot = try? await manager.loadSnapshot(),
+               snapshot.isEnabled,
+               managerSnapshotMismatches(snapshot, record: record).isEmpty else { return }
         try? resumeJournal.discard(operationID: record.operationID)
     }
 
@@ -1501,17 +1626,52 @@ actor DNSProxyController {
             && snapshot.persistedConfiguration == configuration
     }
 
-    private func managerSnapshot(
+    private static let extensionReplacementAllowedMismatches: Set<
+        ProxyResumeManagerMismatchField
+    > = [
+        .ownerConfigurationFingerprint,
+        .localizedDescriptionFingerprint,
+    ]
+
+    private static func mismatchDescription(
+        _ mismatches: Set<ProxyResumeManagerMismatchField>
+    ) -> String {
+        mismatches.map(\.rawValue).sorted().joined(separator: ",")
+    }
+
+    private func managerSnapshotMismatches(
         _ snapshot: DNSProxyManagerSnapshot,
-        matches record: ProxyResumeRecord
-    ) -> Bool {
-        guard let persisted = snapshot.persistedConfiguration,
-              let owner = snapshot.ownerIdentity else { return false }
-        return owner.providerBundleIdentifier == record.providerBundleIdentifier
-            && owner.providerConfigurationFingerprint == record.ownerConfigurationFingerprint
-            && persisted.value.generation == record.activeGeneration
-            && persisted.value.profileID == record.activeProfileID
-            && persisted.fingerprint == record.activeConfigurationFingerprint
+        record: ProxyResumeRecord
+    ) -> Set<ProxyResumeManagerMismatchField> {
+        var mismatches: Set<ProxyResumeManagerMismatchField> = []
+        guard let persisted = snapshot.persistedConfiguration else {
+            mismatches.insert(.persistedConfigurationUnavailable)
+            return mismatches
+        }
+        guard let owner = snapshot.ownerIdentity else {
+            mismatches.insert(.ownerIdentityUnavailable)
+            return mismatches
+        }
+        if owner.providerBundleIdentifier != record.providerBundleIdentifier {
+            mismatches.insert(.providerBundleIdentifier)
+        }
+        if owner.providerConfigurationFingerprint != record.ownerConfigurationFingerprint {
+            mismatches.insert(.ownerConfigurationFingerprint)
+        }
+        if let expectedDescription = record.managerLocalizedDescriptionFingerprint,
+           owner.localizedDescriptionFingerprint != expectedDescription {
+            mismatches.insert(.localizedDescriptionFingerprint)
+        }
+        if persisted.value.generation != record.activeGeneration {
+            mismatches.insert(.activeGeneration)
+        }
+        if persisted.value.profileID != record.activeProfileID {
+            mismatches.insert(.activeProfileID)
+        }
+        if persisted.fingerprint != record.activeConfigurationFingerprint {
+            mismatches.insert(.activeConfigurationFingerprint)
+        }
+        return mismatches
     }
 
     private func classifyRuntimeState(
@@ -2343,7 +2503,10 @@ actor DNSProxyController {
                     if case let .loaded(existing) = try resumeJournal.load(),
                        existing.phase == .preparedForQuit,
                        existing.appConfigurationFingerprint == appConfigurationFingerprint,
-                       self.managerSnapshot(managerSnapshot, matches: existing) {
+                       self.managerSnapshotMismatches(
+                           managerSnapshot,
+                           record: existing
+                       ).isEmpty {
                         preparedResumeOperationID = existing.operationID
                     } else {
                         let record = ProxyResumeRecord(
@@ -2352,6 +2515,8 @@ actor DNSProxyController {
                             appConfigurationFingerprint: appConfigurationFingerprint,
                             providerBundleIdentifier: providerBundleIdentifier,
                             ownerConfigurationFingerprint: owner.providerConfigurationFingerprint,
+                            managerLocalizedDescriptionFingerprint: owner
+                                .localizedDescriptionFingerprint,
                             activeGeneration: generation,
                             activeConfigurationFingerprint: fingerprint,
                             activeProfileID: persisted.value.profileID

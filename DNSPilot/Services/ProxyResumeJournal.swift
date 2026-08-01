@@ -19,8 +19,46 @@ enum ProxyResumeFailureCode: String, Codable, Equatable, Sendable {
     case outcomeUncertain
 }
 
+struct ProxyResumeExtensionBuildIdentity: Codable, Equatable, Hashable, Sendable {
+    let shortVersion: String
+    let buildVersion: String
+
+    var isValid: Bool {
+        !shortVersion.isEmpty && !buildVersion.isEmpty
+    }
+}
+
+enum ProxyResumeExtensionUpgradePhase: String, Codable, Equatable, Sendable {
+    case prepared
+    case replacementSubmitted
+    case replacementConfirmed
+}
+
+struct ProxyResumeExtensionUpgrade: Codable, Equatable, Sendable {
+    let operationID: UUID
+    let source: ProxyResumeExtensionBuildIdentity
+    let target: ProxyResumeExtensionBuildIdentity
+    let phase: ProxyResumeExtensionUpgradePhase
+    let preUpdateOwnerFingerprint: ProxyConfigurationFingerprint
+    let replacementAttemptID: UUID?
+
+    func updating(
+        phase: ProxyResumeExtensionUpgradePhase,
+        replacementAttemptID: UUID?
+    ) -> Self {
+        Self(
+            operationID: operationID,
+            source: source,
+            target: target,
+            phase: phase,
+            preUpdateOwnerFingerprint: preUpdateOwnerFingerprint,
+            replacementAttemptID: replacementAttemptID
+        )
+    }
+}
+
 struct ProxyResumeRecord: Codable, Equatable, Sendable {
-    static let currentSchemaVersion = 1
+    static let currentSchemaVersion = 2
 
     let schemaVersion: Int
     let operationID: UUID
@@ -29,10 +67,12 @@ struct ProxyResumeRecord: Codable, Equatable, Sendable {
     let appConfigurationFingerprint: AppConfigurationFingerprint
     let providerBundleIdentifier: String
     let ownerConfigurationFingerprint: ProxyConfigurationFingerprint
+    let managerLocalizedDescriptionFingerprint: ProxyConfigurationFingerprint?
     let activeGeneration: UUID
     let activeConfigurationFingerprint: ProxyConfigurationFingerprint
     let activeProfileID: DNSProfile.ID
     let failureCode: ProxyResumeFailureCode?
+    let extensionUpgrade: ProxyResumeExtensionUpgrade?
 
     init(
         schemaVersion: Int = Self.currentSchemaVersion,
@@ -42,10 +82,12 @@ struct ProxyResumeRecord: Codable, Equatable, Sendable {
         appConfigurationFingerprint: AppConfigurationFingerprint,
         providerBundleIdentifier: String,
         ownerConfigurationFingerprint: ProxyConfigurationFingerprint,
+        managerLocalizedDescriptionFingerprint: ProxyConfigurationFingerprint?,
         activeGeneration: UUID,
         activeConfigurationFingerprint: ProxyConfigurationFingerprint,
         activeProfileID: DNSProfile.ID,
-        failureCode: ProxyResumeFailureCode? = nil
+        failureCode: ProxyResumeFailureCode? = nil,
+        extensionUpgrade: ProxyResumeExtensionUpgrade? = nil
     ) {
         self.schemaVersion = schemaVersion
         self.operationID = operationID
@@ -54,10 +96,12 @@ struct ProxyResumeRecord: Codable, Equatable, Sendable {
         self.appConfigurationFingerprint = appConfigurationFingerprint
         self.providerBundleIdentifier = providerBundleIdentifier
         self.ownerConfigurationFingerprint = ownerConfigurationFingerprint
+        self.managerLocalizedDescriptionFingerprint = managerLocalizedDescriptionFingerprint
         self.activeGeneration = activeGeneration
         self.activeConfigurationFingerprint = activeConfigurationFingerprint
         self.activeProfileID = activeProfileID
         self.failureCode = failureCode
+        self.extensionUpgrade = extensionUpgrade
     }
 
     func updating(
@@ -73,10 +117,52 @@ struct ProxyResumeRecord: Codable, Equatable, Sendable {
             appConfigurationFingerprint: appConfigurationFingerprint,
             providerBundleIdentifier: providerBundleIdentifier,
             ownerConfigurationFingerprint: ownerConfigurationFingerprint,
+            managerLocalizedDescriptionFingerprint: managerLocalizedDescriptionFingerprint,
             activeGeneration: activeGeneration,
             activeConfigurationFingerprint: activeConfigurationFingerprint,
             activeProfileID: activeProfileID,
-            failureCode: failureCode
+            failureCode: failureCode,
+            extensionUpgrade: extensionUpgrade
+        )
+    }
+
+    func updating(extensionUpgrade: ProxyResumeExtensionUpgrade?) -> Self {
+        Self(
+            schemaVersion: schemaVersion,
+            operationID: operationID,
+            attemptID: attemptID,
+            phase: phase,
+            appConfigurationFingerprint: appConfigurationFingerprint,
+            providerBundleIdentifier: providerBundleIdentifier,
+            ownerConfigurationFingerprint: ownerConfigurationFingerprint,
+            managerLocalizedDescriptionFingerprint: managerLocalizedDescriptionFingerprint,
+            activeGeneration: activeGeneration,
+            activeConfigurationFingerprint: activeConfigurationFingerprint,
+            activeProfileID: activeProfileID,
+            failureCode: failureCode,
+            extensionUpgrade: extensionUpgrade
+        )
+    }
+
+    func rebindingOwner(
+        configurationFingerprint: ProxyConfigurationFingerprint,
+        localizedDescriptionFingerprint: ProxyConfigurationFingerprint,
+        extensionUpgrade: ProxyResumeExtensionUpgrade
+    ) -> Self {
+        Self(
+            schemaVersion: Self.currentSchemaVersion,
+            operationID: operationID,
+            attemptID: attemptID,
+            phase: phase,
+            appConfigurationFingerprint: appConfigurationFingerprint,
+            providerBundleIdentifier: providerBundleIdentifier,
+            ownerConfigurationFingerprint: configurationFingerprint,
+            managerLocalizedDescriptionFingerprint: localizedDescriptionFingerprint,
+            activeGeneration: activeGeneration,
+            activeConfigurationFingerprint: activeConfigurationFingerprint,
+            activeProfileID: activeProfileID,
+            failureCode: failureCode,
+            extensionUpgrade: extensionUpgrade
         )
     }
 }
@@ -130,6 +216,23 @@ protocol ProxyResumeJournalStoring: Sendable {
         code: ProxyResumeFailureCode
     ) throws
     func prepareRetry(operationID: UUID) throws -> ProxyResumeRecord
+    func prepareExtensionUpgrade(
+        operationID: UUID,
+        source: ProxyResumeExtensionBuildIdentity,
+        target: ProxyResumeExtensionBuildIdentity,
+        localizedDescriptionFingerprint: ProxyConfigurationFingerprint
+    ) throws -> ProxyResumeRecord
+    func markExtensionUpgradeSubmitted(
+        operationID: UUID,
+        upgradeOperationID: UUID,
+        attemptID: UUID
+    ) throws -> ProxyResumeRecord
+    func confirmExtensionUpgrade(
+        operationID: UUID,
+        upgradeOperationID: UUID,
+        ownerConfigurationFingerprint: ProxyConfigurationFingerprint,
+        localizedDescriptionFingerprint: ProxyConfigurationFingerprint
+    ) throws -> ProxyResumeRecord
     func discard(operationID: UUID?) throws
 }
 
@@ -199,6 +302,10 @@ struct ProxyResumeJournal: ProxyResumeJournalStoring {
     func claim(operationID: UUID, attemptID: UUID) throws -> ProxyResumeRecord {
         var claimed: ProxyResumeRecord?
         try transition(operationID: operationID) { record in
+            guard record.extensionUpgrade?.phase == nil
+                    || record.extensionUpgrade?.phase == .replacementConfirmed else {
+                throw ProxyResumeJournalError.phaseConflict
+            }
             switch record.phase {
             case .preparedForQuit, .disabledConfirmed:
                 let updated = record.updating(
@@ -251,6 +358,118 @@ struct ProxyResumeJournal: ProxyResumeJournalStoring {
         }
         guard let retry else { throw ProxyResumeJournalError.phaseConflict }
         return retry
+    }
+
+    func prepareExtensionUpgrade(
+        operationID: UUID,
+        source: ProxyResumeExtensionBuildIdentity,
+        target: ProxyResumeExtensionBuildIdentity,
+        localizedDescriptionFingerprint: ProxyConfigurationFingerprint
+    ) throws -> ProxyResumeRecord {
+        var prepared: ProxyResumeRecord?
+        try transition(operationID: operationID) { record in
+            guard record.phase == .preparedForQuit || record.phase == .disabledConfirmed,
+                  source.isValid,
+                  target.isValid,
+                  source != target else {
+                throw ProxyResumeJournalError.phaseConflict
+            }
+            if let existing = record.extensionUpgrade {
+                guard existing.source == source, existing.target == target else {
+                    throw ProxyResumeJournalError.operationConflict
+                }
+                prepared = record
+                return record
+            }
+            let upgrade = ProxyResumeExtensionUpgrade(
+                operationID: UUID(),
+                source: source,
+                target: target,
+                phase: .prepared,
+                preUpdateOwnerFingerprint: record.ownerConfigurationFingerprint,
+                replacementAttemptID: nil
+            )
+            let updated = record.rebindingOwner(
+                configurationFingerprint: record.ownerConfigurationFingerprint,
+                localizedDescriptionFingerprint: localizedDescriptionFingerprint,
+                extensionUpgrade: upgrade
+            )
+            prepared = updated
+            return updated
+        }
+        guard let prepared else { throw ProxyResumeJournalError.phaseConflict }
+        return prepared
+    }
+
+    func markExtensionUpgradeSubmitted(
+        operationID: UUID,
+        upgradeOperationID: UUID,
+        attemptID: UUID
+    ) throws -> ProxyResumeRecord {
+        var submitted: ProxyResumeRecord?
+        try transition(operationID: operationID) { record in
+            guard let upgrade = record.extensionUpgrade,
+                  upgrade.operationID == upgradeOperationID else {
+                throw ProxyResumeJournalError.operationConflict
+            }
+            switch upgrade.phase {
+            case .prepared:
+                let updated = record.updating(extensionUpgrade: upgrade.updating(
+                    phase: .replacementSubmitted,
+                    replacementAttemptID: attemptID
+                ))
+                submitted = updated
+                return updated
+            case .replacementSubmitted where upgrade.replacementAttemptID == attemptID:
+                submitted = record
+                return record
+            case .replacementSubmitted, .replacementConfirmed:
+                throw ProxyResumeJournalError.phaseConflict
+            }
+        }
+        guard let submitted else { throw ProxyResumeJournalError.phaseConflict }
+        return submitted
+    }
+
+    func confirmExtensionUpgrade(
+        operationID: UUID,
+        upgradeOperationID: UUID,
+        ownerConfigurationFingerprint: ProxyConfigurationFingerprint,
+        localizedDescriptionFingerprint: ProxyConfigurationFingerprint
+    ) throws -> ProxyResumeRecord {
+        var confirmed: ProxyResumeRecord?
+        try transition(operationID: operationID) { record in
+            guard let upgrade = record.extensionUpgrade,
+                  upgrade.operationID == upgradeOperationID else {
+                throw ProxyResumeJournalError.operationConflict
+            }
+            switch upgrade.phase {
+            case .replacementSubmitted:
+                let confirmedUpgrade = upgrade.updating(
+                    phase: .replacementConfirmed,
+                    replacementAttemptID: upgrade.replacementAttemptID
+                )
+                let updated = record.rebindingOwner(
+                    configurationFingerprint: ownerConfigurationFingerprint,
+                    localizedDescriptionFingerprint: localizedDescriptionFingerprint,
+                    extensionUpgrade: confirmedUpgrade
+                )
+                confirmed = updated
+                return updated
+            case .replacementConfirmed:
+                guard record.ownerConfigurationFingerprint == ownerConfigurationFingerprint,
+                      record.managerLocalizedDescriptionFingerprint
+                        == localizedDescriptionFingerprint else {
+                    throw ProxyResumeJournalError.phaseConflict
+                }
+                confirmed = record
+                return record
+            case .prepared:
+                throw ProxyResumeJournalError.phaseConflict
+            }
+        }
+        guard let confirmed else { throw ProxyResumeJournalError.phaseConflict }
+        return confirmed
     }
 
     func discard(operationID: UUID?) throws {
@@ -308,7 +527,9 @@ struct ProxyResumeJournal: ProxyResumeJournalStoring {
             guard stored.checksum == Checksum(data: recordData) else {
                 return try corruptResult(data, reason: .checksumMismatch)
             }
-            guard stored.record.schemaVersion == ProxyResumeRecord.currentSchemaVersion,
+            guard (1...ProxyResumeRecord.currentSchemaVersion).contains(
+                stored.record.schemaVersion
+            ),
                   !stored.record.providerBundleIdentifier.isEmpty,
                   Self.recordShapeIsValid(stored.record) else {
                 return try corruptResult(data, reason: .invalidRecord)
@@ -402,13 +623,32 @@ struct ProxyResumeJournal: ProxyResumeJournalStoring {
     }
 
     private static func recordShapeIsValid(_ record: ProxyResumeRecord) -> Bool {
-        switch record.phase {
+        let baseShapeIsValid = switch record.phase {
         case .preparedForQuit, .disabledConfirmed:
             record.attemptID == nil && record.failureCode == nil
         case .claimedForLaunch:
             record.attemptID != nil && record.failureCode == nil
         case .failed:
             record.attemptID != nil && record.failureCode != nil
+        }
+        guard baseShapeIsValid else { return false }
+        switch record.schemaVersion {
+        case 1:
+            return record.managerLocalizedDescriptionFingerprint == nil
+                && record.extensionUpgrade == nil
+        case ProxyResumeRecord.currentSchemaVersion:
+            guard record.managerLocalizedDescriptionFingerprint != nil else { return false }
+            guard let upgrade = record.extensionUpgrade else { return true }
+            guard upgrade.source.isValid, upgrade.target.isValid,
+                  upgrade.source != upgrade.target else { return false }
+            return switch upgrade.phase {
+            case .prepared:
+                upgrade.replacementAttemptID == nil
+            case .replacementSubmitted, .replacementConfirmed:
+                upgrade.replacementAttemptID != nil
+            }
+        default:
+            return false
         }
     }
 

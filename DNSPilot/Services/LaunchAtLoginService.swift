@@ -37,9 +37,15 @@ final class LaunchAtLoginService: ObservableObject {
         category: "LaunchAtLogin"
     )
 
-    init(registration: any LaunchAtLoginRegistering = SystemLaunchAtLoginRegistration()) {
-        self.registration = registration
-        status = registration.status
+    init(registration: (any LaunchAtLoginRegistering)? = nil) {
+        let resolvedRegistration = registration ?? {
+            if AppRuntimeEnvironment.isUnitTestProcess {
+                return IsolatedLaunchAtLoginRegistration() as any LaunchAtLoginRegistering
+            }
+            return SystemLaunchAtLoginRegistration() as any LaunchAtLoginRegistering
+        }()
+        self.registration = resolvedRegistration
+        status = resolvedRegistration.status
     }
 
     func refresh() {
@@ -60,6 +66,27 @@ final class LaunchAtLoginService: ObservableObject {
             )
             status = .failed(error.localizedDescription)
         }
+    }
+}
+
+@MainActor
+private final class IsolatedLaunchAtLoginRegistration: LaunchAtLoginRegistering {
+    let status = LaunchAtLoginStatus.unavailable
+
+    func register() throws {
+        throw LaunchAtLoginIsolationError.unitTestProcess
+    }
+
+    func unregister() throws {
+        throw LaunchAtLoginIsolationError.unitTestProcess
+    }
+}
+
+private enum LaunchAtLoginIsolationError: LocalizedError {
+    case unitTestProcess
+
+    var errorDescription: String? {
+        "Unit tests cannot change Launch at Login."
     }
 }
 

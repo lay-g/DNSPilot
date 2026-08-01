@@ -371,12 +371,26 @@ protocol ProductRuntimeBacking: AnyObject {
     ) async -> DNSProxyTerminationRestoreResult
     func cancelTerminationRequest() async
     func setProxyResumeAllowed(_ allowed: Bool) async
+    func prepareProxyResumeExtensionUpgrade(
+        source: ProxyResumeExtensionBuildIdentity,
+        target: ProxyResumeExtensionBuildIdentity
+    ) async -> ProxyResumeExtensionUpgradeDecision
+    func confirmProxyResumeExtensionUpgrade(
+        target: ProxyResumeExtensionBuildIdentity
+    ) async -> ProxyResumeExtensionUpgradeDecision
     func retryProxyResume() async
     func keepSystemDNSAfterResumeFailure() async
 }
 
 extension ProductRuntimeBacking {
     func setProxyResumeAllowed(_ allowed: Bool) async {}
+    func prepareProxyResumeExtensionUpgrade(
+        source: ProxyResumeExtensionBuildIdentity,
+        target: ProxyResumeExtensionBuildIdentity
+    ) async -> ProxyResumeExtensionUpgradeDecision { .notNeeded }
+    func confirmProxyResumeExtensionUpgrade(
+        target: ProxyResumeExtensionBuildIdentity
+    ) async -> ProxyResumeExtensionUpgradeDecision { .notNeeded }
     func retryProxyResume() async {}
     func keepSystemDNSAfterResumeFailure() async {}
     func restoreSystemDNSForTerminationResult(
@@ -508,6 +522,8 @@ final class AppState: ObservableObject {
     private var didStart = false
     private var startupCompleted = false
     private var refreshGeneration: UInt64 = 0
+    private var extensionCoordinationGeneration: UInt64 = 0
+    private var submittedExtensionTargets: Set<ProxyResumeExtensionBuildIdentity> = []
     private var quitHandler: (@MainActor () -> Void)?
 
     init(
@@ -515,7 +531,7 @@ final class AppState: ObservableObject {
         systemExtension: any SystemExtensionControlling = SystemExtensionController.shared,
         launchAtLogin: LaunchAtLoginService = LaunchAtLoginService(),
         diagnosticExporter: any DiagnosticExporting = DiagnosticExporter(),
-        userDefaults: UserDefaults = .standard
+        userDefaults: UserDefaults = AppRuntimeEnvironment.defaultUserDefaults()
     ) {
         self.backend = backend
         self.systemExtension = systemExtension
@@ -545,11 +561,7 @@ final class AppState: ObservableObject {
                     ?? "Unavailable"
                 self.bundledSystemExtensionVersion = systemExtension.bundledVersion?.description
                     ?? "Unavailable"
-                Task { @MainActor [weak self] in
-                    await Task.yield()
-                    self?.replaceBundledSystemExtensionIfSafe()
-                    await self?.coordinateProxyResume()
-                }
+                self.scheduleSystemExtensionCoordination()
             }
             .store(in: &cancellables)
     }
@@ -610,8 +622,7 @@ final class AppState: ObservableObject {
         await refresh()
         startupCompleted = backendStarted
         if !backendStarted { didStart = false }
-        replaceBundledSystemExtensionIfSafe()
-        await coordinateProxyResume()
+        await coordinateSystemExtensionAndProxyResume()
     }
 
     func refresh() async {
@@ -746,14 +757,80 @@ final class AppState: ObservableObject {
         systemExtension.activate()
     }
 
-    private func replaceBundledSystemExtensionIfSafe() {
-        guard startupCompleted,
-              startupFailure == nil,
-              proxy.state == .disabled,
-              !isPerformingAction,
-              systemExtensionState == .updateRequired,
-              !systemExtension.requestInProgress else { return }
-        systemExtension.activate()
+    private var proxyResumeIsPending: Bool {
+        switch proxyResumeState {
+        case .waitingForExtension, .waitingForNetwork, .restoring:
+            true
+        case .none, .failed:
+            false
+        }
+    }
+
+    private func scheduleSystemExtensionCoordination() {
+        extensionCoordinationGeneration &+= 1
+        let generation = extensionCoordinationGeneration
+        Task { @MainActor [weak self] in
+            await Task.yield()
+            guard let self, generation == self.extensionCoordinationGeneration else { return }
+            await self.coordinateSystemExtensionAndProxyResume(generation: generation)
+        }
+    }
+
+    private func coordinateSystemExtensionAndProxyResume(
+        generation: UInt64? = nil
+    ) async {
+        guard startupCompleted, startupFailure == nil else {
+            await backend.setProxyResumeAllowed(false)
+            return
+        }
+        if systemExtensionState == .updateRequired,
+           proxy.state == .disabled,
+           !isPerformingAction,
+           !systemExtension.requestInProgress {
+            await backend.setProxyResumeAllowed(false)
+            if proxyResumeIsPending {
+                guard let source = systemExtension.installedVersion?.resumeIdentity,
+                      let target = systemExtension.bundledVersion?.resumeIdentity else {
+                    return
+                }
+                let decision = await backend.prepareProxyResumeExtensionUpgrade(
+                    source: source,
+                    target: target
+                )
+                await refresh()
+                guard generation == nil || generation == extensionCoordinationGeneration else {
+                    return
+                }
+                guard case .submitted = decision else { return }
+            }
+            if let target = systemExtension.bundledVersion?.resumeIdentity,
+               !submittedExtensionTargets.insert(target).inserted {
+                return
+            }
+            guard systemExtensionState == .updateRequired,
+                  !systemExtension.requestInProgress else { return }
+            systemExtension.activate()
+            return
+        }
+
+        var resumeAllowed = systemExtensionState == .active
+            && !systemExtension.requestInProgress
+        if resumeAllowed, proxyResumeIsPending,
+           let installed = systemExtension.installedVersion?.resumeIdentity,
+           let target = systemExtension.bundledVersion?.resumeIdentity,
+           installed == target {
+            let decision = await backend.confirmProxyResumeExtensionUpgrade(target: target)
+            await refresh()
+            guard generation == nil || generation == extensionCoordinationGeneration else { return }
+            switch decision {
+            case .notNeeded, .confirmed:
+                break
+            case .submitted, .blocked, .recoveryRequired:
+                resumeAllowed = false
+            }
+        }
+        await backend.setProxyResumeAllowed(resumeAllowed)
+        await refresh()
     }
 
     private func coordinateProxyResume() async {
@@ -807,6 +884,26 @@ final class AppState: ObservableObject {
                 action: .systemExtensionUpdate,
                 reason: .systemExtensionOperationUnavailable
             ), retryOperation: .systemExtensionUpdate)
+        }
+        if proxyResumeIsPending {
+            guard let source = systemExtension.installedVersion?.resumeIdentity,
+                  let target = systemExtension.bundledVersion?.resumeIdentity else {
+                return failSettingsAction(ProductActionFailure(
+                    action: .systemExtensionUpdate,
+                    reason: .systemExtensionOperationUnavailable
+                ), retryOperation: .systemExtensionUpdate)
+            }
+            let decision = await backend.prepareProxyResumeExtensionUpgrade(
+                source: source,
+                target: target
+            )
+            await refresh()
+            guard case .submitted = decision else {
+                return failSettingsAction(ProductActionFailure(
+                    action: .systemExtensionUpdate,
+                    reason: .systemExtensionOperationUnavailable
+                ), retryOperation: .systemExtensionUpdate)
+            }
         }
         systemExtension.activate()
         settingsRetryOperation = nil

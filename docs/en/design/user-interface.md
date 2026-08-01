@@ -20,7 +20,7 @@ System Extension installation and DNS Proxy enablement are separate states. Stab
 
 Overview presents DNS Proxy state and control, Automatic/Manual mode, Target and Active Profiles, selection source, current network, Profile testing, diagnostics access, and recovery actions.
 
-After safe Quit, startup resume may show `Waiting for System Extension`, `Waiting for Network`, or `Restoring DNS Proxy`. The menu continues to report `DNS Proxy Off` until exact Active proof exists. A failed or blocked attempt offers `Retry` and `Keep System DNS`; it never retries continuously in the background.
+After safe Quit, startup resume may show `Waiting for System Extension`, `Waiting for Network`, or `Restoring DNS Proxy`. A compatible Extension upgrade proceeds through those existing states without an error banner and the menu continues to report `DNS Proxy Off` until exact Active proof exists. Approval and restart requirements use the existing System Extension status and actions. Retry is offered only for retryable Extension or activation failures. A permanent manager-identity change explains that the configuration changed and offers `Keep System DNS`, not an ineffective resume retry. The app never retries continuously in the background.
 
 Selecting Manual persists the requested Profile while preserving the current Proxy On/Off state. A failed switch preserves Target and confirmed Active, with Retry and `Use Active Profile (Manual)` actions. Returning to Automatic immediately evaluates the latest valid network context.
 

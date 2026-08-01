@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import Testing
 @testable import DNSPilot
@@ -73,6 +74,84 @@ struct ProxyResumeJournalTests {
         }
     }
 
+    @Test func extensionUpgradeMustBeConfirmedBeforeResumeClaim() throws {
+        try withFixture { journal, record, _ in
+            try journal.prepare(record)
+            try journal.confirmDisabled(operationID: record.operationID)
+            let source = ProxyResumeExtensionBuildIdentity(
+                shortVersion: "1.0",
+                buildVersion: "36"
+            )
+            let target = ProxyResumeExtensionBuildIdentity(
+                shortVersion: "1.1",
+                buildVersion: "39"
+            )
+            let prepared = try journal.prepareExtensionUpgrade(
+                operationID: record.operationID,
+                source: source,
+                target: target,
+                localizedDescriptionFingerprint: record
+                    .managerLocalizedDescriptionFingerprint!
+            )
+            let upgrade = try #require(prepared.extensionUpgrade)
+            let attemptID = UUID()
+            let submitted = try journal.markExtensionUpgradeSubmitted(
+                operationID: record.operationID,
+                upgradeOperationID: upgrade.operationID,
+                attemptID: attemptID
+            )
+            #expect(submitted.extensionUpgrade?.phase == .replacementSubmitted)
+            #expect(throws: ProxyResumeJournalError.phaseConflict) {
+                _ = try journal.claim(operationID: record.operationID, attemptID: UUID())
+            }
+
+            let confirmed = try journal.confirmExtensionUpgrade(
+                operationID: record.operationID,
+                upgradeOperationID: upgrade.operationID,
+                ownerConfigurationFingerprint: record.ownerConfigurationFingerprint,
+                localizedDescriptionFingerprint: record
+                    .managerLocalizedDescriptionFingerprint!
+            )
+            #expect(confirmed.schemaVersion == ProxyResumeRecord.currentSchemaVersion)
+            #expect(confirmed.extensionUpgrade?.phase == .replacementConfirmed)
+            #expect(
+                try journal.claim(operationID: record.operationID, attemptID: UUID()).phase
+                    == .claimedForLaunch
+            )
+        }
+    }
+
+    @Test func schemaOneRecordRemainsEligibleAndUpgradesOnExtensionPrepare() throws {
+        try withFixture { journal, record, _ in
+            let schemaOneRecord = ProxyResumeRecord(
+                schemaVersion: 1,
+                operationID: record.operationID,
+                phase: record.phase,
+                appConfigurationFingerprint: record.appConfigurationFingerprint,
+                providerBundleIdentifier: record.providerBundleIdentifier,
+                ownerConfigurationFingerprint: record.ownerConfigurationFingerprint,
+                managerLocalizedDescriptionFingerprint: nil,
+                activeGeneration: record.activeGeneration,
+                activeConfigurationFingerprint: record.activeConfigurationFingerprint,
+                activeProfileID: record.activeProfileID
+            )
+            try writeStoredRecord(schemaOneRecord, to: journal.recordURL)
+
+            #expect(try journal.load() == .loaded(schemaOneRecord))
+            let prepared = try journal.prepareExtensionUpgrade(
+                operationID: schemaOneRecord.operationID,
+                source: .init(shortVersion: "1.0", buildVersion: "36"),
+                target: .init(shortVersion: "1.1", buildVersion: "39"),
+                localizedDescriptionFingerprint: record
+                    .managerLocalizedDescriptionFingerprint!
+            )
+
+            #expect(prepared.schemaVersion == ProxyResumeRecord.currentSchemaVersion)
+            #expect(prepared.managerLocalizedDescriptionFingerprint != nil)
+            #expect(prepared.extensionUpgrade?.phase == .prepared)
+        }
+    }
+
     @Test func corruptRecordIsPreservedAndCannotBePreparedOver() throws {
         try withFixture { journal, record, _ in
             try Data("not-json".utf8).write(to: journal.recordURL)
@@ -125,10 +204,34 @@ struct ProxyResumeJournalTests {
             appConfigurationFingerprint: AppConfigurationFingerprint(data: Data("app".utf8)),
             providerBundleIdentifier: "com.example.DNSPilot.Proxy",
             ownerConfigurationFingerprint: ProxyConfigurationFingerprint(data: Data("owner".utf8)),
+            managerLocalizedDescriptionFingerprint: ProxyConfigurationFingerprint(
+                data: Data("description".utf8)
+            ),
             activeGeneration: UUID(),
             activeConfigurationFingerprint: ProxyConfigurationFingerprint(data: activeData),
             activeProfileID: UUID()
         )
         try operation(journal, record, directoryURL)
+    }
+
+    private func writeStoredRecord(_ record: ProxyResumeRecord, to url: URL) throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        let recordData = try encoder.encode(record)
+        let checksum = SHA256.hash(data: recordData)
+            .map { String(format: "%02x", $0) }
+            .joined()
+        let stored = StoredRecordFixture(
+            schemaVersion: 1,
+            record: record,
+            checksum: checksum
+        )
+        try encoder.encode(stored).write(to: url)
+    }
+
+    private struct StoredRecordFixture: Codable {
+        let schemaVersion: Int
+        let record: ProxyResumeRecord
+        let checksum: String
     }
 }

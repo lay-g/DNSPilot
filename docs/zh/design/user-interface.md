@@ -20,7 +20,7 @@ System Extension installation 与 DNS Proxy enablement 是独立状态。稳定�
 
 Overview 展示 DNS Proxy 状态与控制、Automatic/Manual、Target/Active Profile、selection source、当前网络、Profile test、诊断入口和恢复操作。
 
-Safe Quit 后的 startup resume 可以显示 `Waiting for System Extension`、`Waiting for Network` 或 `Restoring DNS Proxy`。在 exact Active proof 出现前，菜单栏继续显示 `DNS Proxy Off`。失败或被阻止的 attempt 提供 `Retry` 与 `Keep System DNS`，不得在后台持续重试。
+Safe Quit 后的 startup resume 可以显示 `Waiting for System Extension`、`Waiting for Network` 或 `Restoring DNS Proxy`。兼容的 Extension upgrade 使用这些已有状态且不显示错误 banner；在 exact Active proof 出现前，菜单栏继续显示 `DNS Proxy Off`。Approval 与 restart requirement 使用已有 System Extension 状态与操作。只有可重试的 Extension 或 activation failure 才提供 Retry。永久 manager identity change 会说明配置已变化并提供 `Keep System DNS`，不提供无效的 resume retry。App 不得在后台持续重试。
 
 选择 Manual 会持久化请求的 Profile，并保持当前 Proxy On/Off 状态。切换失败保留 Target 与已确认 Active，并提供 Retry 和 `Use Active Profile (Manual)`。返回 Automatic 后立即计算最新有效 network context。
 

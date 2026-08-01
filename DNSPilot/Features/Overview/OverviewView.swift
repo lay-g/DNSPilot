@@ -111,6 +111,16 @@ struct OverviewView: View {
         case .restoring:
             Label("Restoring DNS Proxy", systemImage: "arrow.clockwise")
                 .foregroundStyle(.secondary)
+        case .failed(.managerChanged):
+            VStack(alignment: .leading, spacing: 8) {
+                Text("DNS Proxy Configuration Changed").font(.headline)
+                Text("System DNS remains active. Keep System DNS, then turn on DNS Proxy to use the current configuration.")
+                    .foregroundStyle(.secondary)
+                Button("Keep System DNS") {
+                    Task { await appState.keepSystemDNSAfterResumeFailure() }
+                }
+            }
+            .disabled(appState.isPerformingAction)
         case .failed:
             VStack(alignment: .leading, spacing: 8) {
                 Text("DNS Proxy Was Not Restored").font(.headline)

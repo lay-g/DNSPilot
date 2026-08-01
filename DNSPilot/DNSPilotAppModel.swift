@@ -647,6 +647,26 @@ final class DNSPilotAppModel: ObservableObject, ProductRuntimeBacking {
         await attemptPendingResume()
     }
 
+    func prepareProxyResumeExtensionUpgrade(
+        source: ProxyResumeExtensionBuildIdentity,
+        target: ProxyResumeExtensionBuildIdentity
+    ) async -> ProxyResumeExtensionUpgradeDecision {
+        let decision = await proxyController.prepareStartupResumeExtensionUpgrade(
+            source: source,
+            target: target
+        )
+        applyExtensionUpgradeDecision(decision)
+        return decision
+    }
+
+    func confirmProxyResumeExtensionUpgrade(
+        target: ProxyResumeExtensionBuildIdentity
+    ) async -> ProxyResumeExtensionUpgradeDecision {
+        let decision = await proxyController.confirmStartupResumeExtensionUpgrade(target: target)
+        applyExtensionUpgradeDecision(decision)
+        return decision
+    }
+
     func retryProxyResume() async {
         guard let proxyResumeJournal else { return }
         do {
@@ -788,6 +808,22 @@ final class DNSPilotAppModel: ObservableObject, ProductRuntimeBacking {
             proxyResumeState = .none
         } else {
             proxyResumeState = .failed(.activationFailed)
+        }
+        productChangeHandler?()
+    }
+
+    private func applyExtensionUpgradeDecision(
+        _ decision: ProxyResumeExtensionUpgradeDecision
+    ) {
+        switch decision {
+        case .notNeeded:
+            break
+        case let .submitted(record), let .confirmed(record):
+            pendingResumeRecord = record
+            proxyResumeState = .waitingForExtension
+        case let .blocked(reason), let .recoveryRequired(reason):
+            pendingResumeRecord = nil
+            proxyResumeState = .failed(reason)
         }
         productChangeHandler?()
     }

@@ -28,7 +28,7 @@ The Host owns user configuration, Location permission, network observation, Prof
 
 ## Ownership Layers
 
-The system lifecycle layer is Host-owned. It performs initial enablement, Restore System DNS, normal Quit, Extension replacement, and bounded repair. Only this layer may write `NEDNSProxyManager`. Runtime quiesce and resume are lifecycle operations, not ordinary Profile switches.
+The system lifecycle layer is Host-owned. It performs initial enablement, Restore System DNS, normal Quit, durable Extension replacement coordination, and bounded repair. Only this layer may write `NEDNSProxyManager`. Runtime quiesce and resume are lifecycle operations, not ordinary Profile switches. SwiftUI and `SystemExtensionController` may request replacement only through this Host coordination boundary and never write the manager.
 
 The runtime switching layer is Extension-owned and reached through authenticated Mach XPC. It applies already-persisted desired bytes to the current Provider instance, performs single-engine rollback, controls flow admission during mutation, and publishes exact runtime identity.
 
@@ -41,12 +41,12 @@ The runtime switching layer is Extension-owned and reached through authenticated
 | Actual runtime and last confirmed bytes | `ProxyLifecycleController` | Process-local |
 | Runtime phase and evidence | `RuntimeStatusStore` | Process-local |
 | Profile mutation compensation | Host mutation journal | Durable, recovery-only |
-| Safe-Quit resume evidence | Host lifecycle journal | Durable, one-shot |
+| Safe-Quit resume and Extension replacement evidence | Host lifecycle journal | Durable, one-shot |
 | Extension installation and approval | macOS | System-owned |
 
 No layer may silently copy, replace, or infer another layer's source of truth.
 
-The lifecycle journal records only that DNSPilot prepared or completed an exact manager disable during safe Quit. It is evidence for one later startup reconciliation, not a desired-runtime source of truth and not independent authority to write the manager.
+The lifecycle journal records only that DNSPilot prepared or completed an exact manager disable during safe Quit, plus an optional transaction that binds one installed Extension build to one bundled replacement build. It is evidence for one later startup reconciliation, not a desired-runtime source of truth and not independent authority to write the manager.
 
 ## Communication Boundary
 

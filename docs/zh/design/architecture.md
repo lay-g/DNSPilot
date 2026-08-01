@@ -28,7 +28,7 @@ Host 负责用户配置、Location 权限、网络观察、Profile 选择、Syst
 
 ## 所有权分层
 
-System lifecycle layer 属于 Host，负责首次启用、Restore System DNS、正常 Quit、Extension replacement 和有界修复。只有这一层可以写 `NEDNSProxyManager`。Runtime quiesce/resume 是 lifecycle 操作，不是普通 Profile 切换。
+System lifecycle layer 属于 Host，负责首次启用、Restore System DNS、正常 Quit、耐久的 Extension replacement 协调和有界修复。只有这一层可以写 `NEDNSProxyManager`。Runtime quiesce/resume 是 lifecycle 操作，不是普通 Profile 切换。SwiftUI 与 `SystemExtensionController` 只能通过该 Host coordination boundary 请求 replacement，绝不能写 manager。
 
 Runtime switching layer 属于 Extension，通过 authenticated Mach XPC 访问。它把已持久化的 desired bytes 应用到当前 Provider instance，执行 single-engine rollback，在 mutation 期间管理 flow admission，并发布 exact runtime identity。
 
@@ -41,12 +41,12 @@ Runtime switching layer 属于 Extension，通过 authenticated Mach XPC 访问�
 | Actual runtime 与最后确认 bytes | `ProxyLifecycleController` | 进程内 |
 | Runtime phase 与 evidence | `RuntimeStatusStore` | 进程内 |
 | Profile mutation compensation | Host mutation journal | 仅恢复持久化 |
-| Safe Quit resume evidence | Host lifecycle journal | 持久化、一次性 |
+| Safe Quit resume 与 Extension replacement evidence | Host lifecycle journal | 持久化、一次性 |
 | Extension 安装与批准 | macOS | 系统拥有 |
 
 任何层都不得静默复制、替换或推断另一层的事实源。
 
-Lifecycle journal 只记录 DNSPilot 在 safe Quit 中准备或完成了一次 exact manager disable。它是下一次启动进行一次 reconciliation 的证据，不是 desired-runtime 事实源，也不能独立授权 manager 写入。
+Lifecycle journal 只记录 DNSPilot 在 safe Quit 中准备或完成了一次 exact manager disable，以及可选的、将一个已安装 Extension build 绑定到一个 bundled replacement build 的 transaction。它是下一次启动进行一次 reconciliation 的证据，不是 desired-runtime 事实源，也不能独立授权 manager 写入。
 
 ## 通信边界
 

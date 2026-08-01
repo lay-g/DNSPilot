@@ -8,7 +8,7 @@ cd "$repository_root"
 
 "$repository_root/scripts/check-toolchain.sh"
 
-xcodebuild test -quiet \
+DNSPILOT_UNIT_TEST_HOST=1 xcodebuild test -quiet \
     -project DNSPilot.xcodeproj \
     -scheme "DNSPilot Community" \
     -configuration Community \

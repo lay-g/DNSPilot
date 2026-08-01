@@ -83,4 +83,8 @@ Lifecycle shutdown 阻止新切换意图，等待无法取消的 mutation，捕�
 
 启动先处理 configuration mutation recovery，再处理 safe Quit resume evidence。Exact enabled manager 只做 reconcile/adopt，不 stop/start。只有 owner identity、保留配置的 generation/fingerprint、App configuration identity 和 Extension readiness 都与 record 一致，exact disabled manager 才可以被 enable。Manual 使用持久化 Profile；Automatic 等待当前活动桌面 session 的 fresh network context 后重新计算 Rules。Missing、corrupt、claimed、foreign、changed 或 uncertain evidence 均不能授权自动 manager write。
 
+如果 safe Quit resume 正在等待且 bundled System Extension 更新，启动会先证明 disabled manager 与 resume record 完全一致，再耐久记录 source build、target build、replacement 前 owner identity 与 replacement attempt。每次启动对每个 target 最多提交一次 replacement。只有 macOS 报告 exact target build active 且 Host 重新加载 manager 后，才允许 resume。Replacement 后 reconcile 只接受 identity 不变，或差异仅限 provider-configuration 与 localized-description fingerprint；disabled state、provider Bundle identifier、保留 Active bytes、generation、Active fingerprint 与 Profile identity 必须保持 exact。Host 必须先耐久 rebind 可接受的 owner evidence，随后才运行原有 claim、fenced enable、Provider readiness 与 final manager proof 路径。
+
+如果 Host 在 upgrade prepare、replacement submit 或 replacement confirm 后 crash，下次启动根据耐久 phase、当前 Extension 与 manager state 继续。未 confirmed 的 upgrade 不能 claim resume record 或 enable manager。Target build 不同、identity 不可用、真实配置变化或耐久 transition 结果不确定时，自动恢复停止并保持 System DNS active。
+
 正常 Quit 保留已安装的 System Extension。发生 Force Quit、crash 或断电后，系统管理的 DNS Proxy 可能保持 enabled，直到下次启动 reconcile persisted state 与 actual runtime，或用户恢复 System DNS。Manager stop/start 用于首次 enable、safe Quit resume、显式 restore、Quit、Extension replacement 和有界 lifecycle repair；普通 Profile 切换使用 manager enabled 的 single-engine reapply 路径。

@@ -32,6 +32,8 @@ Host 校验 response protocol、operation identity、Provider instance、各 dis
 
 Safe Quit resume evidence 只有与当前 disabled manager 一起验证时才有效；manager 的 provider Bundle identity、owner configuration fingerprint、保留 generation 与保留 Active configuration fingerprint 必须与 record 完全一致。Enable 前 Host 先耐久 claim record，再 reload、compare、save 并最终再次 reload manager；任何 mismatch 或 uncertain save 都 fail closed。Journal 本身绝不能授权 manager write。
 
+Extension replacement transaction 不会放宽普通 resume identity。Replacement 前 manager 必须 exact match。Exact target build active 后，只有 provider-configuration 与 localized-description fingerprint drift 可以 rebind，并且 manager 必须仍为 disabled，provider Bundle identity、保留 Active bytes、generation、Active fingerprint、Profile identity 与 App configuration 都保持 exact。其他任何 delta、identity 缺失、target mismatch 或 journal conflict 都会 fail closed 且不写 manager。Confirmed rebind 后仍必须执行普通的 durable claim 与 fenced enable sequence。
+
 ## 数据最小化
 
 XPC 不接收 Profile catalog、Rules、SSID、文件路径、任意 command string、shell command 或 DNS query data。Runtime status 是进程内 evidence，不是持久化配置通道。

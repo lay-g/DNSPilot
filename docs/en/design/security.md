@@ -32,6 +32,8 @@ The Host validates response protocol, operation identity, Provider instance, dis
 
 Safe-Quit resume evidence is valid only together with a currently disabled manager whose provider Bundle identity, owner configuration fingerprint, retained generation, and retained Active configuration fingerprint exactly match the record. The record is durably claimed before enable. The Host then reloads, compares, saves, and finally reloads the manager again; any mismatch or uncertain save fails closed. The journal alone never authorizes a manager write.
 
+An Extension replacement transaction does not weaken ordinary resume identity. Before replacement, the manager must match exactly. After the exact target build is active, only provider-configuration and localized-description fingerprint drift may be rebound, and only while the manager remains disabled and provider Bundle identity, retained Active bytes, generation, Active fingerprint, Profile identity, and application configuration remain exact. Every other delta, missing identity, target mismatch, or journal conflict fails closed without a manager write. A confirmed rebind still requires the ordinary durable claim and fenced enable sequence.
+
 ## Data Minimization
 
 XPC never accepts Profile catalogs, Rules, SSIDs, file paths, arbitrary command strings, shell commands, or DNS query data. Runtime status is process-local evidence, not a durable configuration channel.

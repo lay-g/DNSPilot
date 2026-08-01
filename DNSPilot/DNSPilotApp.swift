@@ -13,9 +13,11 @@ struct DNSPilotApp: App {
     @NSApplicationDelegateAdaptor(ApplicationDelegate.self) private var applicationDelegate
     @StateObject private var appState = AppState()
     private let isGateAProbeMode: Bool
+    private let isUnitTestHost: Bool
 
     init() {
         DNSLogBridge.configure(process: "Host")
+        isUnitTestHost = AppRuntimeEnvironment.isUnitTestProcess
         #if DNSPILOT_DEBUG_LOCAL
         isGateAProbeMode = EnabledManagerGateAProbe.isRequested()
         if isGateAProbeMode {
@@ -33,7 +35,8 @@ struct DNSPilotApp: App {
             MenuBarLabel(
                 appState: appState,
                 applicationDelegate: applicationDelegate,
-                suppressAutomaticWindows: isGateAProbeMode
+                suppressAutomaticWindows: isGateAProbeMode || isUnitTestHost,
+                productRuntimeStartupAllowed: !isUnitTestHost
             )
         }
         .menuBarExtraStyle(.menu)
@@ -78,11 +81,13 @@ private struct MenuBarLabel: View {
     @ObservedObject var appState: AppState
     let applicationDelegate: ApplicationDelegate
     let suppressAutomaticWindows: Bool
+    let productRuntimeStartupAllowed: Bool
 
     var body: some View {
         Image(systemName: appState.menuPresentation?.symbolName ?? "network.slash")
             .accessibilityLabel(appState.menuPresentation?.statusText ?? "DNSPilot")
             .task {
+                guard productRuntimeStartupAllowed else { return }
                 applicationDelegate.configure(
                     appState: appState,
                     suppressAutomaticWindows: suppressAutomaticWindows

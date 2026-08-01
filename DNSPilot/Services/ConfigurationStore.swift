@@ -74,6 +74,7 @@ enum ConfigurationLoadResult: Equatable, Sendable {
 enum ConfigurationStoreError: LocalizedError, Equatable, Sendable {
     case compareAndSwapConflict
     case inconsistentPersistedConfiguration
+    case liveStoreUnavailableInTests
     case recoveryArtifactConflict
 
     var errorDescription: String? {
@@ -82,6 +83,8 @@ enum ConfigurationStoreError: LocalizedError, Equatable, Sendable {
             "The app configuration changed before it could be saved."
         case .inconsistentPersistedConfiguration:
             "The persisted app configuration does not match its canonical value."
+        case .liveStoreUnavailableInTests:
+            "Unit tests cannot access the live app configuration store."
         case .recoveryArtifactConflict:
             "The app configuration recovery artifact does not match the corrupt source."
         }
@@ -214,6 +217,9 @@ struct ConfigurationStore: ConfigurationStoring {
     }
 
     static func live() throws -> Self {
+        guard !AppRuntimeEnvironment.isUnitTestProcess else {
+            throw ConfigurationStoreError.liveStoreUnavailableInTests
+        }
         let applicationSupport = try FileManager.default.url(
             for: .applicationSupportDirectory,
             in: .userDomainMask,

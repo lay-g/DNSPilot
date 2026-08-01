@@ -55,6 +55,20 @@ if git ls-files --error-unmatch Configurations/Identity.local.xcconfig >/dev/nul
     exit 1
 fi
 
+for scheme in DNSPilot.xcodeproj/xcshareddata/xcschemes/*.xcscheme; do
+    marker_block="$(grep -A3 'key = "DNSPILOT_UNIT_TEST_HOST"' "$scheme" || true)"
+    if ! printf '%s\n' "$marker_block" | grep -q 'value = "1"' \
+        || ! printf '%s\n' "$marker_block" | grep -q 'isEnabled = "YES"'; then
+        printf 'error: test scheme is missing the unit-test isolation marker: %s\n' "$scheme" >&2
+        exit 1
+    fi
+done
+
+if ! grep -q '^DNSPILOT_UNIT_TEST_HOST=1 xcodebuild test ' scripts/ci/test.sh; then
+    printf 'error: test runner is missing the unit-test isolation marker\n' >&2
+    exit 1
+fi
+
 user_paths="$(git grep -n -I -E '/Users/[^/[:space:]]+' -- . ':!scripts/ci/check-repository.sh' || true)"
 user_paths="$(printf '%s\n' "$user_paths" | grep -v '/Users/Shared' || true)"
 if [ -n "$user_paths" ]; then

@@ -901,6 +901,82 @@ struct AppStateTests {
         #expect(events.values == ["activateSystemExtension"])
     }
 
+    @Test func explicitPendingResumeUpdatePreparesBeforeActivation() async throws {
+        let fixture = try Fixture()
+        let events = EventRecorder()
+        let pendingSnapshot = ProductRuntimeSnapshot(
+            configuration: fixture.snapshot.configuration,
+            proxy: .init(
+                state: .disabled,
+                targetProfileID: nil,
+                activeProfileID: nil,
+                activeGeneration: nil,
+                lastSwitchFailure: nil
+            ),
+            network: fixture.snapshot.network,
+            locationAuthorization: fixture.snapshot.locationAuthorization,
+            startupFailure: nil,
+            diagnostics: fixture.snapshot.diagnostics,
+            loggingMode: fixture.snapshot.loggingMode,
+            proxyResumeState: .waitingForExtension
+        )
+        let backend = FakeProductRuntimeBackend(snapshot: pendingSnapshot, events: events)
+        backend.prepareUpgradeDecision = .submitted(makeProductResumeRecord())
+        let extensionController = FakeSystemExtensionController(
+            state: .updateFailed("retry"),
+            events: events,
+            installedVersion: .init(shortVersion: "1.0", buildVersion: "36"),
+            bundledVersion: .init(shortVersion: "1.1", buildVersion: "39")
+        )
+        let state = AppState(backend: backend, systemExtension: extensionController)
+        await state.start()
+        events.values.removeAll()
+
+        #expect(await state.updateSystemExtensionSafely() == .completed)
+        #expect(events.values == [
+            "prepareExtensionUpgrade",
+            "activateSystemExtension",
+        ])
+    }
+
+    @Test func explicitPendingResumeUpdateDoesNotActivateWhenPrepareIsBlocked() async throws {
+        let fixture = try Fixture()
+        let pendingSnapshot = ProductRuntimeSnapshot(
+            configuration: fixture.snapshot.configuration,
+            proxy: .init(
+                state: .disabled,
+                targetProfileID: nil,
+                activeProfileID: nil,
+                activeGeneration: nil,
+                lastSwitchFailure: nil
+            ),
+            network: fixture.snapshot.network,
+            locationAuthorization: fixture.snapshot.locationAuthorization,
+            startupFailure: nil,
+            diagnostics: fixture.snapshot.diagnostics,
+            loggingMode: fixture.snapshot.loggingMode,
+            proxyResumeState: .waitingForExtension
+        )
+        let backend = FakeProductRuntimeBackend(snapshot: pendingSnapshot)
+        backend.prepareUpgradeDecision = .blocked(.managerChanged)
+        let extensionController = FakeSystemExtensionController(
+            state: .updateFailed("retry"),
+            installedVersion: .init(shortVersion: "1.0", buildVersion: "36"),
+            bundledVersion: .init(shortVersion: "1.1", buildVersion: "39")
+        )
+        let state = AppState(backend: backend, systemExtension: extensionController)
+        await state.start()
+
+        #expect(
+            await state.updateSystemExtensionSafely()
+                == .failed(ProductActionFailure(
+                    action: .systemExtensionUpdate,
+                    reason: .systemExtensionOperationUnavailable
+                ))
+        )
+        #expect(extensionController.activationCount == 0)
+    }
+
     @Test func explicitExtensionUpdateRequiresCompletedStartup() async {
         let extensionController = FakeSystemExtensionController(state: .updateRequired)
         let state = AppState(
@@ -1043,8 +1119,72 @@ struct AppStateTests {
         #expect(backend.resumeAllowedValues.last == false)
 
         systemExtension.send(.active)
-        try await Task.sleep(for: .milliseconds(50))
+        try await waitUntil { backend.resumeAllowedValues.last == true }
         #expect(backend.resumeAllowedValues.last == true)
+    }
+
+    @Test func pendingResumeCoordinatesExtensionUpgradeBeforeAllowingResume() async throws {
+        let fixture = try Fixture()
+        let pendingSnapshot = ProductRuntimeSnapshot(
+            configuration: fixture.snapshot.configuration,
+            proxy: ProxyControllerSnapshot(
+                state: .disabled,
+                targetProfileID: nil,
+                activeProfileID: nil,
+                activeGeneration: nil,
+                lastSwitchFailure: nil
+            ),
+            network: fixture.snapshot.network,
+            locationAuthorization: fixture.snapshot.locationAuthorization,
+            startupFailure: nil,
+            diagnostics: fixture.snapshot.diagnostics,
+            loggingMode: fixture.snapshot.loggingMode,
+            proxyResumeState: .waitingForExtension
+        )
+        let events = EventRecorder()
+        let backend = FakeProductRuntimeBackend(snapshot: pendingSnapshot, events: events)
+        backend.recordResumeEvents = true
+        let record = makeProductResumeRecord()
+        backend.prepareUpgradeDecision = .submitted(record)
+        backend.confirmUpgradeDecision = .confirmed(record)
+        let source = SystemExtensionController.BundleVersion(
+            shortVersion: "1.0",
+            buildVersion: "36"
+        )
+        let target = SystemExtensionController.BundleVersion(
+            shortVersion: "1.1",
+            buildVersion: "39"
+        )
+        let systemExtension = FakeSystemExtensionController(
+            state: .updateRequired,
+            events: events,
+            installedVersion: source,
+            bundledVersion: target
+        )
+        let state = AppState(backend: backend, systemExtension: systemExtension)
+        await Task.yield()
+        events.values.removeAll()
+
+        await state.start()
+
+        #expect(systemExtension.activationCount == 1)
+        #expect(events.values == [
+            "resumeAllowed:false",
+            "prepareExtensionUpgrade",
+            "activateSystemExtension",
+        ])
+
+        systemExtension.send(.active)
+        try await waitUntil { events.values.contains("resumeAllowed:true") }
+
+        #expect(events.values == [
+            "resumeAllowed:false",
+            "prepareExtensionUpgrade",
+            "activateSystemExtension",
+            "confirmExtensionUpgrade",
+            "resumeAllowed:true",
+        ])
+        #expect(systemExtension.activationCount == 1)
     }
 
 }
@@ -1062,6 +1202,9 @@ private final class FakeProductRuntimeBackend: ProductRuntimeBacking {
     private(set) var terminationRestoreCount = 0
     private(set) var terminationCancelCount = 0
     private(set) var resumeAllowedValues: [Bool] = []
+    var prepareUpgradeDecision = ProxyResumeExtensionUpgradeDecision.notNeeded
+    var confirmUpgradeDecision = ProxyResumeExtensionUpgradeDecision.notNeeded
+    var recordResumeEvents = false
     private var changeHandler: (@MainActor () -> Void)?
     private let events: EventRecorder?
 
@@ -1120,6 +1263,22 @@ private final class FakeProductRuntimeBackend: ProductRuntimeBacking {
 
     func setProxyResumeAllowed(_ allowed: Bool) async {
         resumeAllowedValues.append(allowed)
+        if recordResumeEvents { events?.values.append("resumeAllowed:\(allowed)") }
+    }
+
+    func prepareProxyResumeExtensionUpgrade(
+        source: ProxyResumeExtensionBuildIdentity,
+        target: ProxyResumeExtensionBuildIdentity
+    ) async -> ProxyResumeExtensionUpgradeDecision {
+        events?.values.append("prepareExtensionUpgrade")
+        return prepareUpgradeDecision
+    }
+
+    func confirmProxyResumeExtensionUpgrade(
+        target: ProxyResumeExtensionBuildIdentity
+    ) async -> ProxyResumeExtensionUpgradeDecision {
+        events?.values.append("confirmExtensionUpgrade")
+        return confirmUpgradeDecision
     }
 
     func notifyChange() {
@@ -1143,9 +1302,16 @@ private final class FakeSystemExtensionController: SystemExtensionControlling {
         subject.eraseToAnyPublisher()
     }
 
-    init(state: SystemExtensionController.State, events: EventRecorder? = nil) {
+    init(
+        state: SystemExtensionController.State,
+        events: EventRecorder? = nil,
+        installedVersion: SystemExtensionController.BundleVersion? = nil,
+        bundledVersion: SystemExtensionController.BundleVersion? = nil
+    ) {
         subject = CurrentValueSubject(state)
         self.events = events
+        self.installedVersion = installedVersion
+        self.bundledVersion = bundledVersion
     }
 
     func synchronizeState() { subject.send(subject.value) }
@@ -1165,7 +1331,45 @@ private final class FakeSystemExtensionController: SystemExtensionControlling {
     }
 
     func send(_ state: SystemExtensionController.State) {
+        requestInProgress = switch state {
+        case .activating, .deactivating:
+            true
+        default:
+            false
+        }
+        if state == .active, let bundledVersion {
+            installedVersion = bundledVersion
+        }
         subject.send(state)
+    }
+}
+
+private func makeProductResumeRecord() -> ProxyResumeRecord {
+    ProxyResumeRecord(
+        operationID: UUID(),
+        phase: .disabledConfirmed,
+        appConfigurationFingerprint: AppConfigurationFingerprint(data: Data("app".utf8)),
+        providerBundleIdentifier: "com.example.DNSProxy",
+        ownerConfigurationFingerprint: ProxyConfigurationFingerprint(data: Data("owner".utf8)),
+        managerLocalizedDescriptionFingerprint: ProxyConfigurationFingerprint(
+            data: Data("description".utf8)
+        ),
+        activeGeneration: UUID(),
+        activeConfigurationFingerprint: ProxyConfigurationFingerprint(data: Data("active".utf8)),
+        activeProfileID: UUID()
+    )
+}
+
+@MainActor
+private func waitUntil(
+    timeout: Duration = .seconds(1),
+    _ condition: () -> Bool
+) async throws {
+    let clock = ContinuousClock()
+    let deadline = clock.now.advanced(by: timeout)
+    while !condition() {
+        guard clock.now < deadline else { throw FakeTestError.unavailable }
+        await Task.yield()
     }
 }
 

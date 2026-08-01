@@ -188,6 +188,164 @@ struct ProxyResumeControllerTests {
         }
     }
 
+    @Test func localizedDescriptionChangeBlocksExactStartupResume() async throws {
+        try await withFixture { directoryURL in
+            let old = try PersistedProxyConfiguration(value: makeConfiguration())
+            let manager = FakeDNSProxyManager(
+                isEnabled: false,
+                persistedConfiguration: old
+            )
+            let journal = ProxyResumeJournal(directoryURL: directoryURL)
+            let appFingerprint = AppConfigurationFingerprint(data: Data("app".utf8))
+            let record = makeRecord(
+                managerSnapshot: await manager.currentSnapshot,
+                appFingerprint: appFingerprint,
+                configuration: old
+            )
+            try journal.prepare(record)
+            let owner = try #require(await manager.currentSnapshot.ownerIdentity)
+            await manager.replaceOwnerIdentity(DNSProxyManagerOwnerIdentity(
+                providerBundleIdentifier: owner.providerBundleIdentifier,
+                providerConfigurationFingerprint: owner.providerConfigurationFingerprint,
+                localizedDescription: "Changed"
+            ))
+            let controller = makeController(manager: manager)
+            await controller.configureResumeJournal(
+                journal,
+                appConfigurationFingerprint: appFingerprint
+            )
+
+            #expect(await controller.evaluateStartupResume() == .failed(.managerChanged))
+            #expect(await manager.enableSaveCount == 0)
+        }
+    }
+
+    @Test func controlledExtensionUpgradeRebindsOwnerAndResumes() async throws {
+        try await withFixture { directoryURL in
+            let old = try PersistedProxyConfiguration(value: makeConfiguration())
+            let manager = FakeDNSProxyManager(
+                isEnabled: false,
+                persistedConfiguration: old
+            )
+            let journal = ProxyResumeJournal(directoryURL: directoryURL)
+            let appFingerprint = AppConfigurationFingerprint(data: Data("app".utf8))
+            let record = makeRecord(
+                managerSnapshot: await manager.currentSnapshot,
+                appFingerprint: appFingerprint,
+                configuration: old
+            )
+            try journal.prepare(record)
+            try journal.confirmDisabled(operationID: record.operationID)
+            let controller = makeController(
+                manager: manager,
+                statusProvider: ManagerBackedStatusProvider(manager: manager)
+            )
+            await controller.configureResumeJournal(
+                journal,
+                appConfigurationFingerprint: appFingerprint
+            )
+            let source = ProxyResumeExtensionBuildIdentity(
+                shortVersion: "1.0",
+                buildVersion: "36"
+            )
+            let target = ProxyResumeExtensionBuildIdentity(
+                shortVersion: "1.1",
+                buildVersion: "39"
+            )
+
+            guard case .submitted = await controller.prepareStartupResumeExtensionUpgrade(
+                source: source,
+                target: target
+            ) else {
+                Issue.record("Expected submitted Extension upgrade")
+                return
+            }
+            let owner = try #require(await manager.currentSnapshot.ownerIdentity)
+            await manager.replaceOwnerIdentity(DNSProxyManagerOwnerIdentity(
+                providerBundleIdentifier: owner.providerBundleIdentifier,
+                providerConfigurationFingerprint: ProxyConfigurationFingerprint(
+                    data: Data("replacement-owner".utf8)
+                ),
+                localizedDescription: "DNSPilot Updated"
+            ))
+            guard case let .confirmed(confirmed) = await controller
+                .confirmStartupResumeExtensionUpgrade(target: target) else {
+                Issue.record("Expected confirmed Extension upgrade")
+                return
+            }
+            #expect(confirmed.extensionUpgrade?.phase == .replacementConfirmed)
+
+            let snapshot = await controller.resumeAfterSafeQuit(
+                target: DNSProxyTarget(
+                    profileID: old.value.profileID,
+                    upstream: old.value.upstream
+                ),
+                record: confirmed,
+                appConfigurationFingerprint: appFingerprint
+            )
+            guard case .active = snapshot.state else {
+                Issue.record("Expected resumed Active state")
+                return
+            }
+            #expect(await manager.enableSaveCount == 1)
+            #expect(try journal.load() == .missing)
+        }
+    }
+
+    @Test func extensionUpgradeDoesNotRebindChangedActiveConfiguration() async throws {
+        try await withFixture { directoryURL in
+            let old = try PersistedProxyConfiguration(value: makeConfiguration())
+            let manager = FakeDNSProxyManager(
+                isEnabled: false,
+                persistedConfiguration: old
+            )
+            let journal = ProxyResumeJournal(directoryURL: directoryURL)
+            let appFingerprint = AppConfigurationFingerprint(data: Data("app".utf8))
+            let record = makeRecord(
+                managerSnapshot: await manager.currentSnapshot,
+                appFingerprint: appFingerprint,
+                configuration: old
+            )
+            try journal.prepare(record)
+            try journal.confirmDisabled(operationID: record.operationID)
+            let controller = makeController(manager: manager)
+            await controller.configureResumeJournal(
+                journal,
+                appConfigurationFingerprint: appFingerprint
+            )
+            let source = ProxyResumeExtensionBuildIdentity(
+                shortVersion: "1.0",
+                buildVersion: "36"
+            )
+            let target = ProxyResumeExtensionBuildIdentity(
+                shortVersion: "1.1",
+                buildVersion: "39"
+            )
+            guard case .submitted = await controller.prepareStartupResumeExtensionUpgrade(
+                source: source,
+                target: target
+            ) else {
+                Issue.record("Expected submitted Extension upgrade")
+                return
+            }
+            let changed = try PersistedProxyConfiguration(value: ActiveProxyConfiguration(
+                generation: UUID(),
+                profileID: old.value.profileID,
+                upstream: old.value.upstream,
+                loggingMode: old.value.loggingMode,
+                dnsCacheConfiguration: old.value.dnsCacheConfiguration,
+                schemaVersion: old.value.schemaVersion
+            ))
+            await manager.replaceState(isEnabled: false, persistedConfiguration: changed)
+
+            #expect(
+                await controller.confirmStartupResumeExtensionUpgrade(target: target)
+                    == .blocked(.managerChanged)
+            )
+            #expect(await manager.enableSaveCount == 0)
+        }
+    }
+
     @Test func uncertainResumeSaveWithChangedManagerRequiresRecovery() async throws {
         try await withFixture { directoryURL in
             let old = try PersistedProxyConfiguration(value: makeConfiguration())
@@ -281,6 +439,7 @@ struct ProxyResumeControllerTests {
             appConfigurationFingerprint: appFingerprint,
             providerBundleIdentifier: owner.providerBundleIdentifier!,
             ownerConfigurationFingerprint: owner.providerConfigurationFingerprint,
+            managerLocalizedDescriptionFingerprint: owner.localizedDescriptionFingerprint,
             activeGeneration: configuration.value.generation,
             activeConfigurationFingerprint: configuration.fingerprint,
             activeProfileID: configuration.value.profileID
@@ -316,6 +475,29 @@ private struct FailingProxyResumeJournal: ProxyResumeJournalStoring {
         code: ProxyResumeFailureCode
     ) throws {}
     func prepareRetry(operationID: UUID) throws -> ProxyResumeRecord {
+        throw FakeTestError.saveFailed
+    }
+    func prepareExtensionUpgrade(
+        operationID: UUID,
+        source: ProxyResumeExtensionBuildIdentity,
+        target: ProxyResumeExtensionBuildIdentity,
+        localizedDescriptionFingerprint: ProxyConfigurationFingerprint
+    ) throws -> ProxyResumeRecord {
+        throw FakeTestError.saveFailed
+    }
+    func markExtensionUpgradeSubmitted(
+        operationID: UUID,
+        upgradeOperationID: UUID,
+        attemptID: UUID
+    ) throws -> ProxyResumeRecord {
+        throw FakeTestError.saveFailed
+    }
+    func confirmExtensionUpgrade(
+        operationID: UUID,
+        upgradeOperationID: UUID,
+        ownerConfigurationFingerprint: ProxyConfigurationFingerprint,
+        localizedDescriptionFingerprint: ProxyConfigurationFingerprint
+    ) throws -> ProxyResumeRecord {
         throw FakeTestError.saveFailed
     }
     func discard(operationID: UUID?) throws {}

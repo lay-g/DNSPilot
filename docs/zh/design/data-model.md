@@ -72,6 +72,8 @@ Configuration mutation 串行执行。Inactive 修改只需要一次原子配置
 
 ## Lifecycle Resume Journal
 
-Safe Quit 在同一私有 Application Support 目录使用独立的 versioned lifecycle journal。它保存 operation identity、phase、App configuration fingerprint、预期 manager owner fingerprint、Active generation、Active configuration fingerprint 和 Profile identity，绝不保存 raw runtime bytes、upstream 配置、network context 或 DNS traffic。
+Safe Quit 在同一私有 Application Support 目录使用独立的 versioned lifecycle journal。它保存 operation identity、phase、App configuration fingerprint、预期 manager owner 与 localized-description fingerprint、Active generation、Active configuration fingerprint 和 Profile identity，绝不保存 raw runtime bytes、upstream 配置、network context 或 DNS traffic。
 
-Phase 覆盖 prepared Quit、confirmed disable、claimed launch 与 failed attempt。Phase 变更使用 canonical encoding、checksum、durable atomic replacement 和 operation-scoped compare-and-swap。损坏或更高 schema 的 record 会被保留，且绝不能授权自动 enable。Journal 只消费一次，不属于 `AppConfiguration`；`UserDefaults` 仍只保存 UI preference。
+Schema 2 增加可选的 Extension upgrade subrecord，包含 operation ID、source/target short 与 build version、pre-update owner fingerprint、replacement attempt ID，以及 `prepared`、`replacementSubmitted` 或 `replacementConfirmed` phase。Schema 1 record 仍可读取并保留原 resume 资格；进入 upgrade transaction 时，使用新验证的 manager evidence 将其重写为 schema 2。Upgrade 处于 prepared 或 submitted 时禁止 resume claim。
+
+Base phase 覆盖 prepared Quit、confirmed disable、claimed launch 与 failed attempt。全部 base/upgrade phase 变更使用 canonical encoding、checksum、durable atomic replacement 和 operation-scoped compare-and-swap。损坏或更高 schema 的 record 会被保留，且绝不能授权自动 enable。Journal 只消费一次，不属于 `AppConfiguration`；`UserDefaults` 仍只保存 UI preference。

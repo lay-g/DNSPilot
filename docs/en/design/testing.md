@@ -15,13 +15,19 @@ Unit and contract tests cover:
 - DNS cache defaults, bounds, disablement, schema migration, adapter mapping, capability gating, cache-hit behavior, settings reapply, and rollback.
 - Automatic/Manual persistence, target coalescing, stale decisions, and session fencing.
 - Mutation journal authentication, compensation, crash recovery, and cleanup.
-- Safe-Quit resume journal encoding, phase fencing, corruption preservation, one-shot claims, and crash windows before and after manager disable.
+- Safe-Quit resume journal encoding, schema 1 compatibility, Extension upgrade prepare/submit/confirm fencing, corruption preservation, one-shot claims, and crash windows before and after manager disable or replacement.
 - Runtime payload validation, exact identity, replay, rate limits, rollback, quiescence, resume, and recovery classification.
-- Manual and Automatic startup resume, fresh-session network selection, Extension readiness gates, exact-disabled manager mismatch, and explicit Keep System DNS behavior.
+- Manual and Automatic startup resume, fresh-session network selection, Extension readiness gates, field-level disabled-manager mismatch, prepare-before-replace and confirm-before-resume ordering, duplicate publisher fencing, and explicit Keep System DNS behavior.
 - Quit key-up, repeat rejection, timeout, cancellation, draft handling, and exactly-once dispatch.
 - Privacy-safe display identity and diagnostic redaction.
 
 Run the non-UI suite serially because several tests exercise process-global Network Extension or DnsLibs resources.
+
+## Unit-Test Host Isolation
+
+Every scheme Test action and `scripts/ci/test.sh` marks the launched App Host with `DNSPILOT_UNIT_TEST_HOST=1`. A marked or XCTest-loaded Host must not start the product runtime, open the live `ConfigurationStore`, submit System Extension requests, inspect or change the real Launch at Login registration, or use production `UserDefaults`. These runtime guards apply even if a developer accidentally runs tests with a Release configuration or Production Bundle identity. Repository policy checks require the marker on every shared scheme and the CI entry point; unit tests prove live-store rejection and preference-suite separation.
+
+Temporary stores and injected manager, runtime, network, login-item, and System Extension fakes are the only mutable boundaries permitted in unit tests. Signed runtime validation is a separate, explicitly authorized workflow and never runs through the unit-test target.
 
 ## Static And Build Validation
 
@@ -45,6 +51,7 @@ A properly provisioned machine is required to validate:
 - Network and active-user-session changes.
 - Conflicts with other DNS or VPN products.
 - Crash recovery and normal Quit restoration.
+- Same-build relaunch and signed build N to N+1 safe-Quit replacement, including approval, restart, replacement failure, Host crashes at each durable phase, external manager mutation, delayed Provider readiness, and final manager mismatch.
 
 Signed validation must use explicit user authorization when it changes UI or system state.
 

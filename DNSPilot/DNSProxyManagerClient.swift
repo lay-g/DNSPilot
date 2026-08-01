@@ -6,6 +6,14 @@ struct DNSProxyManagerOwnerIdentity: Equatable, Sendable {
     let providerBundleIdentifier: String?
     let providerConfigurationFingerprint: ProxyConfigurationFingerprint
     let localizedDescription: String?
+
+    var localizedDescriptionFingerprint: ProxyConfigurationFingerprint {
+        var data = Data([localizedDescription == nil ? 0 : 1])
+        if let localizedDescription {
+            data.append(contentsOf: localizedDescription.utf8)
+        }
+        return ProxyConfigurationFingerprint(data: data)
+    }
 }
 
 struct DNSProxyManagerSnapshot: Equatable, Sendable {
@@ -66,6 +74,7 @@ enum DNSProxyManagerReplaceResult: Equatable, Sendable {
 enum DNSProxyManagerClientError: LocalizedError, Sendable {
     case configurationStale
     case injectedDisableSaveFailure
+    case unitTestProcess
 
     var errorDescription: String? {
         switch self {
@@ -73,6 +82,8 @@ enum DNSProxyManagerClientError: LocalizedError, Sendable {
             "The DNS Proxy manager configuration is stale."
         case .injectedDisableSaveFailure:
             "DebugLocal injected a DNS Proxy disable save failure."
+        case .unitTestProcess:
+            "Unit tests cannot access the live DNS Proxy manager."
         }
     }
 }
@@ -227,6 +238,7 @@ actor NetworkExtensionDNSProxyManager: DNSProxyManagerManaging {
     }
 
     func loadSnapshot() async throws -> DNSProxyManagerSnapshot {
+        try requireProductRuntime()
         try await manager.loadFromPreferences()
         return snapshot()
     }
@@ -235,6 +247,7 @@ actor NetworkExtensionDNSProxyManager: DNSProxyManagerManaging {
         _ configuration: ActiveProxyConfiguration,
         providerBundleIdentifier: String
     ) async throws -> DNSProxyManagerEnableResult {
+        try requireProductRuntime()
         guard !manager.isEnabled else {
             return .alreadyEnabled(snapshot())
         }
@@ -260,18 +273,36 @@ actor NetworkExtensionDNSProxyManager: DNSProxyManagerManaging {
         providerBundleIdentifier: String,
         ifDisabledSnapshotMatches expected: DNSProxyManagerSnapshot
     ) async throws -> DNSProxyManagerFencedEnableResult {
+        try requireProductRuntime()
         try await manager.loadFromPreferences()
         let current = snapshot()
         guard !current.isEnabled, current == expected else {
             return .configurationChanged(current)
         }
 
-        manager.providerProtocol = DNSProxyManagerConfiguration.makeProviderProtocol(
-            persistedConfiguration: configuration,
-            providerBundleIdentifier: providerBundleIdentifier
-        )
-        manager.localizedDescription = "DNSPilot"
+        guard let providerProtocol = manager.providerProtocol,
+              providerProtocol.providerBundleIdentifier == providerBundleIdentifier else {
+            return .configurationChanged(current)
+        }
+        let targetProviderConfiguration = DNSProxyManagerConfiguration
+            .replacingActiveConfiguration(
+                in: providerProtocol.providerConfiguration,
+                with: configuration
+            )
+        guard let targetOwnerIdentity = ownerIdentity(
+            providerProtocol: providerProtocol,
+            providerConfiguration: targetProviderConfiguration
+        ) else {
+            return .configurationChanged(current)
+        }
+        providerProtocol.providerConfiguration = targetProviderConfiguration
+        manager.providerProtocol = providerProtocol
         manager.isEnabled = true
+        let expectedSavedSnapshot = DNSProxyManagerSnapshot(
+            isEnabled: true,
+            persistedConfiguration: configuration,
+            ownerIdentity: targetOwnerIdentity
+        )
         do {
             try await saveToPreferences()
         } catch let saveError {
@@ -283,20 +314,14 @@ actor NetworkExtensionDNSProxyManager: DNSProxyManagerManaging {
                 throw DNSProxyManagerClientError.configurationStale
             }
             if observed == expected { throw saveError }
-            if observed.isEnabled,
-               observed.persistedConfiguration == configuration,
-               observed.ownerIdentity?.providerBundleIdentifier == providerBundleIdentifier {
+            if observed == expectedSavedSnapshot {
                 return .enabled(observed)
             }
             throw DNSProxyManagerClientError.configurationStale
         }
         try await manager.loadFromPreferences()
         let confirmed = snapshot()
-        guard
-            confirmed.isEnabled,
-            confirmed.persistedConfiguration == configuration,
-            confirmed.ownerIdentity?.providerBundleIdentifier == providerBundleIdentifier
-        else {
+        guard confirmed == expectedSavedSnapshot else {
             throw DNSProxyManagerClientError.configurationStale
         }
         return .enabled(confirmed)
@@ -305,6 +330,7 @@ actor NetworkExtensionDNSProxyManager: DNSProxyManagerManaging {
     func saveDisabled(
         ifGenerationMatches expectedGeneration: UUID?
     ) async throws -> DNSProxyManagerDisableResult {
+        try requireProductRuntime()
         guard manager.isEnabled else { return .alreadyDisabled }
         if let changed = generationChange(ifExpected: expectedGeneration) { return changed }
 
@@ -337,6 +363,7 @@ actor NetworkExtensionDNSProxyManager: DNSProxyManagerManaging {
     func saveDisabled(
         ifCurrentMatches expected: DNSProxyManagerSnapshot
     ) async throws -> DNSProxyManagerDisableResult {
+        try requireProductRuntime()
         try await manager.loadFromPreferences()
         let current = snapshot()
         if !current.isEnabled {
@@ -386,6 +413,7 @@ actor NetworkExtensionDNSProxyManager: DNSProxyManagerManaging {
         _ target: PersistedProxyConfiguration,
         ifCurrentMatches expected: DNSProxyManagerSnapshot
     ) async throws -> DNSProxyManagerReplaceResult {
+        try requireProductRuntime()
         try await manager.loadFromPreferences()
         let current = snapshot()
         guard current.isEnabled, current == expected else {
@@ -426,6 +454,7 @@ actor NetworkExtensionDNSProxyManager: DNSProxyManagerManaging {
 
     #if DNSPILOT_DEBUG_LOCAL
     func gateALoadOwner() async throws -> DNSProxyManagerGateAOwner {
+        try requireProductRuntime()
         try await manager.loadFromPreferences()
         return try gateAOwner()
     }
@@ -434,6 +463,7 @@ actor NetworkExtensionDNSProxyManager: DNSProxyManagerManaging {
         _ target: PersistedProxyConfiguration,
         replacing expected: DNSProxyManagerGateAOwner
     ) async throws -> DNSProxyManagerGateAOwner {
+        try requireProductRuntime()
         try await manager.loadFromPreferences()
         let current = try gateAOwner()
         guard current == expected else {
@@ -460,6 +490,7 @@ actor NetworkExtensionDNSProxyManager: DNSProxyManagerManaging {
         _ target: PersistedProxyConfiguration,
         replacing expected: DNSProxyManagerGateAOwner
     ) async throws -> DNSProxyManagerGateAOwner {
+        try requireProductRuntime()
         try await manager.loadFromPreferences()
         let current = try gateAOwner()
         guard current.snapshot.isEnabled else {
@@ -503,6 +534,7 @@ actor NetworkExtensionDNSProxyManager: DNSProxyManagerManaging {
     func gateADisableForRecovery(
         ifOwnerMatches expected: DNSProxyManagerGateAOwner
     ) async throws -> DNSProxyManagerGateAOwner {
+        try requireProductRuntime()
         try await manager.loadFromPreferences()
         let current = try gateAOwner()
         guard current == expected else {
@@ -575,6 +607,12 @@ actor NetworkExtensionDNSProxyManager: DNSProxyManagerManaging {
                 providerConfiguration: manager.providerProtocol?.providerConfiguration
             )
         )
+    }
+
+    private func requireProductRuntime() throws {
+        guard !AppRuntimeEnvironment.isUnitTestProcess else {
+            throw DNSProxyManagerClientError.unitTestProcess
+        }
     }
 
     private func ownerIdentity(

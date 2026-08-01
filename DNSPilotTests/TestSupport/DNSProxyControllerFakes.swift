@@ -169,10 +169,16 @@ actor FakeDNSProxyManager: DNSProxyManagerManaging {
         guard !snapshot.isEnabled, snapshot == expected else {
             return .configurationChanged(snapshot)
         }
-        snapshot = Self.makeSnapshot(
+        snapshot = DNSProxyManagerSnapshot(
             isEnabled: true,
-            activeConfiguration: configuration.value,
-            providerBundleIdentifier: providerBundleIdentifier
+            persistedConfiguration: configuration,
+            ownerIdentity: DNSProxyManagerOwnerIdentity(
+                providerBundleIdentifier: providerBundleIdentifier,
+                providerConfigurationFingerprint: Self.providerBundleFingerprint(
+                    for: configuration
+                ),
+                localizedDescription: expected.ownerIdentity?.localizedDescription
+            )
         )
         return .enabled(snapshot)
     }

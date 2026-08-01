@@ -28,6 +28,13 @@ final class SystemExtensionController: NSObject, ObservableObject {
             "\(shortVersion) (\(buildVersion))"
         }
 
+        var resumeIdentity: ProxyResumeExtensionBuildIdentity {
+            ProxyResumeExtensionBuildIdentity(
+                shortVersion: shortVersion,
+                buildVersion: buildVersion
+            )
+        }
+
         func isOlder(than other: Self) -> Bool {
             Self.compare(buildVersion, other.buildVersion) == .orderedAscending
         }
@@ -201,6 +208,7 @@ final class SystemExtensionController: NSObject, ObservableObject {
     }
 
     func synchronizeState() {
+        guard !AppRuntimeEnvironment.isUnitTestProcess else { return }
         submit(
             .propertiesRequest(
                 forExtensionWithIdentifier: extensionIdentifier,
@@ -211,6 +219,7 @@ final class SystemExtensionController: NSObject, ObservableObject {
     }
 
     func activate() {
+        guard !AppRuntimeEnvironment.isUnitTestProcess else { return }
         submit(.activationRequest(
             forExtensionWithIdentifier: extensionIdentifier,
             queue: .main
@@ -218,6 +227,7 @@ final class SystemExtensionController: NSObject, ObservableObject {
     }
 
     func deactivate() {
+        guard !AppRuntimeEnvironment.isUnitTestProcess else { return }
         submit(.deactivationRequest(
             forExtensionWithIdentifier: extensionIdentifier,
             queue: .main
@@ -225,6 +235,7 @@ final class SystemExtensionController: NSObject, ObservableObject {
     }
 
     func deactivateAndWait() async -> State {
+        guard !AppRuntimeEnvironment.isUnitTestProcess else { return state }
         guard operation == nil, state.allowsDeactivation else { return state }
         let waiterID = UUID()
         return await withCheckedContinuation { continuation in
