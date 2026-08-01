@@ -37,6 +37,10 @@ IDENTITY_BUNDLE_ID_PREFIX = org.example
 
 证书保存在 Keychain 或受保护 CI。Provisioning profile 和 Store credential 永不提交。
 
+## 版本管理
+
+`Configurations/Version.xcconfig` 是 `MARKETING_VERSION` 和仓库默认 `CURRENT_PROJECT_VERSION` 的唯一来源。所有 first-party target 与 configuration 通过 `Configurations/Base.xcconfig` 继承这些值；不要在 Xcode project 中添加 target-level override。Release automation 可以在 `xcodebuild` 命令行用单调递增的 build number 覆盖 `CURRENT_PROJECT_VERSION`。
+
 ## Community 验证
 
 ```bash

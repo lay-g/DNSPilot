@@ -37,6 +37,10 @@ The build derives Host and System Extension Bundle IDs, App Group, versioned Mac
 
 Certificates remain in Keychain or protected CI. Provisioning profiles and store credentials are never committed.
 
+## Versioning
+
+`Configurations/Version.xcconfig` is the single source of truth for `MARKETING_VERSION` and the repository-default `CURRENT_PROJECT_VERSION`. All first-party targets and configurations inherit these values through `Configurations/Base.xcconfig`; do not add target-level overrides in the Xcode project. Release automation may override `CURRENT_PROJECT_VERSION` on the `xcodebuild` command line with a monotonically increasing build number.
+
 ## Community Validation
 
 ```bash

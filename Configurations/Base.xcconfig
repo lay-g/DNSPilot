@@ -1,3 +1,5 @@
+#include "Version.xcconfig"
+
 IDENTITY_TEAM_IDENTIFIER = TEAMID1234
 IDENTITY_BUNDLE_ID_PREFIX = org.example
 #include? "Identity.local.xcconfig"
