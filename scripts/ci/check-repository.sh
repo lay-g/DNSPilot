@@ -73,6 +73,11 @@ if git grep -n -I -E 'DEVELOPMENT_TEAM = [A-Z0-9]{10};' -- DNSPilot.xcodeproj/pr
     exit 1
 fi
 
+if git grep -n -I -E 'com\.apple\.security\.network\.server|ENABLE_INCOMING_NETWORK_CONNECTIONS[[:space:]]*=[[:space:]]*YES' -- '*.entitlements' DNSPilot.xcodeproj/project.pbxproj; then
+    printf 'error: incoming network server entitlement is not required\n' >&2
+    exit 1
+fi
+
 if git grep -n -I -E '^(APP_BUNDLE_IDENTIFIER|DNS_PROXY_BUNDLE_IDENTIFIER|APP_GROUP_IDENTIFIER) = ' -- 'Configurations/*.xcconfig' \
     | grep -v -F '$('; then
     printf 'error: xcconfig hard-codes a build identity\n' >&2
