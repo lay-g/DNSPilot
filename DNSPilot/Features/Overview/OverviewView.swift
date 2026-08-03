@@ -10,6 +10,8 @@ struct OverviewView: View {
     @EnvironmentObject private var appState: AppState
     @Environment(\.openSettings) private var openSettings
     @State private var profileTestTask: Task<Void, Never>?
+    @State private var profileTestStatus: ProfileTestStatus?
+    @State private var testedProfile: DNSProfile?
 
     var body: some View {
         ScrollView {
@@ -28,17 +30,12 @@ struct OverviewView: View {
                     Spacer()
                     if let activeProfile {
                         Button("Test Active Profile") {
-                            profileTestTask?.cancel()
-                            profileTestTask = Task {
-                                _ = await appState.preflightProfile(ProfileDraft(profile: activeProfile))
-                            }
+                            test(activeProfile)
                         }
                         .disabled(appState.configurationWritesLocked)
-                        if let result = appState.profileTestResult,
-                           result.matches(activeProfile) {
-                            Text(result.message)
+                        if testedProfile == activeProfile, let profileTestStatus {
+                            ProfileTestStatusView(status: profileTestStatus)
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
                         }
                     }
                     Menu {
@@ -61,7 +58,8 @@ struct OverviewView: View {
         .navigationTitle("Overview")
         .onDisappear {
             profileTestTask?.cancel()
-            appState.cancelProfileTest()
+            profileTestStatus = nil
+            testedProfile = nil
         }
     }
 
@@ -358,6 +356,17 @@ struct OverviewView: View {
     private var activeProfile: DNSProfile? {
         guard let profileID = appState.proxy.activeProfileID else { return nil }
         return appState.profiles.first { $0.id == profileID }
+    }
+
+    private func test(_ profile: DNSProfile) {
+        profileTestTask?.cancel()
+        testedProfile = profile
+        profileTestStatus = .testing
+        profileTestTask = Task {
+            let outcome = await appState.preflightProfile(ProfileDraft(profile: profile))
+            guard !Task.isCancelled else { return }
+            profileTestStatus = ProfileTestStatus(outcome)
+        }
     }
 
     private var wifiSummary: String {

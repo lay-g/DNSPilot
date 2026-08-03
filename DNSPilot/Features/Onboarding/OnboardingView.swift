@@ -87,7 +87,6 @@ struct OnboardingView: View {
         .task { await prepareOnboarding() }
         .onDisappear {
             profileSubmissionTask?.cancel()
-            appState.cancelProfileTest()
         }
         .alert(
             profileSubmissionFailure?.title ?? "Profile Could Not Be Configured",

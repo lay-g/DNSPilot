@@ -55,7 +55,7 @@ struct ContentView: View {
             )
         ) {
             if appState.actionFailure?.recoveryActions.contains(.retry) == true {
-                Button(appState.actionFailure?.action == .profileTest ? "Test Again" : "Try Again") {
+                Button("Try Again") {
                     appState.clearActionFailure()
                     Task { await appState.retryLastAction() }
                 }

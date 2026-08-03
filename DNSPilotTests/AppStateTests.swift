@@ -259,8 +259,7 @@ struct AppStateTests {
         #expect(await state.preflightProfile(ProfileDraft(profile: fixture.profile)) == .completed)
 
         #expect(state.activeDraft == .profile)
-        #expect(state.profileTestResult?.matches(fixture.profile) == true)
-        #expect(state.profileTestResult?.message == "\"Office DNS\" passed the DNS test.")
+        #expect(state.actionFailure == nil)
         #expect(backend.intents.count == 1)
         guard case .preflightProfile = backend.intents[0] else {
             Issue.record("Expected preflight intent")
@@ -281,27 +280,23 @@ struct AppStateTests {
 
         #expect(outcome == backend.outcome)
         #expect(state.actionFailure == nil)
-        #expect(state.profileTestResult == nil)
     }
 
-    @Test func invalidatedInFlightProfileTestCannotPublishLateSuccess() async throws {
+    @Test func failedProfileTestDoesNotPublishGlobalFailure() async throws {
         let fixture = try Fixture()
-        let gate = AsyncGate()
         let backend = FakeProductRuntimeBackend(snapshot: fixture.snapshot)
-        backend.intentGate = gate
+        let failure = ProductActionFailure(
+            action: .profileTest,
+            reason: .upstreamTestUnclassified,
+            diagnosticDescription: "private DnsLibs failure"
+        )
+        backend.outcome = .failed(failure)
         let state = AppState(backend: backend)
 
-        let task = Task {
-            await state.preflightProfile(ProfileDraft(profile: fixture.profile))
-        }
-        while backend.intents.isEmpty { await Task.yield() }
+        let outcome = await state.preflightProfile(ProfileDraft(profile: fixture.profile))
 
-        state.cancelProfileTest()
-        task.cancel()
-        await gate.open()
-        _ = await task.value
-
-        #expect(state.profileTestResult == nil)
+        #expect(outcome == .failed(failure))
+        #expect(state.actionFailure == nil)
     }
 
     @Test func finalRecoveryStateOverridesOrdinarySwitchFailurePresentation() async throws {
@@ -344,16 +339,33 @@ struct AppStateTests {
         #expect(expected.recoveryActions == [.reconnect, .restoreSystemDNS])
     }
 
-    @Test func successfulProfileEditInvalidatesPreviousTestResult() async throws {
+    @Test func profileTestDoesNotReplaceAnotherActionsFailureOrRetry() async throws {
         let fixture = try Fixture()
         let backend = FakeProductRuntimeBackend(snapshot: fixture.snapshot)
         let state = AppState(backend: backend)
+        let failure = ProductActionFailure(
+            action: .profileEdit,
+            reason: .persistenceFailed,
+            diagnosticDescription: "configuration commit failed"
+        )
+        backend.outcome = .failed(failure)
 
+        #expect(
+            await state.editProfile(ProfileDraft(profile: fixture.profile)) == .failed(failure)
+        )
+        #expect(state.actionFailure == failure)
+
+        backend.outcome = .completed
         #expect(await state.preflightProfile(ProfileDraft(profile: fixture.profile)) == .completed)
-        #expect(state.profileTestResult != nil)
+        #expect(state.actionFailure == failure)
 
-        #expect(await state.editProfile(ProfileDraft(profile: fixture.profile)) == .completed)
-        #expect(state.profileTestResult == nil)
+        state.clearActionFailure()
+        #expect(await state.retryLastAction() == .completed)
+        #expect(backend.intents == [
+            .editProfile(fixture.profile),
+            .preflightProfile(fixture.profile),
+            .editProfile(fixture.profile)
+        ])
     }
 
     @Test func globalDraftDiscardPublishesDismissalGeneration() {

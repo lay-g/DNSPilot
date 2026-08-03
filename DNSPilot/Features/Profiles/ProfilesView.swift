@@ -14,6 +14,8 @@ struct ProfilesView: View {
     @State private var editorOperation = EditorOperation.create
     @State private var deletionRequest: ProfileDeletionRequest?
     @State private var profileTestTask: Task<Void, Never>?
+    @State private var profileTestStatus: ProfileTestStatus?
+    @State private var testedProfile: DNSProfile?
 
     var body: some View {
         HSplitView {
@@ -40,8 +42,10 @@ struct ProfilesView: View {
                     Button("Edit") { appState.requestEditor(.editProfile(profile.id)) }
                     Button("Duplicate") { appState.requestEditor(.duplicateProfile(profile.id)) }
                     Button("Test") {
+                        selection = profile.id
                         test(profile)
                     }
+                    .disabled(appState.configurationWritesLocked)
                     Button("Make Default") {
                         Task { await appState.setDefaultProfile(profile.id) }
                     }
@@ -59,6 +63,8 @@ struct ProfilesView: View {
                         profile: profile,
                         isActive: profile.id == appState.proxy.activeProfileID,
                         isDefault: profile.id == appState.configuration?.defaultProfileID,
+                        isTestDisabled: appState.configurationWritesLocked,
+                        testStatus: testedProfile == profile ? profileTestStatus : nil,
                         edit: { appState.requestEditor(.editProfile(profile.id)) },
                         test: {
                             test(profile)
@@ -114,17 +120,8 @@ struct ProfilesView: View {
         .onChange(of: appState.draftDiscardGeneration) { _, _ in draft = nil }
         .onDisappear {
             profileTestTask?.cancel()
-            appState.cancelProfileTest()
-        }
-        .safeAreaInset(edge: .bottom) {
-            if let result = appState.profileTestResult {
-                Label(result.message, systemImage: "checkmark.circle")
-                    .font(.caption)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(.bar)
-            }
+            profileTestStatus = nil
+            testedProfile = nil
         }
     }
 
@@ -181,8 +178,12 @@ struct ProfilesView: View {
 
     private func test(_ profile: DNSProfile) {
         profileTestTask?.cancel()
+        testedProfile = profile
+        profileTestStatus = .testing
         profileTestTask = Task {
-            _ = await appState.preflightProfile(ProfileDraft(profile: profile))
+            let outcome = await appState.preflightProfile(ProfileDraft(profile: profile))
+            guard !Task.isCancelled else { return }
+            profileTestStatus = ProfileTestStatus(outcome)
         }
     }
 }
@@ -192,6 +193,8 @@ private struct ProfileDetailView: View {
     let profile: DNSProfile
     let isActive: Bool
     let isDefault: Bool
+    let isTestDisabled: Bool
+    let testStatus: ProfileTestStatus?
     let edit: () -> Void
     let test: () -> Void
     let duplicate: () -> Void
@@ -232,7 +235,12 @@ private struct ProfileDetailView: View {
             if isActive { LabeledContent("Active", value: "Yes") }
             HStack {
                 Spacer()
+                if let testStatus {
+                    ProfileTestStatusView(status: testStatus)
+                        .font(.caption)
+                }
                 Button("Test", action: test)
+                    .disabled(isTestDisabled)
                 Button("Edit", action: edit)
                 Menu {
                     Button("Duplicate", action: duplicate)
@@ -268,6 +276,7 @@ private struct ProfileEditorView: View {
     @State private var validationError: ProfileDraftError?
     @State private var operationFailure: ProductActionFailure?
     @State private var profileTestTask: Task<Void, Never>?
+    @State private var profileTestStatus: ProfileTestStatus?
     @FocusState private var focusedField: Field?
     let operation: ProfilesView.EditorOperation
 
@@ -333,6 +342,10 @@ private struct ProfileEditorView: View {
             Divider()
             HStack {
                 Button("Test") { startProfileTest() }
+                if let profileTestStatus {
+                    ProfileTestStatusView(status: profileTestStatus)
+                        .font(.caption)
+                }
                 Spacer()
                 Button("Cancel") { dismiss() }
                 Button("Save") {
@@ -347,7 +360,11 @@ private struct ProfileEditorView: View {
         .onAppear { appState.beginDraft(.profile) }
         .onDisappear {
             profileTestTask?.cancel()
-            appState.cancelProfileTest()
+            profileTestStatus = nil
+        }
+        .onChange(of: draft) { _, _ in
+            profileTestTask?.cancel()
+            profileTestStatus = nil
         }
         .alert(
             operationFailure?.title ?? "Profile Action Failed",
@@ -357,11 +374,9 @@ private struct ProfileEditorView: View {
             )
         ) {
             if operationFailure?.recoveryActions.contains(.retry) == true {
-                Button(operationFailure?.action == .profileTest ? "Test Again" : "Try Again") {
-                    let action = operationFailure?.action
+                Button("Try Again") {
                     operationFailure = nil
-                    if action == .profileTest { startProfileTest() }
-                    else { validateAndSave() }
+                    validateAndSave()
                 }
             }
             if operationFailure?.recoveryActions.contains(.reconnect) == true {
@@ -427,13 +442,14 @@ private struct ProfileEditorView: View {
         }
     }
 
-    private func testDraft() async {
-        handle(await appState.preflightProfile(draft), dismissOnSuccess: false)
-    }
-
     private func startProfileTest() {
         profileTestTask?.cancel()
-        profileTestTask = Task { await testDraft() }
+        profileTestStatus = .testing
+        profileTestTask = Task {
+            let outcome = await appState.preflightProfile(draft)
+            guard !Task.isCancelled else { return }
+            profileTestStatus = ProfileTestStatus(outcome)
+        }
     }
 
     private func handle(

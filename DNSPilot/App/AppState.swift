@@ -447,16 +447,6 @@ struct ProductEditorRequest: Equatable, Identifiable, Sendable {
     let kind: Kind
 }
 
-struct ProductProfileTestResult: Equatable, Sendable {
-    let profileID: DNSProfile.ID
-    let upstream: DNSUpstream
-    let message: String
-
-    func matches(_ profile: DNSProfile) -> Bool {
-        profileID == profile.id && upstream == profile.upstream
-    }
-}
-
 private enum SettingsRetryOperation {
     case systemExtensionUpdate
     case systemExtensionDeactivation
@@ -489,7 +479,6 @@ final class AppState: ObservableObject {
     @Published private(set) var startupFailure: ProductStartupFailure?
     @Published private(set) var proxyResumeState = ProductProxyResumeState.none
     @Published private(set) var actionFailure: ProductActionFailure?
-    @Published private(set) var profileTestResult: ProductProfileTestResult?
     @Published private(set) var isPerformingAction = false
     @Published private(set) var activeDraft: ProductDraftKind?
     @Published private(set) var draftDiscardGeneration: UInt64 = 0
@@ -507,7 +496,6 @@ final class AppState: ObservableObject {
     @Published private(set) var loggingMode = ProxyLoggingMode.default
     @Published private(set) var settingsActionFailure: ProductActionFailure?
     private var retryIntent: ProductIntent?
-    private var profileTestGeneration: UInt64 = 0
     private var settingsRetryOperation: SettingsRetryOperation?
     @Published var settingsSection: ProductSettingsSection {
         didSet { userDefaults.set(settingsSection.rawValue, forKey: ProductWindowPolicy.settingsSectionKey) }
@@ -631,11 +619,6 @@ final class AppState: ObservableObject {
         let snapshot = await backend.productSnapshot()
         guard generation == refreshGeneration else { return }
         configuration = snapshot.configuration
-        if let result = profileTestResult,
-           snapshot.configuration?.profiles.contains(where: result.matches) != true {
-            profileTestGeneration &+= 1
-            profileTestResult = nil
-        }
         reconcileOnboardingMigration(with: snapshot.configuration)
         reconcileRequiredSetup(with: snapshot.configuration)
         proxy = snapshot.proxy
@@ -1074,26 +1057,13 @@ final class AppState: ObservableObject {
 
     @discardableResult
     func preflightProfile(_ draft: ProfileDraft) async -> ProductActionOutcome {
-        profileTestGeneration &+= 1
-        let generation = profileTestGeneration
-        profileTestResult = nil
         let profile: DNSProfile
         do {
             profile = try draft.profile()
         } catch {
-            return failValidation(error, action: .profileTest)
+            return failValidation(error, action: .profileTest, presentsFailure: false)
         }
-        let outcome = await submit(.preflightProfile(profile))
-        if outcome == .completed,
-           generation == profileTestGeneration,
-           !Task.isCancelled {
-            profileTestResult = ProductProfileTestResult(
-                profileID: profile.id,
-                upstream: profile.upstream,
-                message: "\"\(profile.name)\" passed the DNS test."
-            )
-        }
-        return outcome
+        return await submit(.preflightProfile(profile), presentsFailure: false)
     }
 
     @discardableResult
@@ -1240,11 +1210,6 @@ final class AppState: ObservableObject {
         settingsActionFailure = nil
     }
 
-    func cancelProfileTest() {
-        profileTestGeneration &+= 1
-        profileTestResult = nil
-    }
-
     @discardableResult
     func retryLastAction() async -> ProductActionOutcome {
         guard let retryIntent else {
@@ -1253,9 +1218,6 @@ final class AppState: ObservableObject {
                 reason: .unknown,
                 diagnosticDescription: "retryIntentUnavailable"
             ))
-        }
-        if case let .preflightProfile(profile) = retryIntent {
-            return await preflightProfile(ProfileDraft(profile: profile))
         }
         return await submit(retryIntent)
     }
@@ -1311,25 +1273,29 @@ final class AppState: ObservableObject {
 
     private func submit(
         _ intent: ProductIntent,
-        clearsDraftOnSuccess: Bool = false
+        clearsDraftOnSuccess: Bool = false,
+        presentsFailure: Bool = true
     ) async -> ProductActionOutcome {
         if case .recoveryRequired = proxy.state, !intent.isRecoveryAction {
-            retryIntent = nil
             let failure = ProductActionFailure(
                 action: intent.action,
                 reason: .recoveryRequired
             )
-            actionFailure = failure
+            if presentsFailure {
+                retryIntent = nil
+                actionFailure = failure
+            }
             return .failed(failure)
         }
         guard !isPerformingAction else {
-            return failAction(ProductActionFailure(
+            let failure = ProductActionFailure(
                 action: intent.action,
                 reason: .operationInProgress
-            ))
+            )
+            return presentsFailure ? failAction(failure) : .failed(failure)
         }
         isPerformingAction = true
-        actionFailure = nil
+        if presentsFailure { actionFailure = nil }
         let outcome = await backend.performProductIntent(intent)
         await refresh()
         isPerformingAction = false
@@ -1347,17 +1313,13 @@ final class AppState: ObservableObject {
         }
         switch presentedOutcome {
         case .completed:
-            retryIntent = nil
-            if intent.action.invalidatesProfileTestResult {
-                profileTestGeneration &+= 1
-                profileTestResult = nil
-            }
+            if presentsFailure { retryIntent = nil }
             if clearsDraftOnSuccess { activeDraft = nil }
         case let .failed(failure):
             Self.logger.error(
                 "Product action failed: \(failure.diagnosticDescription, privacy: .private)"
             )
-            if failure.reason != .cancelled {
+            if presentsFailure, failure.reason != .cancelled {
                 retryIntent = intent
                 actionFailure = failure
             }
@@ -1367,7 +1329,8 @@ final class AppState: ObservableObject {
 
     private func failValidation(
         _ error: any Error,
-        action: ProductAction
+        action: ProductAction,
+        presentsFailure: Bool = true
     ) -> ProductActionOutcome {
         Self.logger.error(
             "Product validation failed: \(error.localizedDescription, privacy: .private)"
@@ -1378,8 +1341,10 @@ final class AppState: ObservableObject {
             diagnosticDescription: (error as? any LocalizedError)?.errorDescription
                 ?? error.localizedDescription
         )
-        retryIntent = nil
-        actionFailure = failure
+        if presentsFailure {
+            retryIntent = nil
+            actionFailure = failure
+        }
         return .failed(failure)
     }
 
@@ -1496,22 +1461,6 @@ extension ProductIntent {
               .deleteProfile, .saveRule, .deleteRule, .reorderRules, .setDefaultProfile,
               .setOperatingMode, .turnOnDNSProxy, .requestLocationAuthorization,
               .setDebugLogging, .setDNSCacheConfiguration, .resetOnboardingConfiguration:
-            false
-        }
-    }
-}
-
-private extension ProductAction {
-    var invalidatesProfileTestResult: Bool {
-        switch self {
-        case .profileCreate, .profileDuplicate, .profileEdit, .profileDelete:
-            true
-        case .profileTest, .profileSwitch, .ruleSave, .ruleDelete, .ruleReorder,
-             .defaultProfileUpdate, .operatingModeUpdate, .dnsProxyEnable,
-             .systemDNSRestore, .reconnect, .onboardingReset, .configurationReplace,
-             .diagnosticsRefresh, .diagnosticsExport, .locationAccessRequest,
-             .debugLoggingUpdate, .dnsCacheUpdate, .systemExtensionUpdate,
-             .systemExtensionDeactivation:
             false
         }
     }

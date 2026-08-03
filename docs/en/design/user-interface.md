@@ -16,6 +16,8 @@ The UI presents observable runtime states: `DNS Proxy On`, `DNS Proxy Off`, `Pre
 
 System Extension installation and DNS Proxy enablement are separate states. Stable state shows one Active Profile. Switching or failure may show both Target and confirmed Active Profile. Unknown ownership or runtime identity is always recovery-required.
 
+Standalone Profile tests in Overview, Profile detail, and the Profile editor keep presentation state in the initiating view. The running state and final result appear beside that Test control and never in another view: success uses a green checkmark with `OK`, while failure uses a red failure symbol with a reviewed, privacy-safe reason. Color never carries the result alone. Onboarding retains its step-local `Test and Continue` workflow and failure alert.
+
 ## Overview
 
 Overview presents DNS Proxy state and control, Automatic/Manual mode, Target and Active Profiles, selection source, current network, Profile testing, diagnostics access, and recovery actions.

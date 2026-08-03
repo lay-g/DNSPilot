@@ -16,6 +16,8 @@ UI 展示可观察的运行状态：`DNS Proxy On`、`DNS Proxy Off`、`Preparin
 
 System Extension installation 与 DNS Proxy enablement 是独立状态。稳定状态显示一个 Active Profile；切换或失败可以同时显示 Target 与已确认 Active。Ownership 或 runtime identity 未知时必须显示 recovery-required。
 
+Overview、Profile detail 和 Profile editor 中的独立 Profile test，由发起测试的 view 持有展示状态。运行状态和最终结果显示在对应 Test 控件旁，不得出现在其他 view：成功使用绿色 checkmark 和 `OK`，失败使用红色失败符号和经过审查、保护隐私的原因；颜色不能单独表达结果。Onboarding 保留步骤内的 `Test and Continue` 流程及失败 alert。
+
 ## Overview
 
 Overview 展示 DNS Proxy 状态与控制、Automatic/Manual、Target/Active Profile、selection source、当前网络、Profile test、诊断入口和恢复操作。
