@@ -312,6 +312,7 @@ private struct DNSCacheSettingsSection: View {
 
             LabeledContent("Maximum Cached Responses") {
                 TextField("Capacity", text: $maximumEntries)
+                    .labelsHidden()
                     .multilineTextAlignment(.trailing)
                     .frame(width: 96)
                     .disabled(!isEnabled || controlsAreDisabled)

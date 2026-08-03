@@ -18,3 +18,7 @@
 - Run the smallest relevant checks first. For documentation-only changes, run `scripts/ci/check-repository.sh`; for code or build changes, run `scripts/ci/all.sh` when feasible. Report omitted checks and remaining signed-runtime or manual UI validation.
 - Never weaken type, concurrency, security, signing, recovery, or test checks to make validation pass.
 - Never commit signing material, private identifiers, credentials, real network identifiers or DNS data, endpoint tokens, private logs, or raw diagnostics.
+
+## UI Layout
+
+- In compact macOS forms, do not show a nested control label when the surrounding `LabeledContent` already describes the field. Hide only the redundant visual label while preserving an accessible name, and verify that minimum window width and long localized text do not introduce wrapping or overlap.
