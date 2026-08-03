@@ -24,6 +24,7 @@ final class DNSPilotAppModel: ObservableObject, ProductRuntimeBacking {
     private var proxyPresentationRevision: UInt64 = 0
     private let proxyController: DNSProxyController
     private let upstreamValidator: any UpstreamValidating
+    private let dnsQueryTester: any DNSQueryTesting
     private let userDefaults: UserDefaults
     private let configurationStoreFactory: @MainActor () throws -> ConfigurationStore
     private var profileMutationCoordinator: ProfileMutationCoordinator?
@@ -47,6 +48,7 @@ final class DNSPilotAppModel: ObservableObject, ProductRuntimeBacking {
     init(
         proxyController: DNSProxyController? = nil,
         upstreamValidator: any UpstreamValidating = UpstreamValidator(),
+        dnsQueryTester: any DNSQueryTesting = DNSQueryTester(),
         userDefaults: UserDefaults = .standard,
         configurationStoreFactory: @escaping @MainActor () throws -> ConfigurationStore = {
             try ConfigurationStore.live()
@@ -56,6 +58,7 @@ final class DNSPilotAppModel: ObservableObject, ProductRuntimeBacking {
             .flatMap(ProxyLoggingMode.init(rawValue:)) ?? .default
         self.proxyController = proxyController ?? DNSProxyController(loggingMode: persistedMode)
         self.upstreamValidator = upstreamValidator
+        self.dnsQueryTester = dnsQueryTester
         self.userDefaults = userDefaults
         self.configurationStoreFactory = configurationStoreFactory
     }
@@ -208,6 +211,10 @@ final class DNSPilotAppModel: ObservableObject, ProductRuntimeBacking {
             loggingMode: loggingMode,
             proxyResumeState: proxyResumeState
         )
+    }
+
+    func queryDNS(_ request: DNSQueryRequest) async throws -> DNSQueryResult {
+        try await dnsQueryTester.query(request)
     }
 
     func performProductIntent(_ intent: ProductIntent) async -> ProductActionOutcome {

@@ -5,6 +5,84 @@ import Testing
 
 @MainActor
 struct AppStateTests {
+    @Test func dnsTestPublishesTheLatestResponse() async throws {
+        let backend = FakeProductRuntimeBackend(snapshot: .empty)
+        let expected = DNSQueryResult(
+            domain: "example.com",
+            type: .a,
+            status: "NOERROR",
+            answer: "93.184.216.34",
+            server: "Plain DNS · 1.1.1.1:53",
+            elapsedMilliseconds: 12,
+            bytesSent: 29,
+            bytesReceived: 45
+        )
+        backend.dnsQueryHandler = { _ in expected }
+        let state = AppState(backend: backend)
+        let request = try DNSQueryRequest(
+            domain: "example.com",
+            type: .a,
+            upstream: .fixedCloudflare
+        )
+
+        state.startDNSTest(request)
+        try await waitUntil { state.dnsTestState == .response(expected) }
+
+        #expect(backend.dnsQueryRequests == [request])
+    }
+
+    @Test func supersededDNSQueryCannotReplaceTheLatestResponse() async throws {
+        let backend = FakeProductRuntimeBackend(snapshot: .empty)
+        let gate = AsyncGate()
+        let oldRequest = try DNSQueryRequest(
+            domain: "old.example",
+            type: .a,
+            upstream: .fixedCloudflare
+        )
+        let newRequest = try DNSQueryRequest(
+            domain: "new.example",
+            type: .aaaa,
+            upstream: .fixedCloudflare
+        )
+        let oldResult = DNSQueryResult(
+            domain: oldRequest.domain,
+            type: oldRequest.type,
+            status: "NOERROR",
+            answer: "192.0.2.1",
+            server: "Cloudflare",
+            elapsedMilliseconds: 50,
+            bytesSent: 1,
+            bytesReceived: 1
+        )
+        let newResult = DNSQueryResult(
+            domain: newRequest.domain,
+            type: newRequest.type,
+            status: "NOERROR",
+            answer: "2001:db8::1",
+            server: "Cloudflare",
+            elapsedMilliseconds: 10,
+            bytesSent: 1,
+            bytesReceived: 1
+        )
+        backend.dnsQueryHandler = { request in
+            if request == oldRequest {
+                await gate.wait()
+                return oldResult
+            }
+            return newResult
+        }
+        let state = AppState(backend: backend)
+
+        state.startDNSTest(oldRequest)
+        try await waitUntil { backend.dnsQueryRequests == [oldRequest] }
+        state.startDNSTest(newRequest)
+        try await waitUntil { state.dnsTestState == .response(newResult) }
+        await gate.open()
+        await Task.yield()
+
+        #expect(state.dnsTestState == .response(newResult))
+    }
+
     @Test func startProjectsConfigurationNetworkProxyAndRuleSelection() async throws {
         let fixture = try Fixture()
         let backend = FakeProductRuntimeBackend(snapshot: fixture.snapshot)
@@ -1210,6 +1288,8 @@ private final class FakeProductRuntimeBackend: ProductRuntimeBacking {
     var intentGate: AsyncGate?
     private(set) var startCount = 0
     private(set) var intents: [ProductIntent] = []
+    private(set) var dnsQueryRequests: [DNSQueryRequest] = []
+    var dnsQueryHandler: (@MainActor (DNSQueryRequest) async throws -> DNSQueryResult)?
     var terminationRestoreState = DNSProxyControllerState.disabled
     private(set) var terminationRestoreCount = 0
     private(set) var terminationCancelCount = 0
@@ -1258,6 +1338,12 @@ private final class FakeProductRuntimeBackend: ProductRuntimeBacking {
             }
         }
         return outcome
+    }
+
+    func queryDNS(_ request: DNSQueryRequest) async throws -> DNSQueryResult {
+        dnsQueryRequests.append(request)
+        guard let dnsQueryHandler else { throw DNSQueryServiceError.unavailable }
+        return try await dnsQueryHandler(request)
     }
 
     func setProductChangeHandler(_ handler: (@MainActor () -> Void)?) {

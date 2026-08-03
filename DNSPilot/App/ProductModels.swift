@@ -4,6 +4,7 @@ enum AppNavigationSection: String, CaseIterable, Codable, Identifiable, Sendable
     case overview
     case profiles
     case rules
+    case test
 
     var id: Self { self }
 }

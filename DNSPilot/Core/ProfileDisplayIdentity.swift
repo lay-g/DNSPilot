@@ -67,7 +67,7 @@ struct ProfileDisplayIdentity: Equatable, Sendable {
         id.uuidString.replacingOccurrences(of: "-", with: "")
     }
 
-    private static func summary(for upstream: DNSUpstream) -> String {
+    static func summary(for upstream: DNSUpstream) -> String {
         switch upstream {
         case let .plain(configuration):
             let address = configuration.serverAddress.isIPv6

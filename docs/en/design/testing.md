@@ -9,6 +9,7 @@ DNSPilot uses deterministic automated checks, controlled network fixtures, signe
 Unit and contract tests cover:
 
 - Profile, upstream, Rule, IP, CIDR, and reference validation.
+- DNS Test query-name and type encoding, isolated adapter configuration, immutable DnsLibs event snapshots, AppState cancellation, and stale-result fencing.
 - Plain DNS, DoT, and DoH model validation, adapter wire mapping, bootstrap conversion, and transport-specific schema capability gating.
 - Rule ordering, AND/OR semantics, SSID availability, and Default fallback.
 - Configuration schema, canonical encoding, fingerprints, atomic commit, corruption preservation, and compare-and-swap conflicts.
@@ -57,4 +58,4 @@ Signed validation must use explicit user authorization when it changes UI or sys
 
 ## Manual UI Validation
 
-Manual review covers window behavior, menu consistency, keyboard-only operation, VoiceOver, long localization, permission dialogs, contrast, transparency, motion, and Quit alerts. UI and authorization checks run on an explicitly authorized test machine.
+Manual review covers window behavior, menu consistency, keyboard-only operation, VoiceOver, long localization, DNS Test Profile/custom switching and long answer layout, permission dialogs, contrast, transparency, motion, and Quit alerts. UI and authorization checks run on an explicitly authorized test machine.

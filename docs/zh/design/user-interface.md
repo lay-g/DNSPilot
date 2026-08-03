@@ -6,7 +6,7 @@
 
 DNSPilot 是安静、原生的 macOS utility，包含一个管理窗口、一个标准 Settings 窗口和常驻菜单栏菜单。关闭窗口后 App 继续运行，并保持当前 DNS Proxy 状态。
 
-管理窗口使用两列 NavigationSplitView，包含 Overview、Profiles、Rules。Settings 包含 General、Privacy、Diagnostics、About。使用原生 list、form、sheet、alert、menu、segmented control、toggle、系统字体、语义色和 SF Symbols。颜色不能单独表达状态。
+管理窗口使用两列 NavigationSplitView，包含 Overview、Profiles、Rules、Test。Settings 包含 General、Privacy、Diagnostics、About。使用原生 list、form、sheet、alert、menu、segmented control、toggle、系统字体、语义色和 SF Symbols。颜色不能单独表达状态。
 
 General 包含 staged DNS Cache section。Cache 默认开启，最多保存 1,000 条响应。用户可以关闭，或输入 1 到 10,000 的精确容量。关闭时保留最后一个合法容量并禁用输入字段；Restore Default 恢复为开启和 1,000。Save 只校验一次并且最多触发一次 runtime mutation。应用期间禁用相关控件。Proxy Off 时保存要说明设置将在下次 enable 时生效；Active 时只有 exact runtime confirmation 后才能显示成功。失败后保留已确认值和 draft，供用户修正或重试。
 
@@ -34,6 +34,14 @@ Profiles 提供 create、edit、duplicate、test、make-default、replacement �
 
 Rules 显示 enabled、priority、condition summary 和 target Profile。Reorder 只保存一次并 reevaluate 一次。Drag 必须提供 Move Up/Move Down 键盘替代。Default Profile selector 保持可见，Proxy 可用时不能为空。
 
+## DNS Test
+
+Test 通过现有 Profile 或不持久化的自定义 Plain DNS、DoT、DoH upstream 执行一次明确的 DNS 查询。Profile 默认选择已确认 Active Profile，其次是 Default Profile，再其次是第一个 Profile。Custom fields 使用与 Profile editing 相同的 validation 和 upstream mapping。Request 接受一个通过校验的 domain，以及 A、AAAA、CNAME、MX、TXT、NS、SOA、SRV、CAA 或 PTR 类型。
+
+开始新查询会取消之前的查询。完成或失败后保留输入。最近一次结果展示 DnsLibs response status 与 answer、配置的逻辑 server 与 transport，以及毫秒耗时。Empty answer 与 transport failure 必须区分。Bootstrap address 不得描述为 connected server。Test state 与 input 只属于当前 window session，绝不持久化 query name 或 result。
+
+当 DNS Proxy 已确认 On，且选中的 Profile 或 custom upstream 使用 Plain DNS 时，Test 显示警告，说明 53 端口查询可能经 Active Profile 转发，而不是直接到达配置的 test server。该警告不阻止查询。
+
 ## Onboarding
 
 Setup 是独立流程：
@@ -51,7 +59,7 @@ Setup 是独立流程：
 
 菜单栏显示 Proxy state、Active/Target Profile、mode 和 network summary，提供 Automatic、Manual Profile、Open DNSPilot、Settings、Turn On/Restore System DNS 和 Quit。所有入口调用共享 app intent，不分别实现业务逻辑。
 
-标准快捷键包括 `Command-1/2/3` 切换主页面、`Command-,` 打开 Settings、`Command-N` 新建 Profile、`Shift-Command-N` 新建 Rule、`Command-W` 关闭窗口。
+标准快捷键包括 `Command-1/2/3/4` 切换主页面、`Command-,` 打开 Settings、`Command-N` 新建 Profile、`Shift-Command-N` 新建 Rule、`Command-W` 关闭窗口。
 
 ## Quit
 

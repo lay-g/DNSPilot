@@ -6,7 +6,7 @@
 
 DNSPilot is a quiet, native macOS utility with one management window, one standard Settings window, and a persistent menu-bar menu. Closing the window leaves the app running and preserves the current DNS Proxy state.
 
-The management window uses a two-column navigation split view with Overview, Profiles, and Rules. Settings contains General, Privacy, Diagnostics, and About. Use native lists, forms, sheets, alerts, menus, segmented controls, toggles, system typography, semantic colors, and SF Symbols. Color never carries status alone.
+The management window uses a two-column navigation split view with Overview, Profiles, Rules, and Test. Settings contains General, Privacy, Diagnostics, and About. Use native lists, forms, sheets, alerts, menus, segmented controls, toggles, system typography, semantic colors, and SF Symbols. Color never carries status alone.
 
 General includes a staged DNS Cache section. Cache is enabled by default with a maximum of 1,000 responses. Users may disable it or enter an exact capacity from 1 through 10,000. Disabling retains the last valid capacity and disables its field; Restore Default reenables cache at 1,000. Save validates once and performs at most one runtime mutation. While applying, related controls are disabled. A Proxy-off save states that the setting applies on the next enable. An Active save reports success only after exact runtime confirmation; failure preserves the confirmed value and the draft for correction or retry.
 
@@ -34,6 +34,14 @@ Profiles expose create, edit, duplicate, test, make-default, replacement, and de
 
 Rules show enabled state, priority, condition summary, and target Profile. Reordering saves once and reevaluates once. Dragging has Move Up/Move Down keyboard alternatives. The Default Profile selector remains visible and cannot be empty while the Proxy is usable.
 
+## DNS Test
+
+Test performs one explicit DNS query through either an existing Profile or an unpersisted custom Plain DNS, DoT, or DoH upstream. Profile selection defaults to the confirmed Active Profile, then the Default Profile, then the first Profile. Custom fields use the same validation and upstream mapping as Profile editing. The request accepts one validated domain and one of A, AAAA, CNAME, MX, TXT, NS, SOA, SRV, CAA, or PTR.
+
+Starting a query cancels any previous query. Inputs remain available after completion or failure. The latest result shows the DnsLibs response status and answer, the configured logical server and transport, and elapsed milliseconds. Empty answers are distinct from transport failure. Bootstrap addresses are not described as the connected server. Test state and input are window-session-only and never persist query names or results.
+
+When DNS Proxy is confirmed On and the selected Profile or custom upstream uses Plain DNS, Test shows a warning that port 53 queries may be routed through the Active Profile instead of directly to the configured test server. The warning does not block the query.
+
 ## Onboarding
 
 Setup is a dedicated workflow:
@@ -51,7 +59,7 @@ Permission denial affects only SSID Rules. Approval-required state offers System
 
 The menu bar shows Proxy state, Active or Target Profile, mode, and network summary. It offers Automatic, Manual Profile selection, Open DNSPilot, Settings, Turn On or Restore System DNS, and Quit. Commands call shared application intents rather than implementing separate logic.
 
-Standard shortcuts include `Command-1/2/3` for main sections, `Command-,` for Settings, `Command-N` for a Profile, `Shift-Command-N` for a Rule, and `Command-W` to close a window.
+Standard shortcuts include `Command-1/2/3/4` for main sections, `Command-,` for Settings, `Command-N` for a Profile, `Shift-Command-N` for a Rule, and `Command-W` to close a window.
 
 ## Quit
 

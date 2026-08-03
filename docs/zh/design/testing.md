@@ -9,6 +9,7 @@ DNSPilot 使用确定性自动检查、受控网络 fixture、签名运行时验
 Unit 与 contract test 覆盖：
 
 - Profile、upstream、Rule、IP、CIDR 和引用校验。
+- DNS Test query-name/type encoding、隔离 adapter configuration、immutable DnsLibs event snapshot、AppState cancellation 和 stale-result fencing。
 - Plain DNS、DoT 与 DoH 的模型校验、adapter wire mapping、bootstrap conversion 和按 transport 区分的 schema capability gating。
 - Rule 顺序、AND/OR、SSID availability 和 Default fallback。
 - Configuration schema、canonical encoding、fingerprint、atomic commit、损坏保留和 compare-and-swap conflict。
@@ -57,4 +58,4 @@ Build-only 成功不能证明 code signing、entitlement authorization、System 
 
 ## 人工 UI 验证
 
-人工检查覆盖窗口行为、菜单一致性、keyboard-only、VoiceOver、长本地化、权限弹窗、contrast、transparency、motion 和 Quit alert。UI 与授权检查在获得明确授权的测试机器上执行。
+人工检查覆盖窗口行为、菜单一致性、keyboard-only、VoiceOver、长本地化、DNS Test Profile/custom switching 与长 answer layout、权限弹窗、contrast、transparency、motion 和 Quit alert。UI 与授权检查在获得明确授权的测试机器上执行。

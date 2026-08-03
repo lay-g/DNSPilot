@@ -149,6 +149,11 @@ private struct DNSPilotCommands: Commands {
                 appState.requestPrimaryWindow()
             }
             .keyboardShortcut("3")
+            Button("Test") {
+                appState.navigate(to: .test)
+                appState.requestPrimaryWindow()
+            }
+            .keyboardShortcut("4")
         }
         SidebarCommands()
     }

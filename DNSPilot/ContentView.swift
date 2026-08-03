@@ -110,6 +110,8 @@ struct ContentView: View {
                 ProfilesView()
             case .rules:
                 RulesView()
+            case .test:
+                DNSTestView()
             }
         }
         .toolbar {
@@ -217,6 +219,7 @@ private extension AppNavigationSection {
         case .overview: "Overview"
         case .profiles: "Profiles"
         case .rules: "Rules"
+        case .test: "Test"
         }
     }
 
@@ -225,6 +228,7 @@ private extension AppNavigationSection {
         case .overview: "network"
         case .profiles: "list.bullet.rectangle"
         case .rules: "arrow.triangle.branch"
+        case .test: "magnifyingglass"
         }
     }
 }

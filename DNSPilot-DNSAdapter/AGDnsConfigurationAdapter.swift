@@ -76,6 +76,24 @@ enum AGDnsConfigurationAdapter {
         result.enableHttp3 = false
         return result
     }
+
+    static func makeQueryProxyConfig(from upstream: DNSUpstream) throws -> AGDnsProxyConfig {
+        guard let result = AGDnsProxyConfig.getDefault() else {
+            throw AGDnsConfigurationAdapterError.defaultConfigurationUnavailable
+        }
+        result.upstreams = [try makeUpstream(from: upstream)]
+        result.fallbacks = []
+        result.fallbackDomains = []
+        result.filters = []
+        result.listeners = []
+        result.upstreamTimeoutMs = 5_000
+        result.dnsCacheSize = 0
+        result.optimisticCache = false
+        result.enableParallelUpstreamQueries = false
+        result.enableFallbackOnUpstreamsFailure = false
+        result.enableHttp3 = false
+        return result
+    }
 }
 
 extension DNSProxyReloadScope {

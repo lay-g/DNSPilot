@@ -12,6 +12,7 @@ DNSPilot 是菜单栏优先的 macOS 工具，通过 DNS Proxy System Extension 
 - DNS over TLS：证书校验与 bootstrap resolution 由 DnsLibs 负责。
 - DNS over HTTPS：使用 DNS wire format。
 - 根据 Wi-Fi SSID、活动接口类型和 IPv4/IPv6 子网按顺序自动匹配 Rule。
+- 通过现有 Profile 或不持久化的自定义 Plain DNS、DoT、DoH upstream 执行一次性 DNS 查询，并展示返回状态、answer、逻辑 upstream 和耗时。
 - 第一条启用且匹配的 Rule 生效；用户指定的 Default Profile 负责兜底。
 - Manual 选择持续有效，直到用户明确返回 Automatic。
 - 关闭管理窗口后 App 继续运行，并保持当前 DNS Proxy 状态。

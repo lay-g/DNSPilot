@@ -13,7 +13,7 @@ DNSPilot.app
   NetworkMonitor
   SystemExtensionController
   DNSProxyController and DNSProxyManagerClient
-  MachXPCClient and UpstreamValidator
+  MachXPCClient, UpstreamValidator, and DNSQueryTester
 
 DNSPilot DNS Proxy System Extension
   NEDNSProxyProvider
@@ -58,7 +58,9 @@ The Extension receives one immutable `ActiveProxyConfiguration` containing schem
 
 `AGDnsProxy` is the only DNS transport engine. DNSPilot maps configuration, passes Network Extension flows to `AGDnsAppProxyFlowManager`, bridges events and logs, and manages runtime identity. DNS wire parsing, request IDs, UDP/TCP exchange, truncation fallback, DoH, bootstrap, TLS, HTTP connection reuse, cancellation, and transport cleanup remain inside DnsLibs.
 
-The Host uses the same pure upstream mapping through `AGDnsUtils.testUpstream` for preflight. Runtime and preflight DNS transport are both implemented through DnsLibs.
+The Host uses the same pure upstream mapping through `AGDnsUtils.testUpstream` for preflight. It also owns an isolated, transient `AGDnsProxy` for an explicit DNS Test query. The Host constructs one validated DNS question, while DnsLibs owns the exchange and response parsing and returns an immutable snapshot of status, answer, upstream ID, elapsed time, byte counts, and error. The transient proxy has no listeners or cache and is stopped after completion, timeout, or cancellation.
+
+DNS Test never directly calls the System Extension runtime, writes `NEDNSProxyManager`, changes Active Profile, or implements a separate transport. macOS may still deliver a Host-created Plain DNS flow on port 53 to the active DNS Proxy; the UI warns that such a query may be routed through the Active Profile. Its logical-server presentation comes from the selected configuration and does not prove the connected server; bootstrap addresses are never presented as the actual connected server. Runtime, preflight, and DNS Test transport are all implemented through DnsLibs.
 
 ## Session Boundary
 

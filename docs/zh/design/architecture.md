@@ -13,7 +13,7 @@ DNSPilot.app
   NetworkMonitor
   SystemExtensionController
   DNSProxyController 与 DNSProxyManagerClient
-  MachXPCClient 与 UpstreamValidator
+  MachXPCClient、UpstreamValidator 与 DNSQueryTester
 
 DNSPilot DNS Proxy System Extension
   NEDNSProxyProvider
@@ -58,7 +58,9 @@ Extension 接收一份 immutable `ActiveProxyConfiguration`，内容包括 schem
 
 `AGDnsProxy` 是唯一 DNS transport engine。DNSPilot 只映射配置、把 Network Extension flow 交给 `AGDnsAppProxyFlowManager`、桥接事件和日志，并管理 runtime identity。DNS wire 解析、request ID、UDP/TCP exchange、TC fallback、DoH、bootstrap、TLS、HTTP connection reuse、取消和 transport cleanup 均由 DnsLibs 负责。
 
-Host 通过 `AGDnsUtils.testUpstream` 使用同一份纯 upstream mapping 做预检。Runtime 与 preflight DNS transport 都通过 DnsLibs 实现。
+Host 通过 `AGDnsUtils.testUpstream` 使用同一份纯 upstream mapping 做预检。Host 还为用户明确发起的 DNS Test query 持有隔离、临时的 `AGDnsProxy`。Host 构造一个通过校验的 DNS question；DnsLibs 负责 exchange 与 response parsing，并返回 status、answer、upstream ID、elapsed time、byte counts 和 error 的 immutable snapshot。临时 proxy 没有 listener 或 cache，并在完成、timeout 或 cancellation 后停止。
+
+DNS Test 不直接调用 System Extension runtime，不写 `NEDNSProxyManager`，不改变 Active Profile，也不实现独立 transport。macOS 仍可能把 Host 创建的 53 端口 Plain DNS flow 交给 Active DNS Proxy；UI 会提示该查询可能经 Active Profile 转发。逻辑服务器展示来自用户选择的配置，不能证明实际连接服务器；bootstrap address 绝不作为实际连接服务器展示。Runtime、preflight 与 DNS Test transport 都通过 DnsLibs 实现。
 
 ## 登录会话边界
 

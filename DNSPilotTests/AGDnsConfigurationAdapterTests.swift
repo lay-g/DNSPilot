@@ -111,4 +111,18 @@ struct AGDnsConfigurationAdapterTests {
         #expect(try AGDnsConfigurationAdapter.makeProxyConfig(from: custom).dnsCacheSize == 4_321)
         #expect(try AGDnsConfigurationAdapter.makeProxyConfig(from: disabled).dnsCacheSize == 0)
     }
+
+    @Test func queryProxyUsesOneUpstreamWithoutListenersOrCache() throws {
+        let result = try AGDnsConfigurationAdapter.makeQueryProxyConfig(from: .fixedCloudflare)
+
+        #expect(result.upstreams.count == 1)
+        #expect(result.upstreams[0].id == 1)
+        #expect(result.fallbacks.isEmpty)
+        #expect(result.listeners.isEmpty)
+        #expect(result.filters.isEmpty)
+        #expect(result.dnsCacheSize == 0)
+        #expect(result.upstreamTimeoutMs == 5_000)
+        #expect(result.enableParallelUpstreamQueries == false)
+        #expect(result.enableFallbackOnUpstreamsFailure == false)
+    }
 }

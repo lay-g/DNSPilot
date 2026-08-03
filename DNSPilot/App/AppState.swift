@@ -364,6 +364,7 @@ protocol ProductRuntimeBacking: AnyObject {
     func start() async -> Bool
     func productSnapshot() async -> ProductRuntimeSnapshot
     func performProductIntent(_ intent: ProductIntent) async -> ProductActionOutcome
+    func queryDNS(_ request: DNSQueryRequest) async throws -> DNSQueryResult
     func setProductChangeHandler(_ handler: (@MainActor () -> Void)?)
     func restoreSystemDNSForTermination() async -> DNSProxyControllerState
     func restoreSystemDNSForTerminationResult(
@@ -383,6 +384,9 @@ protocol ProductRuntimeBacking: AnyObject {
 }
 
 extension ProductRuntimeBacking {
+    func queryDNS(_ request: DNSQueryRequest) async throws -> DNSQueryResult {
+        throw DNSQueryServiceError.unavailable
+    }
     func setProxyResumeAllowed(_ allowed: Bool) async {}
     func prepareProxyResumeExtensionUpgrade(
         source: ProxyResumeExtensionBuildIdentity,
@@ -424,6 +428,13 @@ enum ProductSelectionSource: Equatable, Sendable {
 enum ProductDraftKind: Equatable, Sendable {
     case profile
     case rule
+}
+
+enum ProductDNSTestState: Equatable, Sendable {
+    case idle
+    case running
+    case response(DNSQueryResult)
+    case failed(String)
 }
 
 enum ProductSettingsSection: String, CaseIterable, Sendable {
@@ -495,6 +506,7 @@ final class AppState: ObservableObject {
     @Published private(set) var diagnostics = ProductDiagnosticsSnapshot.unavailable("Not refreshed")
     @Published private(set) var loggingMode = ProxyLoggingMode.default
     @Published private(set) var settingsActionFailure: ProductActionFailure?
+    @Published private(set) var dnsTestState = ProductDNSTestState.idle
     private var retryIntent: ProductIntent?
     private var settingsRetryOperation: SettingsRetryOperation?
     @Published var settingsSection: ProductSettingsSection {
@@ -513,6 +525,8 @@ final class AppState: ObservableObject {
     private var extensionCoordinationGeneration: UInt64 = 0
     private var submittedExtensionTargets: Set<ProxyResumeExtensionBuildIdentity> = []
     private var quitHandler: (@MainActor () -> Void)?
+    private var dnsTestTask: Task<Void, Never>?
+    private var dnsTestGeneration: UInt64 = 0
 
     init(
         backend: any ProductRuntimeBacking = DNSPilotAppModel.shared,
@@ -560,6 +574,45 @@ final class AppState: ObservableObject {
         userDefaults.bool(forKey: ProductWindowPolicy.onboardingCompletedKey)
     }
     var hasUnsavedDrafts: Bool { activeDraft != nil }
+
+    func startDNSTest(_ request: DNSQueryRequest) {
+        dnsTestTask?.cancel()
+        dnsTestGeneration &+= 1
+        let generation = dnsTestGeneration
+        dnsTestState = .running
+        dnsTestTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                let result = try await backend.queryDNS(request)
+                guard generation == dnsTestGeneration, !Task.isCancelled else { return }
+                dnsTestState = .response(result)
+            } catch is CancellationError {
+                guard generation == dnsTestGeneration else { return }
+                dnsTestState = .idle
+            } catch let error as DNSQueryServiceError {
+                guard generation == dnsTestGeneration, !Task.isCancelled else { return }
+                Self.logger.error(
+                    "DNS query failed: \(error.diagnosticDescription, privacy: .private)"
+                )
+                dnsTestState = .failed(error.userMessage)
+            } catch {
+                guard generation == dnsTestGeneration, !Task.isCancelled else { return }
+                Self.logger.error(
+                    "DNS query failed: \(error.localizedDescription, privacy: .private)"
+                )
+                dnsTestState = .failed("The selected DNS server could not complete the query.")
+            }
+        }
+    }
+
+    func cancelDNSTest() {
+        dnsTestTask?.cancel()
+        dnsTestTask = nil
+        dnsTestGeneration &+= 1
+        if dnsTestState == .running {
+            dnsTestState = .idle
+        }
+    }
     var configurationWritesLocked: Bool {
         if isPerformingAction { return true }
         return switch proxy.state {

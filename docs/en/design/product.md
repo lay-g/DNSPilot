@@ -12,6 +12,7 @@ DNSPilot is a menu-bar-first macOS utility that forwards system DNS traffic thro
 - DNS over TLS with certificate validation and bootstrap resolution owned by DnsLibs.
 - DNS over HTTPS using DNS wire format.
 - Ordered automatic Rules based on Wi-Fi SSID, active interface type, and IPv4 or IPv6 subnet.
+- One-shot DNS queries through an existing Profile or an unpersisted custom Plain DNS, DoT, or DoH upstream, with the returned status, answer, logical upstream, and elapsed time.
 - First matching enabled Rule wins; a user-selected Default Profile is the fallback.
 - Manual selection persists until the user explicitly returns to Automatic mode.
 - Closing the management window keeps the app running and preserves the current DNS Proxy state.
