@@ -4,6 +4,8 @@
 
 English | [简体中文](README.zh-CN.md)
 
+[Download DNSPilot on the App Store](https://apps.apple.com/us/app/dnspilot/id6793036211)
+
 DNSPilot is a native macOS DNS Proxy utility for managing Plain DNS and DNS-over-HTTPS Profiles. Profiles can be selected manually or automatically through ordered Wi-Fi SSID, interface-type, and subnet Rules.
 
 ## Features
