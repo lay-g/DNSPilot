@@ -2,7 +2,7 @@
 
 [English](../../en/app-store/metadata.md)
 
-本文档包含首次 Mac App Store 发布可直接使用的元数据。提交前必须替换所有方括号字段。
+本文档包含 Mac App Store 发布可直接使用的元数据。提交前必须替换所有方括号字段。
 
 ## App 信息
 
@@ -58,6 +58,10 @@ DNS 查询会发送到活动 Profile 中选择的解析器。解析器运营方�
 DNSPilot 首次发布，支持普通 DNS、DNS over TLS 与 DNS over HTTPS Profile、基于网络的自动 Rule、菜单栏控制、Profile 测试、诊断和经过确认的 System DNS 恢复。
 
 App Store Connect 不为 App 的首个版本提供“此版本的新功能”字段。仅在其他位置要求首次发布摘要时复用本段，不要尝试把它填写为版本 1.0 的更新说明。
+
+## 版本 1.1 更新说明
+
+新增可配置 DNS 缓存，以及用于 Profile 和临时普通 DNS、DNS over TLS、DNS over HTTPS 服务器的独立 DNS 查询测试。改进 Profile 测试反馈、兼容的 System Extension 升级流程和紧凑窗口布局。
 
 ## App 隐私草案
 

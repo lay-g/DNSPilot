@@ -2,7 +2,7 @@
 
 [中文](../../zh/app-store/metadata.md)
 
-This document contains copy-ready metadata for the first Mac App Store release. Replace every bracketed value before submission.
+This document contains copy-ready metadata for Mac App Store releases. Replace every bracketed value before submission.
 
 ## App Information
 
@@ -58,6 +58,10 @@ Requires macOS 15 or later.
 Initial release of DNSPilot with Plain DNS, DNS over TLS, and DNS over HTTPS Profiles, network-based automatic Rules, menu bar controls, Profile testing, diagnostics, and confirmed System DNS restoration.
 
 App Store Connect does not provide the What's New field for an app's first version. Reuse this summary only where a first-release summary is requested; do not try to enter it as What's New for version 1.0.
+
+## Version 1.1 What's New
+
+Adds configurable DNS caching and a dedicated DNS query tester for Profiles and temporary Plain DNS, DNS over TLS, and DNS over HTTPS servers. Improves Profile test feedback, compatible System Extension upgrades, and compact-window layouts.
 
 ## App Privacy Draft
 
