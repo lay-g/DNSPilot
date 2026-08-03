@@ -22,3 +22,4 @@
 ## UI Layout
 
 - In compact macOS forms, do not show a nested control label when the surrounding `LabeledContent` already describes the field. Hide only the redundant visual label while preserving an accessible name, and verify that minimum window width and long localized text do not introduce wrapping or overlap.
+- In an `HSplitView` nested inside the management `NavigationSplitView`, do not assign positive hard `minWidth` values to sibling panes unless their combined minima, the navigation sidebar, and every divider are proven to fit within the `760 pt` minimum window width. Prefer a zero minimum with `idealWidth` and `maxWidth` so panes can compress with the window. Keep each pane's direct child structurally stable across empty, loading, failure, and result states so intrinsic-content changes do not move a user-positioned divider. Verify the minimum window size, state transitions, and long localized content without horizontal overflow or divider jumps.

@@ -38,7 +38,7 @@ Rules 显示 enabled、priority、condition summary 和 target Profile。Reorder
 
 Test 通过现有 Profile 或不持久化的自定义 Plain DNS、DoT、DoH upstream 执行一次明确的 DNS 查询。Profile 默认选择已确认 Active Profile，其次是 Default Profile，再其次是第一个 Profile。Custom fields 使用与 Profile editing 相同的 validation 和 upstream mapping。Request 接受一个通过校验的 domain，以及 A、AAAA、CNAME、MX、TXT、NS、SOA、SRV、CAA 或 PTR 类型。
 
-开始新查询会取消之前的查询。完成或失败后保留输入。最近一次结果展示 DnsLibs response status 与 answer、配置的逻辑 server 与 transport，以及毫秒耗时。Empty answer 与 transport failure 必须区分。Bootstrap address 不得描述为 connected server。Test state 与 input 只属于当前 window session，绝不持久化 query name 或 result。
+Test 使用水平 split，左侧放置 form 与 query controls，右侧展示最近一次 result。原生 divider 可拖动。Pane width 使用 zero minimum、preferred width 与 maximum width，不叠加 positive hard minimum，使嵌套 split 能随管理窗口压缩，并在最小窗口尺寸下避免水平溢出。稳定的 result-pane container 在 empty、loading、failure 与 response 状态之间切换时保持 divider 位置。开始新查询会取消之前的查询。完成或失败后保留输入。最近一次结果展示 DnsLibs response status 与 answer、配置的逻辑 server 与 transport，以及毫秒耗时。Empty answer 与 transport failure 必须区分。Bootstrap address 不得描述为 connected server。Test state 与 input 只属于当前 window session，绝不持久化 query name 或 result。
 
 当 DNS Proxy 已确认 On，且选中的 Profile 或 custom upstream 使用 Plain DNS 时，Test 显示警告，说明 53 端口查询可能经 Active Profile 转发，而不是直接到达配置的 test server。该警告不阻止查询。
 

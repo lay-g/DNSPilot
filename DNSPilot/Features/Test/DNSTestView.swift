@@ -23,91 +23,95 @@ struct DNSTestView: View {
     @FocusState private var focusedField: Field?
 
     var body: some View {
-        VStack(spacing: 0) {
-            Form {
-                Section("DNS Server") {
-                    Picker("Source", selection: $source) {
-                        ForEach(ServerSource.allCases) { value in
-                            Text(value.rawValue).tag(value)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-
-                    switch source {
-                    case .profile:
-                        Picker("Profile", selection: $profileID) {
-                            if appState.profiles.isEmpty {
-                                Text("No Profiles").tag(Optional<DNSProfile.ID>.none)
-                            } else {
-                                ForEach(appState.profiles) { profile in
-                                    Text(displayNames[profile.id] ?? profile.name)
-                                        .tag(Optional(profile.id))
-                                }
+        HSplitView {
+            VStack(spacing: 0) {
+                Form {
+                    Section("DNS Server") {
+                        Picker("Source", selection: $source) {
+                            ForEach(ServerSource.allCases) { value in
+                                Text(value.rawValue).tag(value)
                             }
                         }
-                    case .custom:
-                        customServerFields
-                    }
+                        .pickerStyle(.segmented)
 
-                    if showsPlainDNSProxyWarning {
-                        Label {
-                            Text(
-                                "DNS Proxy is on. Plain DNS queries on port 53 may be routed through the Active Profile instead of directly to this server."
-                            )
-                        } icon: {
-                            Image(systemName: "exclamationmark.triangle")
+                        switch source {
+                        case .profile:
+                            Picker("Profile", selection: $profileID) {
+                                if appState.profiles.isEmpty {
+                                    Text("No Profiles").tag(Optional<DNSProfile.ID>.none)
+                                } else {
+                                    ForEach(appState.profiles) { profile in
+                                        Text(displayNames[profile.id] ?? profile.name)
+                                            .tag(Optional(profile.id))
+                                    }
+                                }
+                            }
+                        case .custom:
+                            customServerFields
                         }
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                        .accessibilityLabel(
-                            "Warning: DNS Proxy is on. Plain DNS queries on port 53 may be routed through the Active Profile instead of directly to this server."
-                        )
-                    }
-                }
 
-                Section("Request") {
-                    TextField("Domain", text: $domain, prompt: Text("example.com"))
-                        .focused($focusedField, equals: .domain)
-                    Picker("Record Type", selection: $queryType) {
-                        ForEach(DNSQueryType.allCases) { type in
-                            Text(type.rawValue).tag(type)
-                        }
-                    }
-                    if let validationMessage {
-                        Text(validationMessage)
+                        if showsPlainDNSProxyWarning {
+                            Label {
+                                Text(
+                                    "DNS Proxy is on. Plain DNS queries on port 53 may be routed through the Active Profile instead of directly to this server."
+                                )
+                            } icon: {
+                                Image(systemName: "exclamationmark.triangle")
+                            }
                             .font(.caption)
-                            .foregroundStyle(.red)
-                            .accessibilityLabel("Error: \(validationMessage)")
+                            .foregroundStyle(.orange)
+                            .accessibilityLabel(
+                                "Warning: DNS Proxy is on. Plain DNS queries on port 53 may be routed through the Active Profile instead of directly to this server."
+                            )
+                        }
+                    }
+
+                    Section("Request") {
+                        TextField("Domain", text: $domain, prompt: Text("example.com"))
+                            .focused($focusedField, equals: .domain)
+                        Picker("Record Type", selection: $queryType) {
+                            ForEach(DNSQueryType.allCases) { type in
+                                Text(type.rawValue).tag(type)
+                            }
+                        }
+                        if let validationMessage {
+                            Text(validationMessage)
+                                .font(.caption)
+                                .foregroundStyle(.red)
+                                .accessibilityLabel("Error: \(validationMessage)")
+                        }
                     }
                 }
-            }
-            .formStyle(.grouped)
-            .frame(minHeight: 230, idealHeight: 280, maxHeight: 330)
-            .disabled(isRunning)
+                .formStyle(.grouped)
+                .disabled(isRunning)
 
-            HStack {
-                if isRunning {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text("Querying")
-                        .foregroundStyle(.secondary)
-                    Button("Cancel") {
-                        appState.cancelDNSTest()
+                Divider()
+                HStack {
+                    if isRunning {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Querying")
+                            .foregroundStyle(.secondary)
+                        Button("Cancel") {
+                            appState.cancelDNSTest()
+                        }
                     }
+                    Spacer()
+                    Button("Query") {
+                        startQuery()
+                    }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(isRunning || (source == .profile && selectedProfile == nil))
                 }
-                Spacer()
-                Button("Query") {
-                    startQuery()
-                }
-                .keyboardShortcut(.defaultAction)
-                .disabled(isRunning || (source == .profile && selectedProfile == nil))
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 10)
+            .frame(minWidth: 0, idealWidth: 360, maxWidth: 520, maxHeight: .infinity)
 
-            Divider()
-            resultContent
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            ZStack {
+                resultContent
+            }
+            .frame(minWidth: 0, idealWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
         }
         .navigationTitle("DNS Test")
         .onAppear { selectPreferredProfileIfNeeded() }
