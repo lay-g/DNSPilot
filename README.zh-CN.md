@@ -4,7 +4,7 @@
 
 [English](README.md) | 简体中文
 
-[在 App Store 下载 DNSPilot](https://apps.apple.com/cn/app/dnspilot/id6793036211)
+[官方网站](https://dnspilot.lay-g.com) | [在 App Store 下载 DNSPilot](https://apps.apple.com/cn/app/dnspilot/id6793036211)
 
 DNSPilot 是原生 macOS DNS Proxy 工具，用于管理普通 DNS 和 DNS-over-HTTPS Profile。用户可以手动选择 Profile，也可以根据有序的 Wi-Fi SSID、接口类型和子网 Rule 自动选择。
 

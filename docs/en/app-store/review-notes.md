@@ -6,7 +6,7 @@ Replace the bracketed build version before submission. The text below is intende
 
 ## Copy-Ready Notes
 
-DNSPilot `[VERSION] ([BUILD])` is a menu-bar macOS DNS configuration utility. It uses an embedded DNS Proxy System Extension implemented with Apple's NetworkExtension and SystemExtensions frameworks. There is no account, purchase, subscription, advertising, analytics, telemetry, or developer-operated backend.
+DNSPilot `[VERSION] ([BUILD])` is a native macOS DNS configuration utility. It uses an embedded DNS Proxy System Extension implemented with Apple's NetworkExtension and SystemExtensions frameworks. There is no account, purchase, subscription, advertising, analytics, telemetry, or developer-operated backend.
 
 The System Extension and DNS Proxy are installed and enabled only after separate explicit user actions during onboarding. macOS may require approval in System Settings. The app never asks for root credentials and does not install a separate application or updater.
 

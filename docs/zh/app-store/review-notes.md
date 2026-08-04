@@ -6,7 +6,7 @@
 
 ## 可直接使用的备注
 
-DNSPilot `[版本] ([构建号])` 是一款菜单栏优先的 macOS DNS 配置工具。它使用 Apple NetworkExtension 和 SystemExtensions framework 实现内置 DNS Proxy System Extension。App 不包含账号、购买、订阅、广告、分析、遥测或开发者运营的后端。
+DNSPilot `[版本] ([构建号])` 是一款原生 macOS DNS 配置工具。它使用 Apple NetworkExtension 和 SystemExtensions framework 实现内置 DNS Proxy System Extension。App 不包含账号、购买、订阅、广告、分析、遥测或开发者运营的后端。
 
 System Extension 安装和 DNS Proxy 启用是 onboarding 中两个独立、明确的用户操作。macOS 可能要求用户在 System Settings 中批准。App 不会请求 root 凭据，也不会安装独立 App 或更新器。
 

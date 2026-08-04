@@ -4,7 +4,7 @@
 
 ## Purpose
 
-DNSPilot is a menu-bar-first macOS utility that forwards system DNS traffic through a DNS Proxy System Extension. It lets users create DNS Profiles and select them manually or automatically from the current network context.
+DNSPilot is a native macOS DNS utility that forwards system DNS traffic through a DNS Proxy System Extension. It lets users create DNS Profiles and select them manually or automatically from the current network context.
 
 ## Supported Behavior
 

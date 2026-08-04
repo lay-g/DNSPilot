@@ -4,7 +4,7 @@
 
 ## 产品目标
 
-DNSPilot 是菜单栏优先的 macOS 工具，通过 DNS Proxy System Extension 转发系统 DNS 流量。用户可以创建 DNS Profile，并根据当前网络手动或自动选择 Profile。
+DNSPilot 是原生 macOS DNS 工具，通过 DNS Proxy System Extension 转发系统 DNS 流量。用户可以创建 DNS Profile，并根据当前网络手动或自动选择 Profile。
 
 ## 支持能力
 
