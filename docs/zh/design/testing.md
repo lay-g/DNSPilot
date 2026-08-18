@@ -8,12 +8,13 @@ DNSPilot 使用确定性自动检查、受控网络 fixture、签名运行时验
 
 Unit 与 contract test 覆盖：
 
-- Profile、upstream、Rule、IP、CIDR 和引用校验。
+- Profile、upstream、Rule、IP、CIDR、host entry 和引用校验。
 - DNS Test query-name/type encoding、隔离 adapter configuration、immutable DnsLibs event snapshot、AppState cancellation 和 stale-result fencing。
 - Plain DNS、DoT 与 DoH 的模型校验、adapter wire mapping、bootstrap conversion 和按 transport 区分的 schema capability gating。
 - Rule 顺序、AND/OR、SSID availability 和 Default fallback。
 - Configuration schema、canonical encoding、fingerprint、atomic commit、损坏保留和 compare-and-swap conflict。
-- DNS cache 默认值、范围、关闭、schema migration、adapter mapping、capability gating、cache-hit 行为、settings reapply 和 rollback。
+- DNS cache 默认值、范围、关闭、schema migration、adapter mapping、capability gating、cache-hit 行为、settings reapply、filter-only hosts reapply 和 rollback。
+- Profile hosts 的 exact-domain matching、A/AAAA generated rule、loopback address override、empty/non-empty replacement、payload bounds 和非 address query 行为。
 - Automatic/Manual 持久化、target coalescing、stale decision 和 session fencing。
 - Mutation journal authentication、compensation、crash recovery 和 cleanup。
 - Safe Quit resume journal encoding、schema 1 compatibility、Extension upgrade prepare/submit/confirm fencing、损坏保留、一次性 claim，以及 manager disable 或 replacement 前后的 crash window。

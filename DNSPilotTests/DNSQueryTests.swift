@@ -25,6 +25,19 @@ struct DNSQueryTests {
         }
     }
 
+    @Test func requestCarriesProfileHostsWithoutChangingWireQuestion() throws {
+        let host = try DNSHostEntry(domain: "example.test", address: IPAddress("192.0.2.10"))
+        let request = try DNSQueryRequest(
+            domain: "example.test",
+            type: .a,
+            upstream: .fixedCloudflare,
+            hosts: [host]
+        )
+
+        #expect(request.hosts == [host])
+        #expect(DNSWireQueryEncoder.encode(request, identifier: 0x4711).count > 12)
+    }
+
     @Test func encoderBuildsStandardSingleQuestion() throws {
         let request = try DNSQueryRequest(
             domain: "_sip._tcp.example.com",

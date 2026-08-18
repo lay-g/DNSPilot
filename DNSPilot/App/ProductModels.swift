@@ -25,6 +25,10 @@ enum ProfileDraftError: LocalizedError, Equatable, Sendable {
     case invalidEndpoint(String)
     case invalidBootstrapServer(String)
     case missingBootstrapServers
+    case invalidHostDomain(id: UUID, value: String)
+    case invalidHostAddress(id: UUID, value: String)
+    case tooManyHosts(Int)
+    case duplicateHost(id: UUID, value: String)
 
     var errorDescription: String? {
         switch self {
@@ -42,7 +46,33 @@ enum ProfileDraftError: LocalizedError, Equatable, Sendable {
             "Enter a valid bootstrap IP address: \(value)."
         case .missingBootstrapServers:
             "A hostname requires at least one bootstrap server."
+        case let .invalidHostDomain(_, value):
+            "Enter a valid host domain: \(value)."
+        case let .invalidHostAddress(_, value):
+            "Enter a valid host IP address: \(value)."
+        case let .tooManyHosts(value):
+            "The Profile cannot contain more than \(DNSHostEntry.maximumCount) hosts; got \(value)."
+        case let .duplicateHost(_, value):
+            "The Profile has more than one host address for \(value)."
         }
+    }
+}
+
+struct ProfileHostDraft: Identifiable, Equatable, Sendable {
+    let id: UUID
+    var domain: String
+    var address: String
+
+    init(id: UUID = UUID(), domain: String = "", address: String = "") {
+        self.id = id
+        self.domain = domain
+        self.address = address
+    }
+
+    init(entry: DNSHostEntry) {
+        id = UUID()
+        domain = entry.domain
+        address = entry.address.stringValue
     }
 }
 
@@ -56,6 +86,7 @@ struct ProfileDraft: Identifiable, Equatable, Sendable {
     var dotPort: Int
     var endpointURL: String
     var bootstrapServers: [String]
+    var hosts: [ProfileHostDraft]
 
     init(
         id: DNSProfile.ID = UUID(),
@@ -66,7 +97,8 @@ struct ProfileDraft: Identifiable, Equatable, Sendable {
         dotServerName: String = "",
         dotPort: Int = DoTConfiguration.defaultPort,
         endpointURL: String = "",
-        bootstrapServers: [String] = []
+        bootstrapServers: [String] = [],
+        hosts: [ProfileHostDraft] = []
     ) {
         self.id = id
         self.name = name
@@ -77,11 +109,13 @@ struct ProfileDraft: Identifiable, Equatable, Sendable {
         self.dotPort = dotPort
         self.endpointURL = endpointURL
         self.bootstrapServers = bootstrapServers
+        self.hosts = hosts
     }
 
     init(profile: DNSProfile) {
         id = profile.id
         name = profile.name
+        hosts = profile.hosts.map(ProfileHostDraft.init)
         switch profile.upstream {
         case let .plain(configuration):
             transport = .plain
@@ -160,7 +194,42 @@ struct ProfileDraft: Identifiable, Equatable, Sendable {
                 throw ProfileDraftError.invalidEndpoint(endpointURL)
             }
         }
-        return try DNSProfile(id: id, name: trimmedName, upstream: upstream)
+        do {
+            var identities = Set<String>()
+            let parsedHosts = try hosts.map { host in
+                let trimmedAddress = host.address.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard let address = try? IPAddress(trimmedAddress) else {
+                    throw ProfileDraftError.invalidHostAddress(id: host.id, value: host.address)
+                }
+                let entry: DNSHostEntry
+                do {
+                    entry = try DNSHostEntry(domain: host.domain, address: address)
+                } catch {
+                    throw ProfileDraftError.invalidHostDomain(id: host.id, value: host.domain)
+                }
+                let family = entry.address.isIPv6 ? "AAAA" : "A"
+                guard identities.insert("\(entry.domain)|\(family)").inserted else {
+                    throw ProfileDraftError.duplicateHost(id: host.id, value: entry.domain)
+                }
+                return entry
+            }
+
+            return try DNSProfile(
+                id: id,
+                name: trimmedName,
+                upstream: upstream,
+                hosts: parsedHosts
+            )
+        } catch let error as DNSProfileError {
+            switch error {
+            case .emptyName:
+                throw ProfileDraftError.emptyName
+            case let .duplicateHost(domain, _):
+                throw ProfileDraftError.duplicateHost(id: id, value: domain)
+            case let .tooManyHosts(count):
+                throw ProfileDraftError.tooManyHosts(count)
+            }
+        }
     }
 
     private func parsedBootstrapServers() throws -> [IPAddress] {

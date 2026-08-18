@@ -105,15 +105,18 @@ enum ProxyResumeExtensionUpgradeDecision: Equatable, Sendable {
 struct DNSProxyTarget: Hashable, Sendable {
     let profileID: UUID
     let upstream: DNSUpstream
+    let hosts: [DNSHostEntry]
     let dnsCacheConfiguration: DNSCacheConfiguration
 
     init(
         profileID: UUID,
         upstream: DNSUpstream,
+        hosts: [DNSHostEntry] = [],
         dnsCacheConfiguration: DNSCacheConfiguration = .standard
     ) {
         self.profileID = profileID
         self.upstream = upstream
+        self.hosts = hosts
         self.dnsCacheConfiguration = dnsCacheConfiguration
     }
 }
@@ -477,6 +480,7 @@ actor DNSProxyController {
                 generation: generation,
                 profileID: target.profileID,
                 upstream: target.upstream,
+                hosts: target.hosts,
                 loggingMode: configuredLoggingMode,
                 dnsCacheConfiguration: target.dnsCacheConfiguration,
                 schemaVersion: schemaVersion
@@ -965,6 +969,7 @@ actor DNSProxyController {
                 generation: UUID(),
                 profileID: target.profileID,
                 upstream: target.upstream,
+                hosts: target.hosts,
                 loggingMode: configuredLoggingMode,
                 dnsCacheConfiguration: target.dnsCacheConfiguration,
                 schemaVersion: schemaVersion
@@ -1816,6 +1821,7 @@ actor DNSProxyController {
                 generation: targetGeneration,
                 profileID: target.profileID,
                 upstream: target.upstream,
+                hosts: target.hosts,
                 loggingMode: configuredLoggingMode,
                 dnsCacheConfiguration: target.dnsCacheConfiguration,
                 schemaVersion: schemaVersion
@@ -2289,6 +2295,7 @@ actor DNSProxyController {
                 generation: freshRollbackGeneration,
                 profileID: oldConfiguration.profileID,
                 upstream: oldConfiguration.upstream,
+                hosts: oldConfiguration.hosts,
                 loggingMode: oldConfiguration.loggingMode,
                 schemaVersion: oldConfiguration.schemaVersion
             )
@@ -3441,7 +3448,8 @@ actor DNSProxyController {
         }
         let minimumSchemaVersion = max(
             transportMinimum,
-            target.dnsCacheConfiguration == .standard ? 1 : 4
+            target.dnsCacheConfiguration == .standard ? 1 : 4,
+            target.hosts.isEmpty ? 1 : 5
         )
 
         if minimumSchemaVersion == 1 {
@@ -3594,6 +3602,7 @@ actor DNSProxyController {
         activeTarget = DNSProxyTarget(
             profileID: configuration.profileID,
             upstream: configuration.upstream,
+            hosts: configuration.hosts,
             dnsCacheConfiguration: configuration.dnsCacheConfiguration
         )
         activeGeneration = configuration.generation

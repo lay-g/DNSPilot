@@ -120,7 +120,8 @@ final class DNSQueryTester: DNSQueryTesting, Sendable {
     private func start(_ request: DNSQueryRequest, operation: Operation) {
         do {
             let configuration = try AGDnsConfigurationAdapter.makeQueryProxyConfig(
-                from: request.upstream
+                from: request.upstream,
+                hosts: request.hosts
             )
             let events = AGDnsProxyEvents()
             events.onRequestProcessed = { [queue] event in

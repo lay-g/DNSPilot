@@ -4,13 +4,13 @@
 
 ## Runtime Identity
 
-每个 desired runtime 由一份 decoded `ActiveProxyConfiguration`、它的 exact binary property-list bytes，以及这些 bytes 的 SHA-256 fingerprint 表示。配置包含 schema version、generation UUID、Profile UUID、upstream、logging mode 和 DNS cache 设置。
+每个 desired runtime 由一份 decoded `ActiveProxyConfiguration`、它的 exact binary property-list bytes，以及这些 bytes 的 SHA-256 fingerprint 表示。配置包含 schema version、generation UUID、Profile UUID、upstream、Profile hosts、logging mode 和 DNS cache 设置。
 
 每个 generation 只编码一次。Manager 持久化、XPC mutation、runtime application、rollback 和 final verification 使用同一份 bytes。Generation 与 fingerprint 是相互独立的身份维度。
 
 只有 Provider instance、generation、fingerprint、`.ready` phase、兼容 control protocol 和最终 manager ownership reload 全部一致，runtime 才算已确认。
 
-Active Proxy schema capability 按 transport 区分：DoH 至少需要 schema 1，Plain DNS 至少需要 schema 2，DoT 至少需要 schema 3。Schema 1 至 3 隐含标准 DNS cache 配置；自定义容量或关闭 cache 需要 schema 4。Host 在编码需要更高 schema 的 transport 或 cache 设置前先发现经过认证的 Provider capability，绝不能静默丢弃用户请求的设置。Capability 不匹配时必须在预检或 manager mutation 前失败。
+Active Proxy schema capability 按 transport 区分：DoH 至少需要 schema 1，Plain DNS 至少需要 schema 2，DoT 至少需要 schema 3。Schema 1 至 3 隐含标准 DNS cache 配置；自定义容量或关闭 cache 需要 schema 4；非空 Profile hosts 需要 schema 5。Host 在编码需要更高 schema 的 transport、cache 或 hosts 设置前先发现经过认证的 Provider capability，绝不能静默丢弃用户请求的设置。Capability 不匹配时必须在预检或 manager mutation 前失败。
 
 ## DNS Cache 变更
 
@@ -18,7 +18,9 @@ Active Proxy schema capability 按 transport 区分：DoH 至少需要 schema 1�
 
 Proxy Off 时保存只提交 App configuration，并在下次 enable 时生效。存在 exact Active runtime 时，保存使用与 Active Profile 编辑相同的 manager-enabled、authenticated single-engine mutation 和 compensation 路径；upstream 未变化时不重复 upstream preflight。Cache settings reapply 会丢弃旧 cache entry。只有 exact target runtime 与最终 manager verification 均成功后才发布成功；结果不确定时进入 recovery-required。
 
-## Single-Engine Lifecycle
+## Profile Hosts 变更
+
+只修改 Profile hosts 时使用 DnsLibs `AGDnsProxyReapplyOptions.filters` 在现有 engine 内重载 generated filter；upstream 未变化时跳过 upstream preflight。Filter reapply 会清理受影响的 response cache entry，空 hosts 会移除 filter。Hosts 变更继续使用现有 manager CAS、flow admission fence、rollback、exact `.ready` proof 和 recovery-required 语义。
 
 Provider process 只拥有一个 `AGDnsProxy` 和一个 `AGDnsAppProxyFlowManager`。
 

@@ -63,7 +63,7 @@ enum AppConfigurationError: LocalizedError, Equatable, Sendable {
 }
 
 struct AppConfiguration: Codable, Equatable, Sendable {
-    static let currentSchemaVersion = 3
+    static let currentSchemaVersion = 4
 
     let schemaVersion: Int
     let profiles: [DNSProfile]
@@ -132,7 +132,7 @@ struct AppConfiguration: Codable, Equatable, Sendable {
             rules: container.decode([DNSRule].self, forKey: .rules),
             defaultProfileID: container.decodeIfPresent(DNSProfile.ID.self, forKey: .defaultProfileID),
             operatingMode: container.decode(OperatingMode.self, forKey: .operatingMode),
-            dnsCacheConfiguration: decodedSchemaVersion == Self.currentSchemaVersion
+            dnsCacheConfiguration: decodedSchemaVersion >= 3
                 ? container.decode(DNSCacheConfiguration.self, forKey: .dnsCacheConfiguration)
                 : .standard
         )

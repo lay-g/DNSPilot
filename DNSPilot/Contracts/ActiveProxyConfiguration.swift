@@ -12,35 +12,126 @@ enum ActiveProxyConfigurationError: LocalizedError, Equatable, Sendable {
     case missingBootstrapServers
     case missingDoTBootstrapServers
     case unsupportedLegacyDNSCacheConfiguration
+    case unsupportedLegacyHostsConfiguration
+    case invalidHostDomain(String)
+    case tooManyHosts(Int)
+    case configurationTooLarge(Int)
+    case duplicateHost(domain: String, family: IPAddress.Family)
     case invalidPropertyListStructure
 
     var errorDescription: String? {
         switch self {
         case let .unsupportedSchemaVersion(version):
-            "Unsupported proxy configuration schema version: \(version)."
+            return "Unsupported proxy configuration schema version: \(version)."
         case let .unsupportedLegacyUpstreamKind(kind):
-            "Unsupported legacy DNS upstream kind: \(kind)."
+            return "Unsupported legacy DNS upstream kind: \(kind)."
         case .unsupportedLegacyDoHConfiguration:
-            "The DNS-over-HTTPS configuration cannot be represented by schema version 1."
+            return "The DNS-over-HTTPS configuration cannot be represented by schema version 1."
         case let .invalidLegacyBootstrapServer(address):
-            "Invalid legacy bootstrap server address: \(address)."
+            return "Invalid legacy bootstrap server address: \(address)."
         case let .invalidPlainDNSPort(port):
-            "The plain DNS port must be between 1 and 65535, got \(port)."
+            return "The plain DNS port must be between 1 and 65535, got \(port)."
         case .invalidDoTServerName:
-            "The DNS-over-TLS server must be a valid hostname or IP address."
+            return "The DNS-over-TLS server must be a valid hostname or IP address."
         case let .invalidDoTPort(port):
-            "The DNS-over-TLS port must be between 1 and 65535, got \(port)."
+            return "The DNS-over-TLS port must be between 1 and 65535, got \(port)."
         case .invalidDoHEndpoint:
-            "The DNS-over-HTTPS endpoint must be an HTTPS URL with a host and no user info or fragment."
+            return "The DNS-over-HTTPS endpoint must be an HTTPS URL with a host and no user info or fragment."
         case .missingBootstrapServers:
-            "A DNS-over-HTTPS hostname endpoint requires at least one bootstrap server."
+            return "A DNS-over-HTTPS hostname endpoint requires at least one bootstrap server."
         case .missingDoTBootstrapServers:
-            "A DNS-over-TLS hostname requires at least one bootstrap server."
+            return "A DNS-over-TLS hostname requires at least one bootstrap server."
         case .unsupportedLegacyDNSCacheConfiguration:
-            "Custom DNS cache settings require proxy configuration schema version 4."
+            return "Custom DNS cache settings require proxy configuration schema version 4."
+        case .unsupportedLegacyHostsConfiguration:
+            return "Hosts entries require proxy configuration schema version 5."
+        case let .invalidHostDomain(domain):
+            return "Invalid DNS host domain: \(domain)."
+        case let .tooManyHosts(count):
+            return "Hosts entries exceed the supported count of \(DNSHostEntry.maximumCount): \(count)."
+        case let .configurationTooLarge(bytes):
+            return "The proxy configuration exceeds the supported size: \(bytes) bytes."
+        case let .duplicateHost(domain, family):
+            let familyName = switch family {
+            case .ipv4: "IPv4"
+            case .ipv6: "IPv6"
+            }
+            return "DNS host \(domain) has more than one \(familyName) address."
         case .invalidPropertyListStructure:
-            "The proxy configuration property list has an invalid structure."
+            return "The proxy configuration property list has an invalid structure."
         }
+    }
+}
+
+struct DNSHostEntry: Codable, Equatable, Hashable, Sendable {
+    static let maximumCount = 256
+
+    let domain: String
+    let address: IPAddress
+
+    init(domain: String, address: IPAddress) throws {
+        var normalized = domain.trimmingCharacters(in: .whitespacesAndNewlines)
+        if normalized.hasSuffix(".") {
+            normalized.removeLast()
+        }
+        guard !normalized.isEmpty, (try? IPAddress(normalized)) == nil else {
+            throw ActiveProxyConfigurationError.invalidHostDomain(domain)
+        }
+
+        let labels = normalized.split(separator: ".", omittingEmptySubsequences: false)
+        let validLabels = labels.allSatisfy { label in
+            let bytes = label.utf8
+            guard !bytes.isEmpty, bytes.count <= 63 else { return false }
+            return bytes.allSatisfy { byte in
+                byte >= 0x61 && byte <= 0x7a
+                    || byte >= 0x41 && byte <= 0x5a
+                    || byte >= 0x30 && byte <= 0x39
+                    || byte == 0x2d
+                    || byte == 0x5f
+            }
+        }
+        let wireNameLength = labels.reduce(1) { $0 + 1 + $1.utf8.count }
+        guard validLabels, wireNameLength <= 255 else {
+            throw ActiveProxyConfigurationError.invalidHostDomain(domain)
+        }
+
+        self.domain = normalized.lowercased()
+        self.address = address
+    }
+
+    static func validate(_ hosts: [DNSHostEntry]) throws {
+        guard hosts.count <= maximumCount else {
+            throw ActiveProxyConfigurationError.tooManyHosts(hosts.count)
+        }
+        struct Identity: Hashable {
+            let domain: String
+            let family: IPAddress.Family
+        }
+        var identities = Set<Identity>()
+        for host in hosts {
+            guard identities.insert(Identity(domain: host.domain, family: host.address.family)).inserted else {
+                throw ActiveProxyConfigurationError.duplicateHost(
+                    domain: host.domain,
+                    family: host.address.family
+                )
+            }
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case domain
+        case address
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        guard Set(container.allKeys.map(\.stringValue)) == Set(["domain", "address"]) else {
+            throw ActiveProxyConfigurationError.invalidPropertyListStructure
+        }
+        try self.init(
+            domain: container.decode(String.self, forKey: .domain),
+            address: container.decode(IPAddress.self, forKey: .address)
+        )
     }
 }
 
@@ -326,7 +417,7 @@ enum ProxyLoggingMode: String, Codable, Sendable {
 }
 
 struct ActiveProxyConfiguration: Codable, Equatable, Sendable {
-    static let currentSchemaVersion = 4
+    static let currentSchemaVersion = 5
     static let providerConfigurationKey = "DNSPilotActiveProxyConfiguration"
     static let vendorDataOptionKey = "VendorData"
 
@@ -334,6 +425,7 @@ struct ActiveProxyConfiguration: Codable, Equatable, Sendable {
     let generation: UUID
     let profileID: UUID
     let upstream: DNSUpstream
+    let hosts: [DNSHostEntry]
     let loggingMode: ProxyLoggingMode
     let dnsCacheConfiguration: DNSCacheConfiguration
 
@@ -341,6 +433,7 @@ struct ActiveProxyConfiguration: Codable, Equatable, Sendable {
         generation: UUID,
         profileID: UUID,
         upstream: DNSUpstream,
+        hosts: [DNSHostEntry] = [],
         loggingMode: ProxyLoggingMode = .default,
         dnsCacheConfiguration: DNSCacheConfiguration = .standard,
         schemaVersion: Int = Self.currentSchemaVersion
@@ -361,25 +454,65 @@ struct ActiveProxyConfiguration: Codable, Equatable, Sendable {
         } else if schemaVersion == 2, case .tls = upstream {
             throw ActiveProxyConfigurationError.unsupportedLegacyUpstreamKind("tls")
         }
-        if schemaVersion < Self.currentSchemaVersion,
+        if schemaVersion < 4,
            dnsCacheConfiguration != .standard {
             throw ActiveProxyConfigurationError.unsupportedLegacyDNSCacheConfiguration
         }
+        if schemaVersion < 5, !hosts.isEmpty {
+            throw ActiveProxyConfigurationError.unsupportedLegacyHostsConfiguration
+        }
+
+        guard hosts.count <= DNSHostEntry.maximumCount else {
+            throw ActiveProxyConfigurationError.tooManyHosts(hosts.count)
+        }
+
+        let sortedHosts = hosts.sorted { lhs, rhs in
+            if lhs.domain != rhs.domain { return lhs.domain < rhs.domain }
+            if lhs.address.family != rhs.address.family {
+                return lhs.address.family == .ipv4
+            }
+            return lhs.address.stringValue < rhs.address.stringValue
+        }
+        var hostIdentities = Set<HostIdentity>()
+        for host in sortedHosts {
+            guard hostIdentities.insert(
+                HostIdentity(domain: host.domain, family: host.address.family)
+            ).inserted else {
+                throw ActiveProxyConfigurationError.duplicateHost(
+                    domain: host.domain,
+                    family: host.address.family
+                )
+            }
+        }
+
         self.schemaVersion = schemaVersion
         self.generation = generation
         self.profileID = profileID
         self.upstream = upstream
+        self.hosts = sortedHosts
         self.loggingMode = loggingMode
         self.dnsCacheConfiguration = dnsCacheConfiguration
+    }
+
+    private struct HostIdentity: Hashable {
+        let domain: String
+        let family: IPAddress.Family
     }
 
     func propertyListData() throws -> Data {
         let encoder = PropertyListEncoder()
         encoder.outputFormat = .binary
-        return try encoder.encode(self)
+        let data = try encoder.encode(self)
+        guard data.count <= DNSProxyXPCContract.maximumConfigurationSize else {
+            throw ActiveProxyConfigurationError.configurationTooLarge(data.count)
+        }
+        return data
     }
 
     static func decodePropertyList(_ data: Data) throws -> Self {
+        guard data.count <= DNSProxyXPCContract.maximumConfigurationSize else {
+            throw ActiveProxyConfigurationError.configurationTooLarge(data.count)
+        }
         let payload = try PropertyListSerialization.propertyList(
             from: data,
             options: [],
@@ -396,8 +529,11 @@ struct ActiveProxyConfiguration: Codable, Equatable, Sendable {
         "upstream",
         "loggingMode",
     ]
-    private static let currentPropertyListKeys = legacyPropertyListKeys.union([
+    private static let schema4PropertyListKeys = legacyPropertyListKeys.union([
         "dnsCacheConfiguration",
+    ])
+    private static let currentPropertyListKeys = schema4PropertyListKeys.union([
+        "hosts",
     ])
     private static let legacyUpstreamKeys: Set<String> = [
         "kind",
@@ -432,12 +568,26 @@ struct ActiveProxyConfiguration: Codable, Equatable, Sendable {
         guard (1...currentSchemaVersion).contains(schemaVersion) else {
             throw ActiveProxyConfigurationError.unsupportedSchemaVersion(schemaVersion)
         }
-        try requireExactKeys(
-            schemaVersion == currentSchemaVersion
-                ? currentPropertyListKeys
-                : legacyPropertyListKeys,
-            in: configuration
-        )
+        let expectedKeys: Set<String>
+        switch schemaVersion {
+        case 1...3:
+            expectedKeys = legacyPropertyListKeys
+        case 4:
+            expectedKeys = schema4PropertyListKeys
+        case currentSchemaVersion:
+            expectedKeys = currentPropertyListKeys
+        default:
+            throw ActiveProxyConfigurationError.invalidPropertyListStructure
+        }
+        try requireExactKeys(expectedKeys, in: configuration)
+        if schemaVersion == currentSchemaVersion {
+            guard let hosts = configuration["hosts"] as? [[String: Any]] else {
+                throw ActiveProxyConfigurationError.invalidPropertyListStructure
+            }
+            for host in hosts {
+                try requireExactKeys(["domain", "address"], in: host)
+            }
+        }
         guard let upstream = configuration["upstream"] as? [String: Any] else {
             throw ActiveProxyConfigurationError.invalidPropertyListStructure
         }
@@ -482,6 +632,7 @@ struct ActiveProxyConfiguration: Codable, Equatable, Sendable {
         case upstream
         case loggingMode
         case dnsCacheConfiguration
+        case hosts
     }
 
     private struct LegacyDNSUpstream: Codable {
@@ -501,10 +652,15 @@ struct ActiveProxyConfiguration: Codable, Equatable, Sendable {
         let decodedGeneration = try container.decode(UUID.self, forKey: .generation)
         let decodedProfileID = try container.decode(UUID.self, forKey: .profileID)
         let decodedLoggingMode = try container.decode(ProxyLoggingMode.self, forKey: .loggingMode)
-        let decodedDNSCacheConfiguration = if decodedSchemaVersion == Self.currentSchemaVersion {
+        let decodedDNSCacheConfiguration = if decodedSchemaVersion >= 4 {
             try container.decode(DNSCacheConfiguration.self, forKey: .dnsCacheConfiguration)
         } else {
             DNSCacheConfiguration.standard
+        }
+        let decodedHosts: [DNSHostEntry] = if decodedSchemaVersion >= 5 {
+            try container.decode([DNSHostEntry].self, forKey: .hosts)
+        } else {
+            []
         }
 
         switch decodedSchemaVersion {
@@ -515,15 +671,17 @@ struct ActiveProxyConfiguration: Codable, Equatable, Sendable {
                 upstream: Self.migrateLegacyUpstream(
                     container.decode(LegacyDNSUpstream.self, forKey: .upstream)
                 ),
+                hosts: decodedHosts,
                 loggingMode: decodedLoggingMode,
                 dnsCacheConfiguration: decodedDNSCacheConfiguration,
                 schemaVersion: 1
             )
-        case 2, 3, Self.currentSchemaVersion:
+        case 2, 3, 4, Self.currentSchemaVersion:
             try self.init(
                 generation: decodedGeneration,
                 profileID: decodedProfileID,
                 upstream: container.decode(DNSUpstream.self, forKey: .upstream),
+                hosts: decodedHosts,
                 loggingMode: decodedLoggingMode,
                 dnsCacheConfiguration: decodedDNSCacheConfiguration,
                 schemaVersion: decodedSchemaVersion
@@ -553,14 +711,17 @@ struct ActiveProxyConfiguration: Codable, Equatable, Sendable {
                 ),
                 forKey: .upstream
             )
-        case 2, 3, Self.currentSchemaVersion:
+        case 2, 3, 4, Self.currentSchemaVersion:
             try container.encode(upstream, forKey: .upstream)
         default:
             throw ActiveProxyConfigurationError.unsupportedSchemaVersion(schemaVersion)
         }
         try container.encode(loggingMode, forKey: .loggingMode)
-        if schemaVersion == Self.currentSchemaVersion {
+        if schemaVersion >= 4 {
             try container.encode(dnsCacheConfiguration, forKey: .dnsCacheConfiguration)
+        }
+        if schemaVersion >= 5 {
+            try container.encode(hosts, forKey: .hosts)
         }
     }
 

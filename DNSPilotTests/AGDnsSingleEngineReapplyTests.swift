@@ -3,6 +3,7 @@ import Darwin
 import Foundation
 import Synchronization
 import Testing
+@testable import DNSPilot
 
 @Suite("AGDnsProxy single-engine reapply", .serialized)
 struct AGDnsSingleEngineReapplyTests {
@@ -82,6 +83,89 @@ struct AGDnsSingleEngineReapplyTests {
         #expect(settingsCheckResult.applied)
         #expect(settingsCheckResult.issue == nil)
         #expect(try await fixture.answerAddress(for: Self.domain) == Self.targetAddress)
+    }
+
+    @Test("generated Profile hosts answer locally and reapply through filters")
+    func generatedProfileHostsAnswerLocallyAndReapply() async throws {
+        let domain = "profile-hosts-reapply.invalid"
+        let first = try DNSHostEntry(domain: domain, address: IPAddress("127.0.0.1"))
+        let firstAAAA = try DNSHostEntry(domain: domain, address: IPAddress("2001:db8::10"))
+        let old = try ActiveProxyConfiguration(
+            generation: UUID(),
+            profileID: UUID(),
+            upstream: .plain(try PlainDNSConfiguration(serverAddress: IPAddress("192.0.2.1"))),
+            hosts: [first, firstAAAA]
+        )
+        let fixture = try ReapplyFixture(
+            configuration: try AGDnsConfigurationAdapter.makeProxyConfig(from: old)
+        )
+        defer { fixture.stop() }
+
+        #expect(try await fixture.answerAddress(for: domain) == "127.0.0.1")
+        #expect(try await fixture.answerIPv6Address(for: domain) == "2001:db8::10")
+
+        let second = try DNSHostEntry(domain: domain, address: IPAddress("198.51.100.10"))
+        let secondAAAA = try DNSHostEntry(domain: domain, address: IPAddress("2001:db8::20"))
+        let target = try ActiveProxyConfiguration(
+            generation: UUID(),
+            profileID: old.profileID,
+            upstream: old.upstream,
+            hosts: [second, secondAAAA]
+        )
+        let reapply = fixture.reapply(
+            try AGDnsConfigurationAdapter.makeProxyConfig(from: target),
+            options: .filters
+        )
+
+        #expect(reapply.applied)
+        #expect(reapply.issue == nil)
+        #expect(try await fixture.answerAddress(for: domain) == "198.51.100.10")
+        #expect(try await fixture.answerIPv6Address(for: domain) == "2001:db8::20")
+    }
+
+    @Test("generated hosts only handle exact address queries")
+    func generatedHostsStayExactAndClearOnEmptyReapply() async throws {
+        let server = try LoopbackDNSServer()
+        defer { server.stop() }
+        let domain = "profile-hosts-upstream.invalid"
+        let host = try DNSHostEntry(domain: domain, address: IPAddress("198.51.100.10"))
+        let old = try ActiveProxyConfiguration(
+            generation: UUID(),
+            profileID: UUID(),
+            upstream: .plain(try PlainDNSConfiguration(
+                serverAddress: IPAddress("127.0.0.1"),
+                port: Int(server.port)
+            )),
+            hosts: [host]
+        )
+        let fixture = try ReapplyFixture(
+            configuration: try AGDnsConfigurationAdapter.makeProxyConfig(from: old)
+        )
+        defer { fixture.stop() }
+
+        #expect(await fixture.response(for: domain)?.isEmpty == false)
+        #expect(server.queryCount == 0)
+
+        _ = await fixture.response(for: "sub.\(domain)")
+        try await server.waitForQueryCount(1)
+
+        _ = await fixture.response(for: domain, type: 15)
+        try await server.waitForQueryCount(2)
+
+        let cleared = try ActiveProxyConfiguration(
+            generation: UUID(),
+            profileID: old.profileID,
+            upstream: old.upstream
+        )
+        let clearResult = fixture.reapply(
+            try AGDnsConfigurationAdapter.makeProxyConfig(from: cleared),
+            options: .filters
+        )
+        #expect(clearResult.applied)
+        #expect(clearResult.issue == nil)
+
+        _ = await fixture.response(for: domain)
+        try await server.waitForQueryCount(3)
     }
 
     @Test("failed settings reapply requires and accepts explicit rollback")
@@ -349,13 +433,13 @@ private final class ReapplyFixture: @unchecked Sendable {
         return (applied, issue)
     }
 
-    func response(for domain: String) async -> Data? {
-        let operation = beginResponse(for: domain)
+    func response(for domain: String, type: UInt16 = 1) async -> Data? {
+        let operation = beginResponse(for: domain, type: type)
         return await operation.value(timeout: .milliseconds(100))
     }
 
-    private func beginResponse(for domain: String) -> DNSResponseOperation {
-        let query = DNSWireQuery.makeAQuery(domain: domain)
+    private func beginResponse(for domain: String, type: UInt16) -> DNSResponseOperation {
+        let query = DNSWireQuery.makeQuery(domain: domain, type: type)
         let info = AGDnsMessageInfo()
         info.isTcp = false
         info.transparent = false
@@ -373,6 +457,12 @@ private final class ReapplyFixture: @unchecked Sendable {
         return try DNSWireResponse.ipv4Address(in: response)
     }
 
+    func answerIPv6Address(for domain: String) async throws -> String {
+        guard let response = await response(for: domain, type: 28) else {
+            throw ReapplyGateError.responseTimedOut
+        }
+        return try DNSWireResponse.ipv6Address(in: response)
+    }
     func collectResponses(domain: String, count: Int) async -> [Data?] {
         var responses: [Data?] = []
         responses.reserveCapacity(count)
@@ -428,6 +518,17 @@ private final class LoopbackDNSServer: @unchecked Sendable {
 
     var queryCount: Int {
         queryCounter.withLock { $0 }
+    }
+
+    func waitForQueryCount(_ expectedCount: Int) async throws {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(1))
+        while queryCount < expectedCount {
+            guard clock.now < deadline else {
+                throw ReapplyGateError.eventTimedOut
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
     }
 
     init() throws {
@@ -602,7 +703,7 @@ private final class DNSResponseOperation: Sendable {
 }
 
 private enum DNSWireQuery {
-    static func makeAQuery(domain: String) -> Data {
+    static func makeQuery(domain: String, type: UInt16) -> Data {
         var bytes: [UInt8] = [
             0x47, 0x11,
             0x01, 0x00,
@@ -618,7 +719,9 @@ private enum DNSWireQuery {
             bytes.append(contentsOf: labelBytes)
         }
         bytes.append(0)
-        bytes.append(contentsOf: [0x00, 0x01, 0x00, 0x01])
+        bytes.append(UInt8(type >> 8))
+        bytes.append(UInt8(type & 0xff))
+        bytes.append(contentsOf: [0x00, 0x01])
         return Data(bytes)
     }
 }
@@ -661,6 +764,48 @@ private enum DNSWireResponse {
             offset += dataLength
         }
         throw ReapplyGateError.invalidDNSResponse("response has no IPv4 answer")
+    }
+
+    static func ipv6Address(in response: Data) throws -> String {
+        let bytes = [UInt8](response)
+        guard bytes.count >= 12 else {
+            throw ReapplyGateError.invalidDNSResponse("response is empty or shorter than header")
+        }
+
+        var offset = 4
+        let questionCount = try readUInt16(bytes, offset: &offset)
+        let answerCount = try readUInt16(bytes, offset: &offset)
+        offset += 4
+
+        for _ in 0..<questionCount {
+            try skipName(bytes, offset: &offset)
+            guard offset + 4 <= bytes.count else {
+                throw ReapplyGateError.invalidDNSResponse("truncated question")
+            }
+            offset += 4
+        }
+
+        for _ in 0..<answerCount {
+            try skipName(bytes, offset: &offset)
+            let type = try readUInt16(bytes, offset: &offset)
+            let dnsClass = try readUInt16(bytes, offset: &offset)
+            guard offset + 6 <= bytes.count else {
+                throw ReapplyGateError.invalidDNSResponse("truncated answer metadata")
+            }
+            offset += 4
+            let dataLength = Int(try readUInt16(bytes, offset: &offset))
+            guard offset + dataLength <= bytes.count else {
+                throw ReapplyGateError.invalidDNSResponse("truncated answer data")
+            }
+            if type == 28, dnsClass == 1, dataLength == 16 {
+                return IPAddress(
+                    family: .ipv6,
+                    bytes: Array(bytes[offset..<(offset + dataLength)])
+                ).stringValue
+            }
+            offset += dataLength
+        }
+        throw ReapplyGateError.invalidDNSResponse("response has no IPv6 answer")
     }
 
     private static func readUInt16(_ bytes: [UInt8], offset: inout Int) throws -> UInt16 {

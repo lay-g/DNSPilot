@@ -36,6 +36,13 @@ struct ActiveProxyConfigurationTests {
         #expect(binary.fingerprint != xml.fingerprint)
     }
 
+    @Test func oversizedRuntimePayloadIsRejectedBeforePropertyListDecode() {
+        let oversized = Data(repeating: 0, count: DNSProxyXPCContract.maximumConfigurationSize + 1)
+
+        #expect(throws: ActiveProxyConfigurationError.configurationTooLarge(oversized.count)) {
+            try ActiveProxyConfiguration.decodePropertyList(oversized)
+        }
+    }
     @Test func fingerprintUsesValidatedSingleStringWireValue() throws {
         struct Envelope: Codable, Equatable {
             let fingerprint: ProxyConfigurationFingerprint
@@ -130,13 +137,55 @@ struct ActiveProxyConfigurationTests {
         #expect(upstream["kind"] as? String == "tls")
     }
 
+    @Test func schemaFiveRoundTripPreservesHostsAndExactKeys() throws {
+        let hosts = [
+            try DNSHostEntry(domain: "WWW.Example.Test.", address: IPAddress("2001:db8::10")),
+            try DNSHostEntry(domain: "www.example.test", address: IPAddress("192.0.2.10")),
+        ]
+        let configuration = try ActiveProxyConfiguration(
+            generation: generation,
+            profileID: profileID,
+            upstream: .fixedCloudflare,
+            hosts: hosts
+        )
+
+        let data = try configuration.propertyListData()
+        let decoded = try ActiveProxyConfiguration.decodePropertyList(data)
+        let payload = try #require(
+            PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any]
+        )
+
+        #expect(decoded.schemaVersion == 5)
+        #expect(decoded.hosts.map(\.address.stringValue) == ["192.0.2.10", "2001:db8::10"])
+        #expect(payload["hosts"] != nil)
+        #expect(Set(payload.keys) == Set([
+            "schemaVersion", "generation", "profileID", "upstream", "loggingMode",
+            "dnsCacheConfiguration", "hosts",
+        ]))
+    }
+
+    @Test func legacySchemaFourRejectsHosts() throws {
+        let host = try DNSHostEntry(domain: "example.test", address: IPAddress("192.0.2.10"))
+
+        #expect(throws: ActiveProxyConfigurationError.unsupportedLegacyHostsConfiguration) {
+            try ActiveProxyConfiguration(
+                generation: generation,
+                profileID: profileID,
+                upstream: .fixedCloudflare,
+                hosts: [host],
+                schemaVersion: 4
+            )
+        }
+    }
+
     @Test func schemaFourRoundTripPreservesExactCacheConfiguration() throws {
         let cache = try DNSCacheConfiguration(isEnabled: false, maximumEntries: 2_500)
         let configuration = try ActiveProxyConfiguration(
             generation: generation,
             profileID: profileID,
             upstream: .fixedCloudflare,
-            dnsCacheConfiguration: cache
+            dnsCacheConfiguration: cache,
+            schemaVersion: 4
         )
 
         let data = try configuration.propertyListData()
@@ -148,6 +197,76 @@ struct ActiveProxyConfigurationTests {
         #expect(decoded.schemaVersion == 4)
         #expect(decoded.dnsCacheConfiguration == cache)
         #expect(payload["dnsCacheConfiguration"] != nil)
+    }
+
+    @Test func schemaPayloadRejectsHostsMismatch() throws {
+        let schemaFour = try ActiveProxyConfiguration(
+            generation: generation,
+            profileID: profileID,
+            upstream: .fixedCloudflare,
+            schemaVersion: 4
+        )
+        var schemaFourPayload = try #require(
+            PropertyListSerialization.propertyList(
+                from: schemaFour.propertyListData(),
+                format: nil
+            ) as? [String: Any]
+        )
+        schemaFourPayload["hosts"] = []
+        let schemaFourWithHosts = try PropertyListSerialization.data(
+            fromPropertyList: schemaFourPayload,
+            format: .binary,
+            options: 0
+        )
+        #expect(throws: ActiveProxyConfigurationError.invalidPropertyListStructure) {
+            try ActiveProxyConfiguration.decodePropertyList(schemaFourWithHosts)
+        }
+
+        let schemaFive = try ActiveProxyConfiguration(
+            generation: generation,
+            profileID: profileID,
+            upstream: .fixedCloudflare
+        )
+        var schemaFivePayload = try #require(
+            PropertyListSerialization.propertyList(
+                from: schemaFive.propertyListData(),
+                format: nil
+            ) as? [String: Any]
+        )
+        schemaFivePayload.removeValue(forKey: "hosts")
+        let schemaFiveWithoutHosts = try PropertyListSerialization.data(
+            fromPropertyList: schemaFivePayload,
+            format: .binary,
+            options: 0
+        )
+        #expect(throws: ActiveProxyConfigurationError.invalidPropertyListStructure) {
+            try ActiveProxyConfiguration.decodePropertyList(schemaFiveWithoutHosts)
+        }
+
+        let host = try DNSHostEntry(domain: "example.test", address: IPAddress("192.0.2.10"))
+        let schemaFiveWithHost = try ActiveProxyConfiguration(
+            generation: generation,
+            profileID: profileID,
+            upstream: .fixedCloudflare,
+            hosts: [host]
+        )
+        var nestedPayload = try #require(
+            PropertyListSerialization.propertyList(
+                from: schemaFiveWithHost.propertyListData(),
+                format: nil
+            ) as? [String: Any]
+        )
+        var nestedHosts = try #require(nestedPayload["hosts"] as? [[String: Any]])
+        nestedHosts[0]["futureHostField"] = true
+        nestedPayload["hosts"] = nestedHosts
+        let nestedUnknownField = try PropertyListSerialization.data(
+            fromPropertyList: nestedPayload,
+            format: .binary,
+            options: 0
+        )
+        #expect(throws: ActiveProxyConfigurationError.invalidPropertyListStructure) {
+            try ActiveProxyConfiguration.decodePropertyList(nestedUnknownField)
+        }
     }
 
     @Test func legacySchemasRejectNonstandardCacheConfiguration() throws {

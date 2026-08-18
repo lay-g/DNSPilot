@@ -48,13 +48,20 @@ struct DNSQueryRequest: Equatable, Sendable {
     let domain: String
     let type: DNSQueryType
     let upstream: DNSUpstream
+    let hosts: [DNSHostEntry]
 
-    init(domain: String, type: DNSQueryType, upstream: DNSUpstream) throws {
+    init(
+        domain: String,
+        type: DNSQueryType,
+        upstream: DNSUpstream,
+        hosts: [DNSHostEntry] = []
+    ) throws {
         var normalized = domain.trimmingCharacters(in: .whitespacesAndNewlines)
         if normalized.hasSuffix(".") {
             normalized.removeLast()
         }
         guard !normalized.isEmpty else { throw DNSQueryRequestError.emptyDomain }
+        try DNSHostEntry.validate(hosts)
 
         let labels = normalized.split(separator: ".", omittingEmptySubsequences: false)
         let isValid = labels.allSatisfy { label in
@@ -76,6 +83,7 @@ struct DNSQueryRequest: Equatable, Sendable {
         self.domain = normalized
         self.type = type
         self.upstream = upstream
+        self.hosts = hosts
     }
 }
 

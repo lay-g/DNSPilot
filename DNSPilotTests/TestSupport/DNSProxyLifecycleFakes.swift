@@ -166,6 +166,7 @@ func makeLifecycleConfiguration(
     profileID: UUID = UUID(),
     address: String = "1.1.1.1",
     loggingMode: ProxyLoggingMode = .default,
+    hosts: [DNSHostEntry] = [],
     dnsCacheConfiguration: DNSCacheConfiguration = .standard
 ) throws -> PersistedProxyConfiguration {
     try PersistedProxyConfiguration(value: ActiveProxyConfiguration(
@@ -174,6 +175,7 @@ func makeLifecycleConfiguration(
         upstream: .plain(try PlainDNSConfiguration(
             serverAddress: IPAddress(address)
         )),
+        hosts: hosts,
         loggingMode: loggingMode,
         dnsCacheConfiguration: dnsCacheConfiguration
     ))

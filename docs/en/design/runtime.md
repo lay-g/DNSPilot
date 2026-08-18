@@ -4,13 +4,13 @@
 
 ## Runtime Identity
 
-Each desired runtime is represented by one decoded `ActiveProxyConfiguration`, its exact binary property-list bytes, and the SHA-256 fingerprint of those bytes. The configuration contains schema version, generation UUID, Profile UUID, upstream, logging mode, and DNS cache settings.
+Each desired runtime is represented by one decoded `ActiveProxyConfiguration`, its exact binary property-list bytes, and the SHA-256 fingerprint of those bytes. The configuration contains schema version, generation UUID, Profile UUID, upstream, Profile hosts, logging mode, and DNS cache settings.
 
 Encoding occurs once per generation. Manager persistence, XPC mutation, runtime application, rollback, and final verification use the same bytes. Generation and fingerprint are independent identity dimensions.
 
 A runtime is confirmed only when Provider instance, generation, fingerprint, `.ready` phase, compatible control protocol, and final manager ownership reload all agree.
 
-Active Proxy schema capability is transport-specific: DoH requires schema 1, Plain DNS requires schema 2, and DoT requires schema 3. Schema 1 through 3 imply the standard DNS cache configuration; custom capacity or disabled cache requires schema 4. The Host discovers authenticated Provider capability before encoding a transport or cache setting that needs a newer schema and never silently drops a requested setting. Capability mismatch fails before preflight or manager mutation.
+Active Proxy schema capability is transport-specific: DoH requires schema 1, Plain DNS requires schema 2, and DoT requires schema 3. Schema 1 through 3 imply the standard DNS cache configuration; custom capacity or disabled cache requires schema 4; non-empty Profile hosts require schema 5. The Host discovers authenticated Provider capability before encoding a transport, cache, or hosts setting that needs a newer schema and never silently drops a requested setting. Capability mismatch fails before preflight or manager mutation.
 
 ## DNS Cache Changes
 
@@ -18,7 +18,9 @@ The ordinary DNS response cache is global. It defaults to 1,000 responses, accep
 
 Saving while the Proxy is off commits the application configuration and takes effect on the next enable. Saving while an exact Active runtime exists uses the same manager-enabled, authenticated single-engine mutation and compensation path as an Active Profile edit, but does not repeat upstream preflight when the upstream is unchanged. A cache settings reapply discards old cache entries. Success is published only after exact target runtime and final manager verification; uncertain outcomes enter recovery-required state.
 
-## Single-Engine Lifecycle
+## Profile Hosts Changes
+
+A Profile hosts-only edit uses DnsLibs filter reapply with `AGDnsProxyReapplyOptions.filters`. The generated filter is replaced atomically inside the existing engine; an upstream preflight is skipped when the upstream is unchanged. Filter reapply clears affected response cache entries. Empty hosts removes the filter. Hosts changes use the same manager CAS, flow admission fence, rollback, exact `.ready` proof, and recovery-required behavior as other Active Profile mutations.
 
 The Provider process owns exactly one `AGDnsProxy` and one `AGDnsAppProxyFlowManager`.
 

@@ -867,6 +867,7 @@ actor ProfileMutationCoordinator {
         return DNSProxyTarget(
             profileID: profile.id,
             upstream: profile.upstream,
+            hosts: profile.hosts,
             dnsCacheConfiguration: draft.dnsCacheConfiguration
         )
     }

@@ -707,7 +707,8 @@ private actor ModeActiveMutationController: ActiveProfileMutationControlling {
         let draft = try PersistedProxyConfiguration(value: ActiveProxyConfiguration(
             generation: UUID(),
             profileID: target.profileID,
-            upstream: target.upstream
+            upstream: target.upstream,
+            hosts: target.hosts
         ))
         return ActiveProfileMutationReservation(
             mutationID: mutationID,

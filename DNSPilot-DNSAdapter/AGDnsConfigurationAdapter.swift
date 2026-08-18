@@ -1,18 +1,53 @@
 import AGDnsProxy
 import Foundation
 
-enum AGDnsConfigurationAdapterError: LocalizedError {
+enum AGDnsConfigurationAdapterError: LocalizedError, Equatable, Sendable {
     case defaultConfigurationUnavailable
+    case hostRulesTooLarge(Int)
 
     var errorDescription: String? {
         switch self {
         case .defaultConfigurationUnavailable:
             "AGDnsProxy did not provide a default configuration."
+        case let .hostRulesTooLarge(bytes):
+            "The Profile hosts rules exceed the supported size: \(bytes) bytes."
         }
     }
 }
 
 enum AGDnsConfigurationAdapter {
+    private static let hostFilterID: Int = 1
+    private static let maximumHostRulesBytes = DNSProxyXPCContract.maximumConfigurationSize / 2
+
+    static func makeHostRules(from hosts: [DNSHostEntry]) throws -> String {
+        try DNSHostEntry.validate(hosts)
+        let sortedHosts = hosts.sorted { lhs, rhs in
+            if lhs.domain != rhs.domain { return lhs.domain < rhs.domain }
+            if lhs.address.family != rhs.address.family {
+                return lhs.address.family == .ipv4
+            }
+            return lhs.address.stringValue < rhs.address.stringValue
+        }
+        let rules = sortedHosts.map { host in
+            let type = host.address.isIPv6 ? "AAAA" : "A"
+            return "|\(host.domain)|$dnstype=\(type),dnsrewrite=NOERROR;\(type);\(host.address.stringValue)"
+        }
+        let result = rules.isEmpty ? "" : rules.joined(separator: "\n") + "\n"
+        guard result.utf8.count <= maximumHostRulesBytes else {
+            throw AGDnsConfigurationAdapterError.hostRulesTooLarge(result.utf8.count)
+        }
+        return result
+    }
+
+    private static func makeFilters(from hosts: [DNSHostEntry]) throws -> [AGDnsFilterParams] {
+        guard !hosts.isEmpty else { return [] }
+        let filter = AGDnsFilterParams()
+        filter.id = hostFilterID
+        filter.data = try makeHostRules(from: hosts)
+        filter.inMemory = true
+        return [filter]
+    }
+
     static func makeUpstream(from upstream: DNSUpstream) throws -> AGDnsUpstream {
         let result = AGDnsUpstream()
         result.id = 1
@@ -64,7 +99,7 @@ enum AGDnsConfigurationAdapter {
         result.upstreams = [try makeUpstream(from: configuration.upstream)]
         result.fallbacks = []
         result.fallbackDomains = []
-        result.filters = []
+        result.filters = try makeFilters(from: configuration.hosts)
         result.listeners = []
         result.upstreamTimeoutMs = 5_000
         result.dnsCacheSize = configuration.dnsCacheConfiguration.isEnabled
@@ -77,14 +112,17 @@ enum AGDnsConfigurationAdapter {
         return result
     }
 
-    static func makeQueryProxyConfig(from upstream: DNSUpstream) throws -> AGDnsProxyConfig {
+    static func makeQueryProxyConfig(
+        from upstream: DNSUpstream,
+        hosts: [DNSHostEntry] = []
+    ) throws -> AGDnsProxyConfig {
         guard let result = AGDnsProxyConfig.getDefault() else {
             throw AGDnsConfigurationAdapterError.defaultConfigurationUnavailable
         }
         result.upstreams = [try makeUpstream(from: upstream)]
         result.fallbacks = []
         result.fallbackDomains = []
-        result.filters = []
+        result.filters = try makeFilters(from: hosts)
         result.listeners = []
         result.upstreamTimeoutMs = 5_000
         result.dnsCacheSize = 0

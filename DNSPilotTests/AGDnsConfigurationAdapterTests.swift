@@ -64,6 +64,45 @@ struct AGDnsConfigurationAdapterTests {
         #expect(ipv6Result.bootstrap.isEmpty)
     }
 
+    @Test func mapsProfileHostsToOneInMemoryFilter() throws {
+        let configuration = try ActiveProxyConfiguration(
+            generation: UUID(),
+            profileID: UUID(),
+            upstream: .fixedCloudflare,
+            hosts: [
+                try DNSHostEntry(domain: "WWW.Example.Test.", address: IPAddress("2001:db8::10")),
+                try DNSHostEntry(domain: "www.example.test", address: IPAddress("127.0.0.1")),
+            ]
+        )
+
+        let result = try AGDnsConfigurationAdapter.makeProxyConfig(from: configuration)
+
+        #expect(result.filters.count == 1)
+        #expect(result.filters[0].id == 1)
+        #expect(result.filters[0].inMemory)
+        #expect(result.filters[0].data == "|www.example.test|$dnstype=A,dnsrewrite=NOERROR;A;127.0.0.1\n|www.example.test|$dnstype=AAAA,dnsrewrite=NOERROR;AAAA;2001:db8::10\n")
+    }
+
+    @Test func hostRuleGeneratorRejectsDuplicateAndOversizedInput() throws {
+        let duplicate = try DNSHostEntry(domain: "example.test", address: IPAddress("192.0.2.10"))
+        #expect(throws: ActiveProxyConfigurationError.duplicateHost(
+            domain: "example.test",
+            family: .ipv4
+        )) {
+            try AGDnsConfigurationAdapter.makeHostRules(from: [duplicate, duplicate])
+        }
+
+        let oversized = try (0..<DNSHostEntry.maximumCount + 1).map { index in
+            try DNSHostEntry(
+                domain: "host\(index).example.test",
+                address: IPAddress("192.0.2.10")
+            )
+        }
+        #expect(throws: ActiveProxyConfigurationError.tooManyHosts(257)) {
+            try AGDnsConfigurationAdapter.makeHostRules(from: oversized)
+        }
+    }
+
     @Test func fixedDoHMappingDisablesFallbackAndExperimentalFeatures() throws {
         let configuration = try ActiveProxyConfiguration(
             generation: UUID(),

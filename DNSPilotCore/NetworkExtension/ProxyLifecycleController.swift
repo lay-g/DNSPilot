@@ -36,6 +36,9 @@ struct DNSProxyReloadPlan: Equatable, Sendable {
             || active.value.dnsCacheConfiguration != target.value.dnsCacheConfiguration {
             scope.insert(.settings)
         }
+        if active.value.hosts != target.value.hosts {
+            scope.insert(.filters)
+        }
 
         self.init(
             target: target,

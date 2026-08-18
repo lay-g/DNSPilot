@@ -705,6 +705,7 @@ private actor CoordinatorControllerFake: ActiveProfileMutationControlling {
             generation: UUID(),
             profileID: target.profileID,
             upstream: target.upstream,
+            hosts: target.hosts,
             dnsCacheConfiguration: target.dnsCacheConfiguration
         ))
         return ActiveProfileMutationReservation(

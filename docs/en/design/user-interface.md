@@ -32,11 +32,13 @@ Profile and Rule editors use staged drafts. Only Save commits domain configurati
 
 Profiles expose create, edit, duplicate, test, make-default, replacement, and delete workflows. Custom Profile editors support Plain DNS, DNS over TLS, and DNS over HTTPS. DoT input contains server name or address, port, and bootstrap addresses. List identity uses privacy-safe DoT and DoH server summaries.
 
+Each Profile editor also provides a staged Hosts section for exact-domain A/AAAA address overrides. Hosts are validated, canonicalized, sorted, and committed with the Profile. Raw filter syntax, wildcard entries, and hosts file paths are not accepted. Profile detail shows saved host entries without changing the Profile list identity.
+
 Rules show enabled state, priority, condition summary, and target Profile. Reordering saves once and reevaluates once. Dragging has Move Up/Move Down keyboard alternatives. The Default Profile selector remains visible and cannot be empty while the Proxy is usable.
 
 ## DNS Test
 
-Test performs one explicit DNS query through either an existing Profile or an unpersisted custom Plain DNS, DoT, or DoH upstream. Profile selection defaults to the confirmed Active Profile, then the Default Profile, then the first Profile. Custom fields use the same validation and upstream mapping as Profile editing. The request accepts one validated domain and one of A, AAAA, CNAME, MX, TXT, NS, SOA, SRV, CAA, or PTR.
+Test performs one explicit DNS query through either an existing Profile or an unpersisted custom Plain DNS, DoT, or DoH upstream. When an existing Profile is selected, its Profile hosts are applied to the transient proxy; custom upstreams have no hosts. Profile selection defaults to the confirmed Active Profile, then the Default Profile, then the first Profile. Custom fields use the same validation and upstream mapping as Profile editing. The request accepts one validated domain and one of A, AAAA, CNAME, MX, TXT, NS, SOA, SRV, CAA, or PTR.
 
 Test uses a horizontal split with the form and query controls on the left and the latest result on the right. The native divider is draggable. Pane widths use a zero minimum with preferred and maximum widths rather than combined positive hard minima, so the nested split can compress within the minimum management-window size without horizontal overflow. A stable result-pane container preserves the divider position when the result changes among empty, loading, failure, and response states. Starting a query cancels any previous query. Inputs remain available after completion or failure. The latest result shows the DnsLibs response status and answer, the configured logical server and transport, and elapsed milliseconds. Empty answers are distinct from transport failure. Bootstrap addresses are not described as the connected server. Test state and input are window-session-only and never persist query names or results.
 

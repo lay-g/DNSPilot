@@ -275,6 +275,7 @@ struct DNSTestView: View {
     private func startQuery() {
         do {
             let upstream: DNSUpstream
+            let hosts: [DNSHostEntry]
             switch source {
             case .profile:
                 guard let selectedProfile else {
@@ -282,13 +283,16 @@ struct DNSTestView: View {
                     return
                 }
                 upstream = selectedProfile.upstream
+                hosts = selectedProfile.hosts
             case .custom:
                 upstream = try customDraft.profile().upstream
+                hosts = []
             }
             let request = try DNSQueryRequest(
                 domain: domain,
                 type: queryType,
-                upstream: upstream
+                upstream: upstream,
+                hosts: hosts
             )
             validationMessage = nil
             appState.startDNSTest(request)

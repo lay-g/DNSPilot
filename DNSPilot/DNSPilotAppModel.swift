@@ -580,6 +580,7 @@ final class DNSPilotAppModel: ObservableObject, ProductRuntimeBacking {
         _ = await proxyController.activate(DNSProxyTarget(
             profileID: profile.id,
             upstream: profile.upstream,
+            hosts: profile.hosts,
             dnsCacheConfiguration: configuration.dnsCacheConfiguration
         ))
         await refreshProxyPresentation()
@@ -804,6 +805,7 @@ final class DNSPilotAppModel: ObservableObject, ProductRuntimeBacking {
             target: DNSProxyTarget(
                 profileID: profile.id,
                 upstream: profile.upstream,
+                hosts: profile.hosts,
                 dnsCacheConfiguration: configuration.value.dnsCacheConfiguration
             ),
             record: record,

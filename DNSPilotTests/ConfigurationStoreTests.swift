@@ -67,10 +67,10 @@ struct ConfigurationStoreTests {
 
     @Test func newerSchemaIsClassifiedBeforeFullDecode() throws {
         try withTemporaryStore { store, directoryURL in
-            let source = Data(#"{"schemaVersion":4,"operatingMode":{"kind":"future"}}"#.utf8)
+            let source = Data(#"{"schemaVersion":5,"operatingMode":{"kind":"future"}}"#.utf8)
             try source.write(to: store.configurationURL)
 
-            #expect(try store.load() == .newerSchema(version: 4))
+            #expect(try store.load() == .newerSchema(version: 5))
             #expect(
                 try FileManager.default.contentsOfDirectory(atPath: directoryURL.path)
                     .sorted()

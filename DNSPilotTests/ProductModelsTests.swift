@@ -26,6 +26,45 @@ struct ProductModelsTests {
         #expect(configuration.port == 5353)
     }
 
+    @Test func profileHostsCanonicalizeAndSort() throws {
+        let profile = try ProfileDraft(
+            name: "DNS",
+            transport: .plain,
+            plainServerAddress: "192.0.2.53",
+            hosts: [
+                ProfileHostDraft(domain: "WWW.Example.Test.", address: "2001:0DB8::10"),
+                ProfileHostDraft(domain: "www.example.test", address: "192.0.2.10"),
+            ]
+        ).profile()
+
+        #expect(profile.hosts.map(\.domain) == ["www.example.test", "www.example.test"])
+        #expect(profile.hosts.map(\.address.stringValue) == ["192.0.2.10", "2001:db8::10"])
+        #expect(try ProfileDraft(profile: profile).profile() == profile)
+    }
+
+    @Test func profileHostsRejectInvalidAndDuplicateEntries() {
+        let invalid = ProfileHostDraft(domain: "bad host", address: "192.0.2.10")
+        #expect(throws: ProfileDraftError.invalidHostDomain(id: invalid.id, value: "bad host")) {
+            try ProfileDraft(
+                name: "DNS",
+                transport: .plain,
+                plainServerAddress: "192.0.2.53",
+                hosts: [invalid]
+            ).profile()
+        }
+
+        let first = ProfileHostDraft(domain: "www.example.test", address: "192.0.2.10")
+        let duplicate = ProfileHostDraft(domain: "WWW.EXAMPLE.TEST.", address: "198.51.100.10")
+        #expect(throws: ProfileDraftError.duplicateHost(id: duplicate.id, value: "www.example.test")) {
+            try ProfileDraft(
+                name: "DNS",
+                transport: .plain,
+                plainServerAddress: "192.0.2.53",
+                hosts: [first, duplicate]
+            ).profile()
+        }
+    }
+
     @Test func profileDraftReportsTypedFieldFailures() {
         #expect(throws: ProfileDraftError.emptyName) {
             try ProfileDraft(name: " ", transport: .plain, plainServerAddress: "192.0.2.1").profile()

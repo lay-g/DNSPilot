@@ -231,6 +231,16 @@ private struct ProfileDetailView: View {
                         .textSelection(.enabled)
                 }
             }
+            if !profile.hosts.isEmpty {
+                Section("Hosts") {
+                    ForEach(profile.hosts, id: \.self) { host in
+                        LabeledContent(host.domain) {
+                            Text(host.address.stringValue)
+                                .textSelection(.enabled)
+                        }
+                    }
+                }
+            }
             if isDefault { LabeledContent("Default Profile", value: "Yes") }
             if isActive { LabeledContent("Active", value: "Yes") }
             HStack {
@@ -267,6 +277,9 @@ private struct ProfileEditorView: View {
         case port
         case endpoint
         case bootstrap
+        case hosts
+        case hostDomain(UUID)
+        case hostAddress(UUID)
     }
 
     @Environment(\.dismiss) private var dismiss
@@ -337,6 +350,7 @@ private struct ProfileEditorView: View {
                     fieldError(.endpoint)
                     bootstrapEditor
                 }
+                hostsEditor
             }
             .formStyle(.grouped)
             Divider()
@@ -355,7 +369,7 @@ private struct ProfileEditorView: View {
             }
             .padding()
         }
-        .frame(width: 520, height: 390)
+        .frame(minWidth: 520, idealWidth: 560, minHeight: 430, idealHeight: 520)
         .disabled(appState.isPerformingAction)
         .onAppear { appState.beginDraft(.profile) }
         .onDisappear {
@@ -472,6 +486,9 @@ private struct ProfileEditorView: View {
         case .invalidPort: .port
         case .invalidEndpoint: .endpoint
         case .invalidBootstrapServer, .missingBootstrapServers: .bootstrap
+        case .invalidHostDomain(let id, _): .hostDomain(id)
+        case .invalidHostAddress(let id, _): .hostAddress(id)
+        case .tooManyHosts, .duplicateHost: .hosts
         }
     }
 
@@ -494,6 +511,38 @@ private struct ProfileEditorView: View {
             fieldError(.bootstrap)
         }
     }
+
+    @ViewBuilder
+    private var hostsEditor: some View {
+        Section("Hosts") {
+            ForEach($draft.hosts) { $host in
+                HStack(spacing: 8) {
+                    TextField("Domain", text: $host.domain)
+                        .focused($focusedField, equals: .hostDomain(host.id))
+                    TextField("Address", text: $host.address)
+                        .focused($focusedField, equals: .hostAddress(host.id))
+                    Button(role: .destructive) {
+                        draft.hosts.removeAll { $0.id == host.id }
+                    } label: {
+                        Image(systemName: "trash")
+                    }
+                    .help("Remove Host")
+                    .accessibilityLabel("Remove Host")
+                }
+            }
+            if draft.hosts.isEmpty {
+                Text("No Hosts")
+                    .foregroundStyle(.secondary)
+            }
+            fieldError(.hosts)
+            Button {
+                draft.hosts.append(ProfileHostDraft())
+            } label: {
+                Label("Add Host", systemImage: "plus")
+            }
+        }
+    }
+
 
     @ViewBuilder
     private func fieldError(_ field: Field) -> some View {

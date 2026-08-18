@@ -38,11 +38,11 @@ Extension replacement transaction 不会放宽普通 resume identity。Replaceme
 
 XPC 不接收 Profile catalog、Rules、SSID、文件路径、任意 command string、shell command 或 DNS query data。Runtime status 是进程内 evidence，不是持久化配置通道。
 
-配置与恢复文件位于私有目录并使用严格权限。DNS name、SSID、地址、子网、answer、endpoint path、token、bootstrap 和 raw runtime payload 都是私有数据。
+配置与恢复文件位于私有目录并使用严格权限。DNS name、Profile hosts、SSID、地址、子网、answer、endpoint path、token、bootstrap 和 raw runtime payload 都是私有数据。
 
 Lifecycle journal 只包含 identity fingerprint 与 UUID，不包含 upstream value、raw provider configuration、network context 或 runtime payload。损坏源文件在同一私有文件边界内保留。
 
-默认日志避开这些值。Debug Logging 必须先警告，并可能暴露这些内容。复制 diagnostic summary 需要降敏；显式 export 被视为敏感操作并要求确认。
+默认日志避开这些值，包括 raw generated hosts rule。Debug Logging 必须先警告，并可能暴露这些内容。复制 diagnostic summary 需要降敏；显式 export 被视为敏感操作并要求确认。
 
 底层操作错误默认按私有信息记录，不直接渲染到面向用户的错误文案。面向用户的失败可以展示经过审核的稳定错误类别和非敏感错误码，但绝不展示可能包含私有配置或实现细节的原始描述。非结构化的依赖错误必须明确标记为未分类。Debug Logging 和已确认的 diagnostic export 可在现有敏感数据警告约束下包含详细失败信息。
 

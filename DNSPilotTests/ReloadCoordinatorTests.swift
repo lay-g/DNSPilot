@@ -43,6 +43,12 @@ struct ReloadCoordinatorTests {
         #expect(cachePlan.scope == .settings)
         #expect(!cachePlan.loggingModeChanged)
 
+        let host = try DNSHostEntry(domain: "example.test", address: IPAddress("192.0.2.10"))
+        let hostsTarget = try makeLifecycleConfiguration(profileID: profileID, hosts: [host])
+        let hostsPlan = DNSProxyReloadPlan(active: old, target: hostsTarget)
+        #expect(hostsPlan.scope == .filters)
+        #expect(!hostsPlan.loggingModeChanged)
+
         let identityTarget = try makeLifecycleConfiguration(
             profileID: profileID,
             address: "1.1.1.1"

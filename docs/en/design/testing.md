@@ -8,12 +8,13 @@ DNSPilot uses deterministic automated checks, controlled network fixtures, signe
 
 Unit and contract tests cover:
 
-- Profile, upstream, Rule, IP, CIDR, and reference validation.
+- Profile, upstream, Rule, IP, CIDR, host entry, and reference validation.
 - DNS Test query-name and type encoding, isolated adapter configuration, immutable DnsLibs event snapshots, AppState cancellation, and stale-result fencing.
 - Plain DNS, DoT, and DoH model validation, adapter wire mapping, bootstrap conversion, and transport-specific schema capability gating.
 - Rule ordering, AND/OR semantics, SSID availability, and Default fallback.
 - Configuration schema, canonical encoding, fingerprints, atomic commit, corruption preservation, and compare-and-swap conflicts.
-- DNS cache defaults, bounds, disablement, schema migration, adapter mapping, capability gating, cache-hit behavior, settings reapply, and rollback.
+- DNS cache defaults, bounds, disablement, schema migration, adapter mapping, capability gating, cache-hit behavior, settings reapply, filter-only hosts reapply, and rollback.
+- Profile hosts exact-domain matching, A/AAAA generated rules, loopback address overrides, empty/non-empty replacement, payload bounds, and non-address query behavior.
 - Automatic/Manual persistence, target coalescing, stale decisions, and session fencing.
 - Mutation journal authentication, compensation, crash recovery, and cleanup.
 - Safe-Quit resume journal encoding, schema 1 compatibility, Extension upgrade prepare/submit/confirm fencing, corruption preservation, one-shot claims, and crash windows before and after manager disable or replacement.

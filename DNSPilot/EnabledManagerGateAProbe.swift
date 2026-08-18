@@ -68,6 +68,7 @@ enum EnabledManagerGateAProbe {
                 generation: UUID(),
                 profileID: persisted.value.profileID,
                 upstream: persisted.value.upstream,
+                hosts: persisted.value.hosts,
                 loggingMode: persisted.value.loggingMode,
                 schemaVersion: persisted.value.schemaVersion
             )

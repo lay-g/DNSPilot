@@ -279,6 +279,7 @@ actor OperatingModeCoordinator {
         let target = DNSProxyTarget(
             profileID: profile.id,
             upstream: profile.upstream,
+            hosts: profile.hosts,
             dnsCacheConfiguration: configuration.configuration.value.dnsCacheConfiguration
         )
         guard

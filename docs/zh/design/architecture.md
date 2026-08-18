@@ -52,11 +52,13 @@ Lifecycle journal 只记录 DNSPilot 在 safe Quit 中准备或完成了一次 e
 
 Host 和 Extension 只通过由构建身份派生的 Mach service 通信。App Group entitlement 只授权 Mach service namespace。Host 配置保存在私有 Application Support storage，runtime status 保存在 Extension 进程内。
 
-Extension 接收一份 immutable `ActiveProxyConfiguration`，内容包括 schema version、generation 与 Profile identity、upstream 配置、runtime logging mode 和 DNS cache 设置。
+Extension 接收一份 immutable `ActiveProxyConfiguration`，内容包括 schema version、generation 与 Profile identity、upstream 配置、Profile hosts、runtime logging mode 和 DNS cache 设置。
 
 ## 依赖边界
 
 `AGDnsProxy` 是唯一 DNS transport engine。DNSPilot 只映射配置、把 Network Extension flow 交给 `AGDnsAppProxyFlowManager`、桥接事件和日志，并管理 runtime identity。DNS wire 解析、request ID、UDP/TCP exchange、TC fallback、DoH、bootstrap、TLS、HTTP connection reuse、取消和 transport cleanup 均由 DnsLibs 负责。
+
+Profile 的 typed hosts 由 first-party adapter 转换为一份 deterministic in-memory DnsLibs filter。DNSPilot 不通过 XPC 传递 raw filter text 或 file path。Address override 在 upstream exchange 前生效；transient Profile DNS Test proxy 使用同一份 generator。
 
 Host 通过 `AGDnsUtils.testUpstream` 使用同一份纯 upstream mapping 做预检。Host 还为用户明确发起的 DNS Test query 持有隔离、临时的 `AGDnsProxy`。Host 构造一个通过校验的 DNS question；DnsLibs 负责 exchange 与 response parsing，并返回 status、answer、upstream ID、elapsed time、byte counts 和 error 的 immutable snapshot。临时 proxy 没有 listener 或 cache，并在完成、timeout 或 cancellation 后停止。
 

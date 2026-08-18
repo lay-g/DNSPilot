@@ -11,6 +11,7 @@ DNSPilot 是原生 macOS DNS 工具，通过 DNS Proxy System Extension 转发�
 - 普通 DNS：UDP 优先、TCP fallback，并支持原生 TCP DNS flow。
 - DNS over TLS：证书校验与 bootstrap resolution 由 DnsLibs 负责。
 - DNS over HTTPS：使用 DNS wire format。
+- Profile-owned exact-domain A/AAAA address override，在 upstream exchange 前通过 DnsLibs in-memory filter 生效，并对普通 DNS、DoT 和 DoH Profile 保持一致。
 - 根据 Wi-Fi SSID、活动接口类型和 IPv4/IPv6 子网按顺序自动匹配 Rule。
 - 通过现有 Profile 或不持久化的自定义 Plain DNS、DoT、DoH upstream 执行一次性 DNS 查询，并展示返回状态、answer、逻辑 upstream 和耗时。
 - 第一条启用且匹配的 Rule 生效；用户指定的 Default Profile 负责兜底。

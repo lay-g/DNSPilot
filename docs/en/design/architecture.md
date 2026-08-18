@@ -52,11 +52,13 @@ The lifecycle journal records only that DNSPilot prepared or completed an exact 
 
 The Host and Extension use a build-identity-derived Mach service as their sole communication channel. The App Group entitlement authorizes only the Mach service namespace. Host configuration remains in private Application Support storage, and runtime status remains process-local in the Extension.
 
-The Extension receives one immutable `ActiveProxyConfiguration` containing schema version, generation and Profile identity, upstream configuration, runtime logging mode, and DNS cache settings.
+The Extension receives one immutable `ActiveProxyConfiguration` containing schema version, generation and Profile identity, upstream configuration, Profile hosts, runtime logging mode, and DNS cache settings.
 
 ## Dependency Boundary
 
 `AGDnsProxy` is the only DNS transport engine. DNSPilot maps configuration, passes Network Extension flows to `AGDnsAppProxyFlowManager`, bridges events and logs, and manages runtime identity. DNS wire parsing, request IDs, UDP/TCP exchange, truncation fallback, DoH, bootstrap, TLS, HTTP connection reuse, cancellation, and transport cleanup remain inside DnsLibs.
+
+A Profile's typed hosts are converted by the first-party adapter into one deterministic in-memory DnsLibs filter. DNSPilot does not pass raw filter text or file paths across XPC. Address overrides are evaluated before upstream exchange; the same generator is used for the transient Profile DNS Test proxy.
 
 The Host uses the same pure upstream mapping through `AGDnsUtils.testUpstream` for preflight. It also owns an isolated, transient `AGDnsProxy` for an explicit DNS Test query. The Host constructs one validated DNS question, while DnsLibs owns the exchange and response parsing and returns an immutable snapshot of status, answer, upstream ID, elapsed time, byte counts, and error. The transient proxy has no listeners or cache and is stopped after completion, timeout, or cancellation.
 

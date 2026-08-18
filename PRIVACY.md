@@ -16,7 +16,7 @@ DNSPilot must send DNS traffic to the resolver selected by you. That resolver an
 
 DNSPilot stores the following data locally for the current macOS user:
 
-- Profile names and resolver configuration, including addresses, ports, DNS over HTTPS URLs, and bootstrap addresses;
+- Profile names and resolver configuration, including addresses, ports, DNS over HTTPS URLs, bootstrap addresses, and Profile hosts;
 - Rule names and conditions, which may include Wi-Fi names, interface types, and IPv4 or IPv6 subnets;
 - the Default Profile, Automatic or Manual mode, and related app preferences;
 - short-lived recovery evidence used to complete or safely reverse an interrupted configuration change.
@@ -77,7 +77,7 @@ DNSPilot 必须将 DNS 流量发送到你选择的解析器。该解析器及你
 
 DNSPilot 为当前 macOS 用户在本地保存以下数据：
 
-- Profile 名称和解析器配置，包括地址、端口、DNS over HTTPS URL 与 bootstrap 地址；
+- Profile 名称和解析器配置，包括地址、端口、DNS over HTTPS URL、bootstrap 地址和 Profile hosts；
 - Rule 名称和条件，其中可能包括 Wi-Fi 名称、接口类型以及 IPv4 或 IPv6 子网；
 - Default Profile、Automatic 或 Manual 模式及相关 App 偏好；
 - 用于完成或安全撤销中断配置变更的短期恢复证据。

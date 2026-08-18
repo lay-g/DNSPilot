@@ -9,6 +9,7 @@ struct DNSProfile {
     let id: UUID
     let name: String
     let upstream: DNSUpstream
+    let hosts: [DNSHostEntry]
 }
 
 enum DNSUpstream {
@@ -23,6 +24,12 @@ Profile UUID is identity; names may repeat. Names are trimmed and non-empty. Pla
 Display identity uses the name plus a privacy-safe protocol/server summary. DoT summaries exclude bootstrap addresses. DoH summaries exclude paths, queries, tokens, and bootstrap addresses. Business logic always uses UUIDs.
 
 The Default Profile is a role assigned to a user-owned Profile. Provider templates create ordinary Profiles that remain editable by the user.
+
+## Profile Hosts
+
+A Profile may contain up to 256 typed `DNSHostEntry` values. Each entry is an exact, canonicalized ASCII domain plus one IPv4 or IPv6 address. Domains are lowercased, one trailing dot is removed, wildcards are not accepted, and each domain may have at most one address per family. Hosts are sorted canonically before persistence.
+
+Hosts are Profile-owned and are not `DNSRule` conditions. They affect only A or AAAA queries for the exact domain. Other record types continue to the Profile upstream. The runtime adapter generates `$dnsrewrite` plus `$dnstype` rules in one in-memory DnsLibs filter; raw filter text and file paths are not part of the model or XPC contract.
 
 ## Rules
 
@@ -48,9 +55,9 @@ SSID denial disables only SSID conditions. Interface and subnet Rules continue t
 
 ## Configuration Storage
 
-Profiles, Rules, Default Profile, operating mode, and the global DNS cache configuration live in one versioned `AppConfiguration` document. The cache is enabled by default with a maximum of 1,000 responses. An enabled capacity is restricted to `1...10,000`; disabling the cache retains the last valid capacity for later reuse. An empty document starts in Automatic mode and cannot enable the DNS Proxy until a valid Profile and Default Profile exist.
+Profiles, Rules, Default Profile, operating mode, per-Profile hosts, and the global DNS cache configuration live in one versioned `AppConfiguration` document. The cache is enabled by default with a maximum of 1,000 responses. An enabled capacity is restricted to `1...10,000`; disabling the cache retains the last valid capacity for later reuse. An empty document starts in Automatic mode and cannot enable the DNS Proxy until a valid Profile and Default Profile exist.
 
-Loading validates schema support, duplicate identities, every reference, and cache bounds. Persisted schemas 1 and 2 are migrated canonically to schema 3 in memory with the standard cache configuration and change the official file only through the normal atomic commit path. A newer schema enters read-only recovery and is never overwritten. Corrupt input is preserved before reset is offered.
+Loading validates schema support, duplicate identities, every reference, hosts bounds, and cache bounds. Persisted schemas 1 and 2 are migrated in memory to schema 3 with the standard cache configuration; schema 3 and later inputs are canonicalized to the current schema 4, with absent Profile hosts represented by an empty array. The official file changes only through the normal atomic commit path. A newer schema enters read-only recovery and is never overwritten. Corrupt input is preserved before reset is offered.
 
 Configuration is canonicalized, fingerprinted, and committed with compare-and-swap semantics using a private Application Support directory, restrictive permissions, durable temporary-file writes, and atomic replacement. `UserDefaults` is limited to UI preferences.
 

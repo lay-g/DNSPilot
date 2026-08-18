@@ -32,11 +32,13 @@ Profile/Rule editor 使用 staged draft，只有 Save 才提交 domain configura
 
 Profiles 提供 create、edit、duplicate、test、make-default、replacement 和 delete。自定义 Profile editor 支持 Plain DNS、DNS over TLS 和 DNS over HTTPS。DoT 输入包含 server name 或 address、port 和 bootstrap address。列表身份使用隐私安全的 DoT 与 DoH server 摘要。
 
+每个 Profile editor 还提供 staged Hosts section，用于 exact-domain 的 A/AAAA address override。Hosts 会被校验、canonicalize、排序，并和 Profile 一起提交。不接受 raw filter syntax、wildcard entry 或 hosts file path。Profile detail 展示已保存的 hosts entry，但不改变 Profile list identity。
+
 Rules 显示 enabled、priority、condition summary 和 target Profile。Reorder 只保存一次并 reevaluate 一次。Drag 必须提供 Move Up/Move Down 键盘替代。Default Profile selector 保持可见，Proxy 可用时不能为空。
 
 ## DNS Test
 
-Test 通过现有 Profile 或不持久化的自定义 Plain DNS、DoT、DoH upstream 执行一次明确的 DNS 查询。Profile 默认选择已确认 Active Profile，其次是 Default Profile，再其次是第一个 Profile。Custom fields 使用与 Profile editing 相同的 validation 和 upstream mapping。Request 接受一个通过校验的 domain，以及 A、AAAA、CNAME、MX、TXT、NS、SOA、SRV、CAA 或 PTR 类型。
+Test 通过现有 Profile 或不持久化的自定义 Plain DNS、DoT、DoH upstream 执行一次明确的 DNS 查询。选择现有 Profile 时，transient proxy 同时使用该 Profile hosts；custom upstream 不携带 hosts。Profile 默认选择已确认 Active Profile，其次是 Default Profile，再其次是第一个 Profile。Custom fields 使用与 Profile editing 相同的 validation 和 upstream mapping。Request 接受一个通过校验的 domain，以及 A、AAAA、CNAME、MX、TXT、NS、SOA、SRV、CAA 或 PTR 类型。
 
 Test 使用水平 split，左侧放置 form 与 query controls，右侧展示最近一次 result。原生 divider 可拖动。Pane width 使用 zero minimum、preferred width 与 maximum width，不叠加 positive hard minimum，使嵌套 split 能随管理窗口压缩，并在最小窗口尺寸下避免水平溢出。稳定的 result-pane container 在 empty、loading、failure 与 response 状态之间切换时保持 divider 位置。开始新查询会取消之前的查询。完成或失败后保留输入。最近一次结果展示 DnsLibs response status 与 answer、配置的逻辑 server 与 transport，以及毫秒耗时。Empty answer 与 transport failure 必须区分。Bootstrap address 不得描述为 connected server。Test state 与 input 只属于当前 window session，绝不持久化 query name 或 result。
 

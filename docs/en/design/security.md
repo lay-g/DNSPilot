@@ -38,11 +38,11 @@ An Extension replacement transaction does not weaken ordinary resume identity. B
 
 XPC never accepts Profile catalogs, Rules, SSIDs, file paths, arbitrary command strings, shell commands, or DNS query data. Runtime status is process-local evidence, not a durable configuration channel.
 
-Configuration and recovery files use private directories and restrictive permissions. DNS names, SSIDs, addresses, subnets, answers, endpoint paths, tokens, bootstrap addresses, and raw runtime payloads are private data.
+Configuration and recovery files use private directories and restrictive permissions. DNS names, Profile hosts, SSIDs, addresses, subnets, answers, endpoint paths, tokens, bootstrap addresses, and raw runtime payloads are private data.
 
 The lifecycle journal contains identity fingerprints and UUIDs only. It excludes upstream values, raw provider configuration, network context, and runtime payloads. Corrupt sources are preserved under the same private-file boundary.
 
-Default logs avoid those values. Debug Logging requires explicit warning and may expose them. Diagnostic summary copying is reduced; explicit export is treated as sensitive and requires confirmation.
+Default logs avoid those values, including raw generated hosts rules. Debug Logging requires explicit warning and may expose them. Diagnostic summary copying is reduced; explicit export is treated as sensitive and requires confirmation.
 
 Underlying operational errors are logged as private by default and are not rendered directly in user-facing error text. User-facing failures may expose reviewed, stable error categories and non-sensitive codes, but never raw descriptions that can contain private configuration or implementation details. An unstructured dependency failure remains explicitly unclassified. Debug Logging and confirmed diagnostic export may contain detailed failures under their existing sensitive-data warnings.
 
