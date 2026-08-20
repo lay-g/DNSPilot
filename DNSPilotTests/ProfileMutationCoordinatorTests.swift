@@ -189,6 +189,7 @@ struct ProfileMutationCoordinatorTests {
         state: ActiveProfileMutationState
     ) async throws {
         let fixture = try CoordinatorFixture(profileCount: 1, activeProfileIndex: 0)
+        let host = try DNSHostEntry(domain: "active-hosts.invalid", address: IPAddress("198.51.100.10"))
         let controller = CoordinatorControllerFake(
             activeProfileID: fixture.profiles[0].id,
             oldRuntime: try fixture.runtime(for: fixture.profiles[0]),
@@ -196,9 +197,10 @@ struct ProfileMutationCoordinatorTests {
         )
         let coordinator = fixture.coordinator(controller: controller)
 
-        #expect(await coordinator.mutate(try fixture.editRequest(index: 0))
+        #expect(await coordinator.mutate(try fixture.editRequest(index: 0, hosts: [host]))
                 == .rejected(.runtimeRejected))
         #expect(await controller.events == [.reserve, .persistDesired, .apply, .compensate])
+        #expect(await controller.lastTarget?.hosts == [host])
         #expect(fixture.store.persisted == fixture.initial)
         #expect(try fixture.journal.load() == .missing)
     }
@@ -226,7 +228,8 @@ struct ProfileMutationCoordinatorTests {
     @Test(arguments: [false, true])
     func recoveryUsesExactOfficialOldOrDraftJSON(finishDraft: Bool) async throws {
         let fixture = try CoordinatorFixture(profileCount: 1, activeProfileIndex: 0)
-        let evidence = try fixture.installEvidence(officialDraft: finishDraft)
+        let host = try DNSHostEntry(domain: "recovery-hosts.invalid", address: IPAddress("2001:db8::10"))
+        let evidence = try fixture.installEvidence(officialDraft: finishDraft, hosts: [host])
         let controller = CoordinatorControllerFake(
             activeProfileID: fixture.profiles[0].id,
             oldRuntime: evidence.oldRuntime
@@ -245,6 +248,8 @@ struct ProfileMutationCoordinatorTests {
             #expect(result == .restoredOld(fixture.initial))
             #expect(await controller.recoveryGoals == [.restoreOld])
         }
+        let recoveredDraft = await controller.lastRecoveryDraft
+        #expect(recoveredDraft?.value.hosts == [host])
         #expect(try fixture.journal.load() == .missing)
     }
 
@@ -671,6 +676,7 @@ private actor CoordinatorControllerFake: ActiveProfileMutationControlling {
     private(set) var lastMutationID: UUID?
     private(set) var lastRuntimeOperationIDs: [UUID] = []
     private(set) var lastTarget: DNSProxyTarget?
+    private(set) var lastRecoveryDraft: PersistedProxyConfiguration?
     private(set) var recoveryGoals: [ActiveProfileMutationRecoveryGoal] = []
 
     init(
@@ -739,6 +745,7 @@ private actor CoordinatorControllerFake: ActiveProfileMutationControlling {
         recoveryGoals.append(goal)
         let old = try PersistedProxyConfiguration(data: oldConfigurationData)
         let draft = try PersistedProxyConfiguration(data: draftConfigurationData)
+        lastRecoveryDraft = draft
         return ActiveProfileMutationResult(
             mutationID: mutationID,
             runtimeOperationID: runtimeOperationID,
@@ -845,7 +852,7 @@ private final class CoordinatorFixture {
         )
     }
 
-    func editRequest(index: Int) throws -> ProfileMutationRequest {
+    func editRequest(index: Int, hosts: [DNSHostEntry] = []) throws -> ProfileMutationRequest {
         let profile = profiles[index]
         return ProfileMutationRequest(
             operationID: UUID(),
@@ -853,23 +860,28 @@ private final class CoordinatorFixture {
             intent: .edit(try DNSProfile(
                 id: profile.id,
                 name: "Edited \(profile.name)",
-                upstream: .fixedForCurrentBuild
+                upstream: .fixedForCurrentBuild,
+                hosts: hosts
             ))
         )
     }
 
     func runtime(for profile: DNSProfile) throws -> PersistedProxyConfiguration {
         try PersistedProxyConfiguration(value: ActiveProxyConfiguration(
-            generation: UUID(), profileID: profile.id, upstream: profile.upstream
+            generation: UUID(),
+            profileID: profile.id,
+            upstream: profile.upstream,
+            hosts: profile.hosts
         ))
     }
 
-    func installEvidence(officialDraft: Bool) throws -> Evidence {
+    func installEvidence(officialDraft: Bool, hosts: [DNSHostEntry] = []) throws -> Evidence {
         let oldRuntime = try runtime(for: profiles[0])
         let edited = try DNSProfile(
             id: profiles[0].id,
             name: "Recovered Draft",
-            upstream: .fixedForCurrentBuild
+            upstream: .fixedForCurrentBuild,
+            hosts: hosts
         )
         let draftValue = try AppConfiguration(profiles: [edited])
         let draftApp = try PersistedAppConfiguration(value: draftValue)

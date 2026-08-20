@@ -488,7 +488,8 @@ private struct ProfileEditorView: View {
         case .invalidBootstrapServer, .missingBootstrapServers: .bootstrap
         case .invalidHostDomain(let id, _): .hostDomain(id)
         case .invalidHostAddress(let id, _): .hostAddress(id)
-        case .tooManyHosts, .duplicateHost: .hosts
+        case .tooManyHosts: .hosts
+        case .duplicateHost(let id, _): .hostDomain(id)
         }
     }
 

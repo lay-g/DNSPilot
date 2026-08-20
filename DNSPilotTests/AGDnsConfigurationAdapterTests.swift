@@ -103,6 +103,27 @@ struct AGDnsConfigurationAdapterTests {
         }
     }
 
+    @Test func hostRuleGeneratorRejects256EntriesBeyondRuleByteLimit() throws {
+        let hosts = try (0..<DNSHostEntry.maximumCount).map { index in
+            let uniqueLabel = String(format: "%03d", index) + String(repeating: "z", count: 53)
+            let domain = [String(repeating: "a", count: 63), uniqueLabel].joined(separator: ".")
+            return try DNSHostEntry(domain: domain, address: IPAddress("192.0.2.10"))
+        }
+        _ = try PersistedProxyConfiguration(value: ActiveProxyConfiguration(
+            generation: UUID(),
+            profileID: UUID(),
+            upstream: .fixedCloudflare,
+            hosts: hosts
+        ))
+
+        do {
+            _ = try AGDnsConfigurationAdapter.makeHostRules(from: hosts)
+            Issue.record("Expected the host rule byte limit to reject 256 long entries")
+        } catch let AGDnsConfigurationAdapterError.hostRulesTooLarge(bytes) {
+            #expect(bytes > DNSProxyXPCContract.maximumConfigurationSize / 2)
+        }
+    }
+
     @Test func fixedDoHMappingDisablesFallbackAndExperimentalFeatures() throws {
         let configuration = try ActiveProxyConfiguration(
             generation: UUID(),

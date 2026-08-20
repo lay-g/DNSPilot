@@ -149,8 +149,14 @@ struct AGDnsSingleEngineReapplyTests {
         _ = await fixture.response(for: "sub.\(domain)")
         try await server.waitForQueryCount(1)
 
-        _ = await fixture.response(for: domain, type: 15)
+        _ = await fixture.response(for: domain, type: 28)
         try await server.waitForQueryCount(2)
+
+        _ = await fixture.response(for: domain, type: 15)
+        try await server.waitForQueryCount(3)
+
+        _ = await fixture.response(for: domain, type: 16)
+        try await server.waitForQueryCount(4)
 
         let cleared = try ActiveProxyConfiguration(
             generation: UUID(),
@@ -165,7 +171,57 @@ struct AGDnsSingleEngineReapplyTests {
         #expect(clearResult.issue == nil)
 
         _ = await fixture.response(for: domain)
-        try await server.waitForQueryCount(3)
+        try await server.waitForQueryCount(5)
+    }
+
+    @Test("transient DNS Test proxy applies Profile hosts")
+    func transientQueryProxyAppliesProfileHosts() async throws {
+        let server = try LoopbackDNSServer()
+        defer { server.stop() }
+        let domain = "profile-hosts-query-test.invalid"
+        let upstream = DNSUpstream.plain(try PlainDNSConfiguration(
+            serverAddress: IPAddress("127.0.0.1"),
+            port: Int(server.port)
+        ))
+        let hosts = [
+            try DNSHostEntry(domain: domain, address: IPAddress("198.51.100.10")),
+            try DNSHostEntry(domain: domain, address: IPAddress("2001:db8::10")),
+        ]
+        let tester = DNSQueryTester()
+
+        let aResult = try await tester.query(DNSQueryRequest(
+            domain: domain,
+            type: .a,
+            upstream: upstream,
+            hosts: hosts
+        ))
+        #expect(aResult.answer.contains("198.51.100.10"))
+        #expect(server.queryCount == 0)
+
+        let aaaaResult = try await tester.query(DNSQueryRequest(
+            domain: domain,
+            type: .aaaa,
+            upstream: upstream,
+            hosts: hosts
+        ))
+        #expect(aaaaResult.answer.contains("2001:db8::10"))
+        #expect(server.queryCount == 0)
+
+        _ = try await tester.query(DNSQueryRequest(
+            domain: domain,
+            type: .mx,
+            upstream: upstream,
+            hosts: hosts
+        ))
+        try await server.waitForQueryCount(1)
+
+        _ = try await tester.query(DNSQueryRequest(
+            domain: "sub.\(domain)",
+            type: .a,
+            upstream: upstream,
+            hosts: hosts
+        ))
+        try await server.waitForQueryCount(2)
     }
 
     @Test("failed settings reapply requires and accepts explicit rollback")
