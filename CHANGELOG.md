@@ -4,7 +4,16 @@ All notable changes to DNSPilot are documented in this file. The format follows 
 
 ## Unreleased
 
-## [1.1] - 2026-08-03
+## [1.2] - 2026-08-21
+
+### Added
+
+- Profile hosts overrides for exact domain-to-address mappings, including IPv4 and IPv6 entries.
+
+### Changed
+
+- Profile hosts are validated, stored, and applied consistently during active DNS runtime changes and Profile testing without requiring a separate DNS transport.
+
 
 ### Added
 

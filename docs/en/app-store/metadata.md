@@ -59,9 +59,9 @@ Initial release of DNSPilot with Plain DNS, DNS over TLS, and DNS over HTTPS Pro
 
 App Store Connect does not provide the What's New field for an app's first version. Reuse this summary only where a first-release summary is requested; do not try to enter it as What's New for version 1.0.
 
-## Version 1.1 What's New
+## Version 1.2 What's New
 
-Adds configurable DNS caching and a dedicated DNS query tester for Profiles and temporary Plain DNS, DNS over TLS, and DNS over HTTPS servers. Improves Profile test feedback, compatible System Extension upgrades, and compact-window layouts.
+Adds per-Profile hosts overrides for exact domain-to-address mappings, including IPv4 and IPv6 entries, and applies them consistently during active DNS runtime changes and Profile testing.
 
 ## App Privacy Draft
 
