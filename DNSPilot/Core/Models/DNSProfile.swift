@@ -4,6 +4,7 @@ enum DNSProfileError: LocalizedError, Equatable, Sendable {
     case emptyName
     case tooManyHosts(Int)
     case duplicateHost(domain: String, family: IPAddress.Family)
+    case overlappingWildcardHost(domain: String, family: IPAddress.Family)
 
     var errorDescription: String? {
         switch self {
@@ -17,6 +18,12 @@ enum DNSProfileError: LocalizedError, Equatable, Sendable {
             case .ipv6: "IPv6"
             }
             return "DNS profile host \(domain) has more than one \(familyName) address."
+        case let .overlappingWildcardHost(domain, family):
+            let familyName = switch family {
+            case .ipv4: "IPv4"
+            case .ipv6: "IPv6"
+            }
+            return "DNS profile host \(domain) overlaps an existing wildcard hosts entry for \(familyName)."
         }
     }
 }
@@ -55,6 +62,14 @@ struct DNSProfile: Identifiable, Codable, Equatable, Sendable {
                 throw DNSProfileError.duplicateHost(
                     domain: host.domain,
                     family: host.address.family
+                )
+            }
+        }
+        for i in 0..<sortedHosts.count {
+            for j in (i + 1)..<sortedHosts.count where DNSHostEntry.overlaps(sortedHosts[i], sortedHosts[j]) {
+                throw DNSProfileError.overlappingWildcardHost(
+                    domain: sortedHosts[j].domain,
+                    family: sortedHosts[j].address.family
                 )
             }
         }

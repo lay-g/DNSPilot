@@ -10,7 +10,7 @@ Encoding occurs once per generation. Manager persistence, XPC mutation, runtime 
 
 A runtime is confirmed only when Provider instance, generation, fingerprint, `.ready` phase, compatible control protocol, and final manager ownership reload all agree.
 
-Active Proxy schema capability is transport-specific: DoH requires schema 1, Plain DNS requires schema 2, and DoT requires schema 3. Schema 1 through 3 imply the standard DNS cache configuration; custom capacity or disabled cache requires schema 4; non-empty Profile hosts require schema 5. The Host discovers authenticated Provider capability before encoding a transport, cache, or hosts setting that needs a newer schema and never silently drops a requested setting. Capability mismatch fails before preflight or manager mutation.
+Active Proxy schema capability is transport-specific: DoH requires schema 1, Plain DNS requires schema 2, and DoT requires schema 3. Schema 1 through 3 imply the standard DNS cache configuration; custom capacity or disabled cache requires schema 4; non-empty Profile hosts require schema 5; wildcard Profile hosts require schema 6. The Host discovers authenticated Provider capability before encoding a transport, cache, or hosts setting that needs a newer schema and never silently drops a requested setting. Capability mismatch fails before preflight or manager mutation.
 
 ## DNS Cache Changes
 

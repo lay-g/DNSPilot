@@ -10,7 +10,7 @@
 
 只有 Provider instance、generation、fingerprint、`.ready` phase、兼容 control protocol 和最终 manager ownership reload 全部一致，runtime 才算已确认。
 
-Active Proxy schema capability 按 transport 区分：DoH 至少需要 schema 1，Plain DNS 至少需要 schema 2，DoT 至少需要 schema 3。Schema 1 至 3 隐含标准 DNS cache 配置；自定义容量或关闭 cache 需要 schema 4；非空 Profile hosts 需要 schema 5。Host 在编码需要更高 schema 的 transport、cache 或 hosts 设置前先发现经过认证的 Provider capability，绝不能静默丢弃用户请求的设置。Capability 不匹配时必须在预检或 manager mutation 前失败。
+Active Proxy schema capability 按 transport 区分：DoH 至少需要 schema 1，Plain DNS 至少需要 schema 2，DoT 至少需要 schema 3。Schema 1 至 3 隐含标准 DNS cache 配置；自定义容量或关闭 cache 需要 schema 4；非空 Profile hosts 需要 schema 5；wildcard Profile hosts 需要 schema 6。Host 在编码需要更高 schema 的 transport、cache 或 hosts 设置前先发现经过认证的 Provider capability，绝不能静默丢弃用户请求的设置。Capability 不匹配时必须在预检或 manager mutation 前失败。
 
 ## DNS Cache 变更
 

@@ -490,6 +490,7 @@ private struct ProfileEditorView: View {
         case .invalidHostAddress(let id, _): .hostAddress(id)
         case .tooManyHosts: .hosts
         case .duplicateHost(let id, _): .hostDomain(id)
+        case .overlappingWildcardHost(let id, _): .hostDomain(id)
         }
     }
 

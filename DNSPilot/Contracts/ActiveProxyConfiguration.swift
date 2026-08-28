@@ -17,6 +17,8 @@ enum ActiveProxyConfigurationError: LocalizedError, Equatable, Sendable {
     case tooManyHosts(Int)
     case configurationTooLarge(Int)
     case duplicateHost(domain: String, family: IPAddress.Family)
+    case overlappingWildcardHost(domain: String, family: IPAddress.Family)
+    case wildcardHostsRequireSchemaVersion
     case invalidPropertyListStructure
 
     var errorDescription: String? {
@@ -57,6 +59,14 @@ enum ActiveProxyConfigurationError: LocalizedError, Equatable, Sendable {
             case .ipv6: "IPv6"
             }
             return "DNS host \(domain) has more than one \(familyName) address."
+        case let .overlappingWildcardHost(domain, family):
+            let familyName = switch family {
+            case .ipv4: "IPv4"
+            case .ipv6: "IPv6"
+            }
+            return "DNS host \(domain) overlaps an existing wildcard hosts entry for \(familyName)."
+        case .wildcardHostsRequireSchemaVersion:
+            return "Wildcard hosts entries require proxy configuration schema version 6."
         case .invalidPropertyListStructure:
             return "The proxy configuration property list has an invalid structure."
         }
@@ -69,6 +79,16 @@ struct DNSHostEntry: Codable, Equatable, Hashable, Sendable {
     let domain: String
     let address: IPAddress
 
+    /// True when the canonicalized domain carries a leftmost `*.` label.
+    var isWildcard: Bool {
+        domain.hasPrefix("*.")
+    }
+
+    /// The wildcard base domain (domain without the leading `*.`), or `nil` for exact entries.
+    var wildcardBase: String? {
+        isWildcard ? String(domain.dropFirst(2)) : nil
+    }
+
     init(domain: String, address: IPAddress) throws {
         var normalized = domain.trimmingCharacters(in: .whitespacesAndNewlines)
         if normalized.hasSuffix(".") {
@@ -78,7 +98,16 @@ struct DNSHostEntry: Codable, Equatable, Hashable, Sendable {
             throw ActiveProxyConfigurationError.invalidHostDomain(domain)
         }
 
-        let labels = normalized.split(separator: ".", omittingEmptySubsequences: false)
+        // A single leftmost `*.` prefix selects the wildcard form; the label
+        // whitelist below rejects `*` anywhere else (`**.x`, `a.*.x`, trailing `*`).
+        let isWildcard = normalized.hasPrefix("*.")
+        let body = isWildcard ? String(normalized.dropFirst(2)) : normalized
+        // The IP-literal ban applies to the body too: `*.192.0.2.1` must be rejected
+        // just like the exact form, which the whole-domain check above cannot catch.
+        guard (try? IPAddress(body)) == nil else {
+            throw ActiveProxyConfigurationError.invalidHostDomain(domain)
+        }
+        let labels = body.split(separator: ".", omittingEmptySubsequences: false)
         let validLabels = labels.allSatisfy { label in
             let bytes = label.utf8
             guard !bytes.isEmpty, bytes.count <= 63 else { return false }
@@ -90,13 +119,32 @@ struct DNSHostEntry: Codable, Equatable, Hashable, Sendable {
                     || byte == 0x5f
             }
         }
-        let wireNameLength = labels.reduce(1) { $0 + 1 + $1.utf8.count }
-        guard validLabels, wireNameLength <= 255 else {
+        // `*.` contributes a 2-byte wire label (length byte + '*') beyond the body.
+        let wireNameLength = labels.reduce(1) { $0 + 1 + $1.utf8.count } + (isWildcard ? 2 : 0)
+        guard !body.isEmpty, validLabels, wireNameLength <= 255 else {
             throw ActiveProxyConfigurationError.invalidHostDomain(domain)
         }
 
         self.domain = normalized.lowercased()
         self.address = address
+    }
+
+    /// Whether two entries' coverage sets intersect for the same address family.
+    /// Exact–exact pairs are left to the existing duplicate check.
+    static func overlaps(_ lhs: DNSHostEntry, _ rhs: DNSHostEntry) -> Bool {
+        guard lhs.address.family == rhs.address.family else { return false }
+        switch (lhs.wildcardBase, rhs.wildcardBase) {
+        case let (base?, otherBase?):
+            return base == otherBase
+                || base.hasSuffix("." + otherBase)
+                || otherBase.hasSuffix("." + base)
+        case let (base?, nil):
+            return rhs.domain == base || rhs.domain.hasSuffix("." + base)
+        case let (nil, base?):
+            return lhs.domain == base || lhs.domain.hasSuffix("." + base)
+        case (nil, nil):
+            return false
+        }
     }
 
     static func validate(_ hosts: [DNSHostEntry]) throws {
@@ -113,6 +161,14 @@ struct DNSHostEntry: Codable, Equatable, Hashable, Sendable {
                 throw ActiveProxyConfigurationError.duplicateHost(
                     domain: host.domain,
                     family: host.address.family
+                )
+            }
+        }
+        for i in 0..<hosts.count {
+            for j in (i + 1)..<hosts.count where DNSHostEntry.overlaps(hosts[i], hosts[j]) {
+                throw ActiveProxyConfigurationError.overlappingWildcardHost(
+                    domain: hosts[j].domain,
+                    family: hosts[j].address.family
                 )
             }
         }
@@ -417,7 +473,7 @@ enum ProxyLoggingMode: String, Codable, Sendable {
 }
 
 struct ActiveProxyConfiguration: Codable, Equatable, Sendable {
-    static let currentSchemaVersion = 5
+    static let currentSchemaVersion = 6
     static let providerConfigurationKey = "DNSPilotActiveProxyConfiguration"
     static let vendorDataOptionKey = "VendorData"
 
@@ -461,6 +517,9 @@ struct ActiveProxyConfiguration: Codable, Equatable, Sendable {
         if schemaVersion < 5, !hosts.isEmpty {
             throw ActiveProxyConfigurationError.unsupportedLegacyHostsConfiguration
         }
+        if schemaVersion < 6, hosts.contains(where: \.isWildcard) {
+            throw ActiveProxyConfigurationError.wildcardHostsRequireSchemaVersion
+        }
 
         guard hosts.count <= DNSHostEntry.maximumCount else {
             throw ActiveProxyConfigurationError.tooManyHosts(hosts.count)
@@ -481,6 +540,14 @@ struct ActiveProxyConfiguration: Codable, Equatable, Sendable {
                 throw ActiveProxyConfigurationError.duplicateHost(
                     domain: host.domain,
                     family: host.address.family
+                )
+            }
+        }
+        for i in 0..<sortedHosts.count {
+            for j in (i + 1)..<sortedHosts.count where DNSHostEntry.overlaps(sortedHosts[i], sortedHosts[j]) {
+                throw ActiveProxyConfigurationError.overlappingWildcardHost(
+                    domain: sortedHosts[j].domain,
+                    family: sortedHosts[j].address.family
                 )
             }
         }
@@ -574,13 +641,13 @@ struct ActiveProxyConfiguration: Codable, Equatable, Sendable {
             expectedKeys = legacyPropertyListKeys
         case 4:
             expectedKeys = schema4PropertyListKeys
-        case currentSchemaVersion:
+        case 5, currentSchemaVersion:
             expectedKeys = currentPropertyListKeys
         default:
             throw ActiveProxyConfigurationError.invalidPropertyListStructure
         }
         try requireExactKeys(expectedKeys, in: configuration)
-        if schemaVersion == currentSchemaVersion {
+        if schemaVersion >= 5 {
             guard let hosts = configuration["hosts"] as? [[String: Any]] else {
                 throw ActiveProxyConfigurationError.invalidPropertyListStructure
             }
@@ -676,7 +743,7 @@ struct ActiveProxyConfiguration: Codable, Equatable, Sendable {
                 dnsCacheConfiguration: decodedDNSCacheConfiguration,
                 schemaVersion: 1
             )
-        case 2, 3, 4, Self.currentSchemaVersion:
+        case 2, 3, 4, 5, Self.currentSchemaVersion:
             try self.init(
                 generation: decodedGeneration,
                 profileID: decodedProfileID,
@@ -711,7 +778,7 @@ struct ActiveProxyConfiguration: Codable, Equatable, Sendable {
                 ),
                 forKey: .upstream
             )
-        case 2, 3, 4, Self.currentSchemaVersion:
+        case 2, 3, 4, 5, Self.currentSchemaVersion:
             try container.encode(upstream, forKey: .upstream)
         default:
             throw ActiveProxyConfigurationError.unsupportedSchemaVersion(schemaVersion)

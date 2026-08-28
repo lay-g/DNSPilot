@@ -27,9 +27,9 @@ The Default Profile is a role assigned to a user-owned Profile. Provider templat
 
 ## Profile Hosts
 
-A Profile may contain up to 256 typed `DNSHostEntry` values. Each entry is an exact, canonicalized ASCII domain plus one IPv4 or IPv6 address. Domains are lowercased, one trailing dot is removed, wildcards are not accepted, and each domain may have at most one address per family. Hosts are sorted canonically before persistence.
+A Profile may contain up to 256 typed `DNSHostEntry` values. Each entry is a canonicalized ASCII domain — exact or carrying a single leftmost `*.` wildcard prefix — plus one IPv4 or IPv6 address. Domains are lowercased and one trailing dot is removed; `*` is accepted only as the entire leftmost label followed by a dot. A wildcard entry covers the base domain and every subdomain of any depth. Entries whose coverage would intersect for the same address family are rejected: a wildcard over base D conflicts with any same-family entry whose domain equals D or ends with `.D`, and with another wildcard whose base equals D, ends with `.D`, or has D as a suffix. Each domain may have at most one address per family. Hosts are sorted canonically before persistence.
 
-Hosts are Profile-owned and are not `DNSRule` conditions. They affect only A or AAAA queries for the exact domain. Other record types continue to the Profile upstream. The runtime adapter generates `$dnsrewrite` plus `$dnstype` rules in one in-memory DnsLibs filter; raw filter text and file paths are not part of the model or XPC contract.
+Hosts are Profile-owned and are not `DNSRule` conditions. They affect only A or AAAA queries for the covered domains. Other record types continue to the Profile upstream. The runtime adapter generates `$dnsrewrite` plus `$dnstype` rules in one in-memory DnsLibs filter — `|domain|` for exact entries and `||base^` for wildcard entries; raw filter text and file paths are not part of the model or XPC contract.
 
 ## Rules
 
@@ -57,7 +57,7 @@ SSID denial disables only SSID conditions. Interface and subnet Rules continue t
 
 Profiles, Rules, Default Profile, operating mode, per-Profile hosts, and the global DNS cache configuration live in one versioned `AppConfiguration` document. The cache is enabled by default with a maximum of 1,000 responses. An enabled capacity is restricted to `1...10,000`; disabling the cache retains the last valid capacity for later reuse. An empty document starts in Automatic mode and cannot enable the DNS Proxy until a valid Profile and Default Profile exist.
 
-Loading validates schema support, duplicate identities, every reference, hosts bounds, and cache bounds. Persisted schemas 1 and 2 are migrated in memory to schema 3 with the standard cache configuration; schema 3 and later inputs are canonicalized to the current schema 4, with absent Profile hosts represented by an empty array. The official file changes only through the normal atomic commit path. A newer schema enters read-only recovery and is never overwritten. Corrupt input is preserved before reset is offered.
+Loading validates schema support, duplicate identities, every reference, hosts bounds, and cache bounds. Persisted schemas 1 and 2 are migrated in memory to schema 3 with the standard cache configuration; schema 3 and later inputs are canonicalized to the current schema 5, with absent Profile hosts represented by an empty array. The official file changes only through the normal atomic commit path. A newer schema enters read-only recovery and is never overwritten. Corrupt input is preserved before reset is offered.
 
 Configuration is canonicalized, fingerprinted, and committed with compare-and-swap semantics using a private Application Support directory, restrictive permissions, durable temporary-file writes, and atomic replacement. `UserDefaults` is limited to UI preferences.
 

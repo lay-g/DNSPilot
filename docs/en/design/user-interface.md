@@ -32,7 +32,7 @@ Profile and Rule editors use staged drafts. Only Save commits domain configurati
 
 Profiles expose create, edit, duplicate, test, make-default, replacement, and delete workflows. Custom Profile editors support Plain DNS, DNS over TLS, and DNS over HTTPS. DoT input contains server name or address, port, and bootstrap addresses. List identity uses privacy-safe DoT and DoH server summaries.
 
-Each Profile editor also provides a staged Hosts section for exact-domain A/AAAA address overrides. Hosts are validated, canonicalized, sorted, and committed with the Profile. Raw filter syntax, wildcard entries, and hosts file paths are not accepted. Profile detail shows saved host entries without changing the Profile list identity.
+Each Profile editor also provides a staged Hosts section for exact or leftmost-wildcard (`*.`) A/AAAA address overrides. A wildcard entry covers the base domain and all subdomains, and overlapping same-family entries are rejected. Hosts are validated, canonicalized, sorted, and committed with the Profile. Raw filter syntax and hosts file paths are not accepted. Profile detail shows saved host entries without changing the Profile list identity.
 
 Rules show enabled state, priority, condition summary, and target Profile. Reordering saves once and reevaluates once. Dragging has Move Up/Move Down keyboard alternatives. The Default Profile selector remains visible and cannot be empty while the Proxy is usable.
 

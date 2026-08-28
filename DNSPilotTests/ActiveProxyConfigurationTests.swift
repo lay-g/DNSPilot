@@ -137,7 +137,7 @@ struct ActiveProxyConfigurationTests {
         #expect(upstream["kind"] as? String == "tls")
     }
 
-    @Test func schemaFiveRoundTripPreservesHostsAndExactKeys() throws {
+    @Test func schemaSixRoundTripPreservesHostsAndExactKeys() throws {
         let hosts = [
             try DNSHostEntry(domain: "WWW.Example.Test.", address: IPAddress("2001:db8::10")),
             try DNSHostEntry(domain: "www.example.test", address: IPAddress("192.0.2.10")),
@@ -155,13 +155,200 @@ struct ActiveProxyConfigurationTests {
             PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any]
         )
 
-        #expect(decoded.schemaVersion == 5)
+        #expect(decoded.schemaVersion == 6)
         #expect(decoded.hosts.map(\.address.stringValue) == ["192.0.2.10", "2001:db8::10"])
         #expect(payload["hosts"] != nil)
         #expect(Set(payload.keys) == Set([
             "schemaVersion", "generation", "profileID", "upstream", "loggingMode",
             "dnsCacheConfiguration", "hosts",
         ]))
+    }
+
+    @Test func wildcardHostsNormalizeAndExposeBase() throws {
+        let wildcard = try DNSHostEntry(domain: " *.Ads.Example.COM. ", address: IPAddress("192.0.2.10"))
+        #expect(wildcard.domain == "*.ads.example.com")
+        #expect(wildcard.isWildcard)
+        #expect(wildcard.wildcardBase == "ads.example.com")
+
+        let exact = try DNSHostEntry(domain: "WWW.Example.COM.", address: IPAddress("192.0.2.10"))
+        #expect(exact.domain == "www.example.com")
+        #expect(!exact.isWildcard)
+        #expect(exact.wildcardBase == nil)
+
+        let singleLabel = try DNSHostEntry(domain: "*.intranet", address: IPAddress("192.0.2.10"))
+        #expect(singleLabel.isWildcard)
+        #expect(singleLabel.wildcardBase == "intranet")
+    }
+
+    @Test(arguments: [
+        "**.example.test",
+        "a.*.example.test",
+        "*",
+        "*.",
+        "example.*",
+        "*example.test",
+        "*..example.test",
+        "a**.example.test",
+        "*.192.0.2.1",
+        "*.2001:db8::1",
+    ])
+    func rejectsInvalidWildcardForms(_ domain: String) {
+        #expect(throws: ActiveProxyConfigurationError.invalidHostDomain(domain)) {
+            try DNSHostEntry(domain: domain, address: IPAddress("192.0.2.10"))
+        }
+    }
+
+    @Test func hostEntryValidateRejectsWildcardOverlap() throws {
+        #expect(throws: ActiveProxyConfigurationError.overlappingWildcardHost(
+            domain: "www.example.test",
+            family: .ipv4
+        )) {
+            try DNSHostEntry.validate([
+                try DNSHostEntry(domain: "*.example.test", address: IPAddress("192.0.2.10")),
+                try DNSHostEntry(domain: "www.example.test", address: IPAddress("192.0.2.11")),
+            ])
+        }
+    }
+
+    @Test func runtimeConfigurationRejectsWildcardOverlaps() throws {
+        let wildcard = try DNSHostEntry(domain: "*.example.test", address: IPAddress("192.0.2.10"))
+        let exactBase = try DNSHostEntry(domain: "example.test", address: IPAddress("192.0.2.11"))
+        let deepSubdomain = try DNSHostEntry(domain: "a.b.example.test", address: IPAddress("192.0.2.12"))
+        let wildcardSub = try DNSHostEntry(domain: "*.sub.example.test", address: IPAddress("192.0.2.13"))
+
+        #expect(throws: ActiveProxyConfigurationError.overlappingWildcardHost(domain: "example.test", family: .ipv4)) {
+            try ActiveProxyConfiguration(
+                generation: generation,
+                profileID: profileID,
+                upstream: .fixedCloudflare,
+                hosts: [wildcard, exactBase]
+            )
+        }
+        #expect(throws: ActiveProxyConfigurationError.overlappingWildcardHost(domain: "a.b.example.test", family: .ipv4)) {
+            try ActiveProxyConfiguration(
+                generation: generation,
+                profileID: profileID,
+                upstream: .fixedCloudflare,
+                hosts: [wildcard, deepSubdomain]
+            )
+        }
+        #expect(throws: ActiveProxyConfigurationError.overlappingWildcardHost(domain: "*.sub.example.test", family: .ipv4)) {
+            try ActiveProxyConfiguration(
+                generation: generation,
+                profileID: profileID,
+                upstream: .fixedCloudflare,
+                hosts: [wildcard, wildcardSub]
+            )
+        }
+    }
+
+    @Test func wildcardOverlapsAcrossFamiliesAndDistinctBasesAreAllowed() throws {
+        let configuration = try ActiveProxyConfiguration(
+            generation: generation,
+            profileID: profileID,
+            upstream: .fixedCloudflare,
+            hosts: [
+                try DNSHostEntry(domain: "*.example.test", address: IPAddress("192.0.2.10")),
+                try DNSHostEntry(domain: "example.test", address: IPAddress("2001:db8::10")),
+                try DNSHostEntry(domain: "*.example.org", address: IPAddress("192.0.2.11")),
+                try DNSHostEntry(domain: "example.org", address: IPAddress("2001:db8::11")),
+                try DNSHostEntry(domain: "*.intranet", address: IPAddress("192.0.2.12")),
+            ]
+        )
+
+        #expect(configuration.hosts.count == 5)
+    }
+
+    @Test func wildcardHostsRequireSchemaSix() throws {
+        let wildcard = try DNSHostEntry(domain: "*.example.test", address: IPAddress("192.0.2.10"))
+        #expect(throws: ActiveProxyConfigurationError.wildcardHostsRequireSchemaVersion) {
+            try ActiveProxyConfiguration(
+                generation: generation,
+                profileID: profileID,
+                upstream: .fixedCloudflare,
+                hosts: [wildcard],
+                schemaVersion: 5
+            )
+        }
+
+        let exact = try DNSHostEntry(domain: "example.test", address: IPAddress("192.0.2.10"))
+        _ = try ActiveProxyConfiguration(
+            generation: generation,
+            profileID: profileID,
+            upstream: .fixedCloudflare,
+            hosts: [exact],
+            schemaVersion: 5
+        )
+    }
+
+    @Test func schemaFivePayloadRejectsWildcardHostEntries() throws {
+        let exactConfiguration = try ActiveProxyConfiguration(
+            generation: generation,
+            profileID: profileID,
+            upstream: .fixedCloudflare,
+            hosts: [try DNSHostEntry(domain: "example.test", address: IPAddress("192.0.2.10"))],
+            schemaVersion: 5
+        )
+        var payload = try #require(
+            PropertyListSerialization.propertyList(
+                from: exactConfiguration.propertyListData(),
+                format: nil
+            ) as? [String: Any]
+        )
+        var hosts = try #require(payload["hosts"] as? [[String: Any]])
+        hosts[0]["domain"] = "*.example.test"
+        payload["hosts"] = hosts
+        let data = try PropertyListSerialization.data(fromPropertyList: payload, format: .binary, options: 0)
+
+        #expect(throws: ActiveProxyConfigurationError.wildcardHostsRequireSchemaVersion) {
+            try ActiveProxyConfiguration.decodePropertyList(data)
+        }
+    }
+
+    @Test func schemaSixRoundTripPreservesWildcardHosts() throws {
+        let wildcard = try DNSHostEntry(domain: "*.Example.Test.", address: IPAddress("192.0.2.10"))
+        let configuration = try ActiveProxyConfiguration(
+            generation: generation,
+            profileID: profileID,
+            upstream: .fixedCloudflare,
+            hosts: [wildcard]
+        )
+
+        #expect(configuration.schemaVersion == 6)
+        let decoded = try ActiveProxyConfiguration.decodePropertyList(configuration.propertyListData())
+        #expect(decoded.hosts == [try DNSHostEntry(domain: "*.example.test", address: IPAddress("192.0.2.10"))])
+    }
+
+    @Test func schemaFiveExactHostsPayloadRoundTripsUnchanged() throws {
+        let exactConfiguration = try ActiveProxyConfiguration(
+            generation: generation,
+            profileID: profileID,
+            upstream: .fixedCloudflare,
+            hosts: [try DNSHostEntry(domain: "example.test", address: IPAddress("192.0.2.10"))],
+            schemaVersion: 5
+        )
+        let data = try exactConfiguration.propertyListData()
+        let decoded = try ActiveProxyConfiguration.decodePropertyList(data)
+        let payload = try #require(
+            PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any]
+        )
+
+        #expect(decoded.schemaVersion == 5)
+        #expect(decoded.hosts == exactConfiguration.hosts)
+        #expect(payload["hosts"] != nil)
+    }
+
+    @Test func wildcardWireLengthBoundaryIsEnforced() throws {
+        // `*.` (2 bytes) + four 62-byte labels (4 × 63) + root (1) = 255, accepted.
+        let label = String(repeating: "a", count: 62)
+        let maxLength = "*.\(label).\(label).\(label).\(label)"
+        #expect(try DNSHostEntry(domain: maxLength, address: IPAddress("192.0.2.10")).isWildcard)
+
+        // One more byte in the last label pushes the wire length to 256, rejected.
+        let overLength = "*.\(label).\(label).\(label).\(String(repeating: "a", count: 63))"
+        #expect(throws: ActiveProxyConfigurationError.invalidHostDomain(overLength)) {
+            try DNSHostEntry(domain: overLength, address: IPAddress("192.0.2.10"))
+        }
     }
 
     @Test func legacySchemaFourRejectsHosts() throws {

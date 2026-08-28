@@ -63,7 +63,7 @@ enum AppConfigurationError: LocalizedError, Equatable, Sendable {
 }
 
 struct AppConfiguration: Codable, Equatable, Sendable {
-    static let currentSchemaVersion = 4
+    static let currentSchemaVersion = 5
 
     let schemaVersion: Int
     let profiles: [DNSProfile]

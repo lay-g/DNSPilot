@@ -65,6 +65,42 @@ struct ProductModelsTests {
         }
     }
 
+    @Test func profileHostsAcceptWildcardDomains() throws {
+        let profile = try ProfileDraft(
+            name: "DNS",
+            transport: .plain,
+            plainServerAddress: "192.0.2.53",
+            hosts: [
+                ProfileHostDraft(domain: " *.Ads.Example.Test. ", address: "0.0.0.0"),
+            ]
+        ).profile()
+
+        #expect(profile.hosts.first?.domain == "*.ads.example.test")
+        #expect(try ProfileDraft(profile: profile).profile() == profile)
+    }
+
+    @Test func profileDraftRejectsWildcardOverlapAndReportsField() throws {
+        let wildcard = ProfileHostDraft(domain: "*.example.test", address: "192.0.2.10")
+        let overlapping = ProfileHostDraft(domain: "www.example.test", address: "192.0.2.11")
+        #expect(throws: ProfileDraftError.overlappingWildcardHost(id: overlapping.id, value: "www.example.test")) {
+            try ProfileDraft(
+                name: "DNS",
+                transport: .plain,
+                plainServerAddress: "192.0.2.53",
+                hosts: [wildcard, overlapping]
+            ).profile()
+        }
+
+        let crossFamily = ProfileHostDraft(domain: "www.example.test", address: "2001:db8::10")
+        let profile = try ProfileDraft(
+            name: "DNS",
+            transport: .plain,
+            plainServerAddress: "192.0.2.53",
+            hosts: [wildcard, crossFamily]
+        ).profile()
+        #expect(profile.hosts.count == 2)
+    }
+
     @Test func profileDraftReportsTypedFieldFailures() {
         #expect(throws: ProfileDraftError.emptyName) {
             try ProfileDraft(name: " ", transport: .plain, plainServerAddress: "192.0.2.1").profile()

@@ -593,7 +593,8 @@ struct OnboardingView: View {
         case .invalidPort: .port
         case .invalidEndpoint: .endpoint
         case .invalidBootstrapServer, .missingBootstrapServers: .bootstrap
-        case .invalidHostDomain, .invalidHostAddress, .tooManyHosts, .duplicateHost: .name
+        case .invalidHostDomain, .invalidHostAddress, .tooManyHosts, .duplicateHost, .overlappingWildcardHost:
+            .name
         }
     }
 

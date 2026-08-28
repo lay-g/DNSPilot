@@ -54,14 +54,14 @@ struct AppConfigurationTests {
             from: JSONEncoder().encode(configuration)
         )
 
-        #expect(decoded.schemaVersion == 4)
+        #expect(decoded.schemaVersion == 5)
         #expect(decoded.profiles.first?.hosts == [host])
     }
 
     @Test func emptyInitialConfigurationIsValid() throws {
         let configuration = try AppConfiguration()
 
-        #expect(configuration.schemaVersion == 4)
+        #expect(configuration.schemaVersion == 5)
         #expect(configuration.profiles.isEmpty)
         #expect(configuration.defaultProfileID == nil)
         #expect(configuration.operatingMode == .automatic)
@@ -77,8 +77,8 @@ struct AppConfigurationTests {
             profileID: profile.id
         )
 
-        #expect(throws: AppConfigurationError.unsupportedSchemaVersion(5)) {
-            try AppConfiguration(schemaVersion: 5)
+        #expect(throws: AppConfigurationError.unsupportedSchemaVersion(6)) {
+            try AppConfiguration(schemaVersion: 6)
         }
         #expect(throws: AppConfigurationError.duplicateProfileID(profile.id)) {
             try AppConfiguration(profiles: [profile, profile])
@@ -130,6 +130,64 @@ struct AppConfigurationTests {
         )
 
         #expect(migrated.profiles.first?.hosts.isEmpty == true)
+    }
+
+    @Test func migratesSchemaFourToCurrentSchemaWithoutHostsKeys() throws {
+        let profile = try makeProfile()
+        let current = try AppConfiguration(profiles: [profile], defaultProfileID: profile.id)
+        var payload = try #require(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(current)) as? [String: Any]
+        )
+        payload["schemaVersion"] = 4
+        var profiles = try #require(payload["profiles"] as? [[String: Any]])
+        for index in profiles.indices {
+            profiles[index].removeValue(forKey: "hosts")
+        }
+        payload["profiles"] = profiles
+
+        let migrated = try JSONDecoder().decode(
+            AppConfiguration.self,
+            from: JSONSerialization.data(withJSONObject: payload)
+        )
+
+        #expect(migrated.schemaVersion == AppConfiguration.currentSchemaVersion)
+        #expect(migrated.profiles.first?.hosts.isEmpty == true)
+    }
+
+    @Test func migratesSchemaFourExactHostsToCurrentSchema() throws {
+        let profile = try makeProfile()
+        let current = try AppConfiguration(profiles: [profile], defaultProfileID: profile.id)
+        var payload = try #require(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(current)) as? [String: Any]
+        )
+        payload["schemaVersion"] = 4
+
+        let migrated = try JSONDecoder().decode(
+            AppConfiguration.self,
+            from: JSONSerialization.data(withJSONObject: payload)
+        )
+
+        #expect(migrated.schemaVersion == AppConfiguration.currentSchemaVersion)
+        #expect(migrated.profiles == current.profiles)
+    }
+
+    @Test func wildcardHostsRoundTripInCurrentSchema() throws {
+        let wildcard = try DNSHostEntry(domain: "*.example.test", address: IPAddress("192.0.2.10"))
+        let profile = try DNSProfile(
+            id: profileID,
+            name: "Primary",
+            upstream: .plain(try PlainDNSConfiguration(serverAddress: IPAddress("192.0.2.53"))),
+            hosts: [wildcard]
+        )
+        let configuration = try AppConfiguration(profiles: [profile], defaultProfileID: profile.id)
+
+        let decoded = try JSONDecoder().decode(
+            AppConfiguration.self,
+            from: JSONEncoder().encode(configuration)
+        )
+
+        #expect(decoded.schemaVersion == AppConfiguration.currentSchemaVersion)
+        #expect(decoded.profiles.first?.hosts == [wildcard])
     }
 
     @Test func cacheConfigurationValidatesBoundsAndDecodedPayload() throws {

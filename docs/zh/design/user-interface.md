@@ -32,7 +32,7 @@ Profile/Rule editor 使用 staged draft，只有 Save 才提交 domain configura
 
 Profiles 提供 create、edit、duplicate、test、make-default、replacement 和 delete。自定义 Profile editor 支持 Plain DNS、DNS over TLS 和 DNS over HTTPS。DoT 输入包含 server name 或 address、port 和 bootstrap address。列表身份使用隐私安全的 DoT 与 DoH server 摘要。
 
-每个 Profile editor 还提供 staged Hosts section，用于 exact-domain 的 A/AAAA address override。Hosts 会被校验、canonicalize、排序，并和 Profile 一起提交。不接受 raw filter syntax、wildcard entry 或 hosts file path。Profile detail 展示已保存的 hosts entry，但不改变 Profile list identity。
+每个 Profile editor 还提供 staged Hosts section，用于 exact 或最左侧 wildcard（`*.`）的 A/AAAA address override。Wildcard entry 覆盖 base domain 与全部 subdomain，同 family 内覆盖集重叠的 entry 会被拒绝。Hosts 会被校验、canonicalize、排序，并和 Profile 一起提交。不接受 raw filter syntax 或 hosts file path。Profile detail 展示已保存的 hosts entry，但不改变 Profile list identity。
 
 Rules 显示 enabled、priority、condition summary 和 target Profile。Reorder 只保存一次并 reevaluate 一次。Drag 必须提供 Move Up/Move Down 键盘替代。Default Profile selector 保持可见，Proxy 可用时不能为空。
 

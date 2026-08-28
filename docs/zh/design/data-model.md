@@ -27,9 +27,9 @@ Default Profile 是用户自有 Profile 的角色。Provider 模板创建普通 
 
 ## Profile Hosts
 
-Profile 可以包含最多 256 个 typed `DNSHostEntry`。每条 entry 由一个 canonicalized ASCII exact domain 和一个 IPv4 或 IPv6 address 组成。Domain 会转为小写、去掉一个尾部 `.`，不接受 wildcard；同一 domain 每个 address family 最多一个地址。持久化前按 canonical 顺序排序。
+Profile 可以包含最多 256 个 typed `DNSHostEntry`。每条 entry 由一个 canonicalized ASCII domain — exact 或带单个最左侧 `*.` wildcard 前缀 — 和一个 IPv4 或 IPv6 address 组成。Domain 会转为小写、去掉一个尾部 `.`；`*` 只能作为完整的左侧 label 后跟 `.` 出现。Wildcard entry 覆盖 base domain 与任意深度的全部 subdomain。同一 address family 内覆盖集相交的 entry 会被拒绝：base 为 D 的 wildcard 与 domain 等于 D 或以 `.D` 结尾的同 family entry 冲突，也与 base 等于 D、以 `.D` 结尾或以 D 为后缀的另一个 wildcard 冲突。同一 domain 每个 address family 最多一个地址。持久化前按 canonical 顺序排序。
 
-Hosts 属于 Profile，不属于 `DNSRule` condition。它只影响 exact domain 的 A 或 AAAA query，其他 record type 继续发送到 Profile upstream。Runtime adapter 将 hosts 生成 `$dnsrewrite` 与 `$dnstype` 规则，并放入一个 in-memory DnsLibs filter；raw filter text 和 file path 不属于 model 或 XPC contract。
+Hosts 属于 Profile，不属于 `DNSRule` condition。它只影响所覆盖 domain 的 A 或 AAAA query，其他 record type 继续发送到 Profile upstream。Runtime adapter 将 hosts 生成 `$dnsrewrite` 与 `$dnstype` 规则，并放入一个 in-memory DnsLibs filter — exact entry 使用 `|domain|`，wildcard entry 使用 `||base^`；raw filter text 和 file path 不属于 model 或 XPC contract。
 
 ## Rule
 
@@ -57,7 +57,7 @@ SSID 权限拒绝只禁用 SSID 条件；接口和子网 Rule 继续工作。网
 
 Profiles、Rules、Default Profile、operating mode、per-Profile hosts 和全局 DNS cache 配置存在一个 versioned `AppConfiguration` 文档。Cache 默认开启，最多保存 1,000 条响应；开启时容量限制为 `1...10,000`，关闭后仍保留最后一个合法容量供再次开启使用。初始空配置使用 Automatic，在至少存在一个有效 Profile 和 Default Profile 前不能启用 DNS Proxy。
 
-加载时校验 schema、重复 identity、全部引用、hosts 限制和 cache 范围。持久化 schema 1 和 2 在内存中使用标准 cache 配置迁移为 schema 3；schema 3 及更高版本输入 canonicalize 为当前 schema 4，缺失的 Profile hosts 使用空数组表示，并且只通过正常 atomic commit path 修改正式文件。更高 schema 进入只读恢复，绝不被旧版本覆盖。损坏输入在提供 reset 前必须保留。
+加载时校验 schema、重复 identity、全部引用、hosts 限制和 cache 范围。持久化 schema 1 和 2 在内存中使用标准 cache 配置迁移为 schema 3；schema 3 及更高版本输入 canonicalize 为当前 schema 5，缺失的 Profile hosts 使用空数组表示，并且只通过正常 atomic commit path 修改正式文件。更高 schema 进入只读恢复，绝不被旧版本覆盖。损坏输入在提供 reset 前必须保留。
 
 配置采用 canonical encoding 与 fingerprint，通过 compare-and-swap 提交；使用私有 Application Support 目录、严格权限、durable 临时写入和原子替换。`UserDefaults` 只保存 UI preference。
 

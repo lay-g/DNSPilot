@@ -30,6 +30,11 @@ enum AGDnsConfigurationAdapter {
         }
         let rules = sortedHosts.map { host in
             let type = host.address.isIPv6 ? "AAAA" : "A"
+            // Wildcard entries anchor both ends (`||base^`) so the rewrite covers
+            // the base domain and every subdomain, as verified by the M0 probe.
+            if let base = host.wildcardBase {
+                return "||\(base)^$dnstype=\(type),dnsrewrite=NOERROR;\(type);\(host.address.stringValue)"
+            }
             return "|\(host.domain)|$dnstype=\(type),dnsrewrite=NOERROR;\(type);\(host.address.stringValue)"
         }
         let result = rules.isEmpty ? "" : rules.joined(separator: "\n") + "\n"

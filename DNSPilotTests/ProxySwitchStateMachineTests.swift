@@ -656,6 +656,100 @@ struct ProxySwitchStateMachineTests {
         #expect(await manager.enableSaveCount == 0)
     }
 
+    @Test func wildcardHostsRequireSchemaSixBeforeManagerMutation() async throws {
+        let host = try DNSHostEntry(domain: "*.example.test", address: IPAddress("192.0.2.10"))
+        let target = DNSProxyTarget(
+            profileID: UUID(),
+            upstream: .plain(try PlainDNSConfiguration(serverAddress: IPAddress("192.0.2.53"))),
+            hosts: [host]
+        )
+        let manager = FakeDNSProxyManager(isEnabled: false)
+        let validator = FakeUpstreamValidator()
+        let providerInstanceID = UUID()
+        let status = FakeRuntimeStatusProvider {
+            runtimeStatus(
+                generation: nil,
+                phase: .idle,
+                maximumConfigurationSchemaVersion: 5,
+                runtimeControlProtocolVersion: DNSProxyXPCContract.currentRuntimeControlProtocolVersion,
+                providerInstanceID: providerInstanceID
+            )
+        }
+        let controller = makeController(
+            manager: manager,
+            validator: validator,
+            statusProvider: status
+        )
+
+        let result = await controller.activate(target)
+
+        #expect(result.lastSwitchFailure?.code == .providerCompatibilityUnavailable)
+        #expect(await validator.validationCount == 0)
+        #expect(await manager.enableSaveCount == 0)
+    }
+
+    @Test func wildcardHostsUseSchemaSixWithCapableProvider() async throws {
+        let host = try DNSHostEntry(domain: "*.example.test", address: IPAddress("192.0.2.10"))
+        let target = DNSProxyTarget(
+            profileID: UUID(),
+            upstream: .plain(try PlainDNSConfiguration(serverAddress: IPAddress("192.0.2.53"))),
+            hosts: [host]
+        )
+        let manager = FakeDNSProxyManager(isEnabled: false)
+        let providerInstanceID = UUID()
+        let status = FakeRuntimeStatusProvider {
+            let snapshot = await manager.currentSnapshot
+            let persisted = snapshot.persistedConfiguration
+            return runtimeStatus(
+                generation: snapshot.activeConfiguration?.generation,
+                phase: snapshot.isEnabled ? .ready : .idle,
+                maximumConfigurationSchemaVersion: 6,
+                runtimeControlProtocolVersion: DNSProxyXPCContract.currentRuntimeControlProtocolVersion,
+                providerInstanceID: providerInstanceID,
+                configurationFingerprint: persisted?.fingerprint
+            )
+        }
+        let controller = makeController(manager: manager, statusProvider: status)
+
+        let result = await controller.activate(target)
+        let configuration = try #require(await manager.currentSnapshot.activeConfiguration)
+
+        #expect(result.state == .active(configuration.generation))
+        #expect(configuration.schemaVersion == 6)
+        #expect(configuration.hosts == [host])
+    }
+
+    @Test func exactHostsKeepSchemaFiveWithSchemaFiveProvider() async throws {
+        let host = try DNSHostEntry(domain: "example.test", address: IPAddress("192.0.2.10"))
+        let target = DNSProxyTarget(
+            profileID: UUID(),
+            upstream: .plain(try PlainDNSConfiguration(serverAddress: IPAddress("192.0.2.53"))),
+            hosts: [host]
+        )
+        let manager = FakeDNSProxyManager(isEnabled: false)
+        let providerInstanceID = UUID()
+        let status = FakeRuntimeStatusProvider {
+            let snapshot = await manager.currentSnapshot
+            let persisted = snapshot.persistedConfiguration
+            return runtimeStatus(
+                generation: snapshot.activeConfiguration?.generation,
+                phase: snapshot.isEnabled ? .ready : .idle,
+                maximumConfigurationSchemaVersion: 5,
+                runtimeControlProtocolVersion: DNSProxyXPCContract.currentRuntimeControlProtocolVersion,
+                providerInstanceID: providerInstanceID,
+                configurationFingerprint: persisted?.fingerprint
+            )
+        }
+        let controller = makeController(manager: manager, statusProvider: status)
+
+        let result = await controller.activate(target)
+        let configuration = try #require(await manager.currentSnapshot.activeConfiguration)
+
+        #expect(result.state == .active(configuration.generation))
+        #expect(configuration.schemaVersion == 5)
+        #expect(configuration.hosts == [host])
+    }
+
     @Test func hostsAreRetainedInEnabledManagerPayload() async throws {
         let host = try DNSHostEntry(domain: "example.test", address: IPAddress("192.0.2.10"))
         let target = DNSProxyTarget(

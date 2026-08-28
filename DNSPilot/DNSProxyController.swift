@@ -3449,7 +3449,8 @@ actor DNSProxyController {
         let minimumSchemaVersion = max(
             transportMinimum,
             target.dnsCacheConfiguration == .standard ? 1 : 4,
-            target.hosts.isEmpty ? 1 : 5
+            target.hosts.isEmpty ? 1 : 5,
+            target.hosts.contains(where: \.isWildcard) ? 6 : 1
         )
 
         if minimumSchemaVersion == 1 {

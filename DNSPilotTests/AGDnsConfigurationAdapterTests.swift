@@ -83,6 +83,27 @@ struct AGDnsConfigurationAdapterTests {
         #expect(result.filters[0].data == "|www.example.test|$dnstype=A,dnsrewrite=NOERROR;A;127.0.0.1\n|www.example.test|$dnstype=AAAA,dnsrewrite=NOERROR;AAAA;2001:db8::10\n")
     }
 
+    @Test func mapsWildcardHostsToAnchoredRewriteRules() throws {
+        let configuration = try ActiveProxyConfiguration(
+            generation: UUID(),
+            profileID: UUID(),
+            upstream: .fixedCloudflare,
+            hosts: [
+                try DNSHostEntry(domain: "*.Ads.Example.Test.", address: IPAddress("0.0.0.0")),
+                try DNSHostEntry(domain: "*.example.test", address: IPAddress("2001:db8::10")),
+                try DNSHostEntry(domain: "www.example.test", address: IPAddress("192.0.2.10")),
+            ]
+        )
+
+        let result = try AGDnsConfigurationAdapter.makeProxyConfig(from: configuration)
+
+        #expect(result.filters.count == 1)
+        #expect(
+            result.filters[0].data
+                == "||ads.example.test^$dnstype=A,dnsrewrite=NOERROR;A;0.0.0.0\n||example.test^$dnstype=AAAA,dnsrewrite=NOERROR;AAAA;2001:db8::10\n|www.example.test|$dnstype=A,dnsrewrite=NOERROR;A;192.0.2.10\n"
+        )
+    }
+
     @Test func hostRuleGeneratorRejectsDuplicateAndOversizedInput() throws {
         let duplicate = try DNSHostEntry(domain: "example.test", address: IPAddress("192.0.2.10"))
         #expect(throws: ActiveProxyConfigurationError.duplicateHost(

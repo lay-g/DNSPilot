@@ -29,6 +29,7 @@ enum ProfileDraftError: LocalizedError, Equatable, Sendable {
     case invalidHostAddress(id: UUID, value: String)
     case tooManyHosts(Int)
     case duplicateHost(id: UUID, value: String)
+    case overlappingWildcardHost(id: UUID, value: String)
 
     var errorDescription: String? {
         switch self {
@@ -54,6 +55,8 @@ enum ProfileDraftError: LocalizedError, Equatable, Sendable {
             "The Profile cannot contain more than \(DNSHostEntry.maximumCount) hosts; got \(value)."
         case let .duplicateHost(_, value):
             "The Profile has more than one host address for \(value)."
+        case let .overlappingWildcardHost(_, value):
+            "The host domain \(value) overlaps a wildcard hosts entry."
         }
     }
 }
@@ -196,7 +199,7 @@ struct ProfileDraft: Identifiable, Equatable, Sendable {
         }
         do {
             var identities = Set<String>()
-            let parsedHosts = try hosts.map { host in
+            let parsedPairs = try hosts.map { host -> (id: UUID, entry: DNSHostEntry) in
                 let trimmedAddress = host.address.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard let address = try? IPAddress(trimmedAddress) else {
                     throw ProfileDraftError.invalidHostAddress(id: host.id, value: host.address)
@@ -211,8 +214,18 @@ struct ProfileDraft: Identifiable, Equatable, Sendable {
                 guard identities.insert("\(entry.domain)|\(family)").inserted else {
                     throw ProfileDraftError.duplicateHost(id: host.id, value: entry.domain)
                 }
-                return entry
+                return (id: host.id, entry: entry)
             }
+            for i in 0..<parsedPairs.count {
+                for j in (i + 1)..<parsedPairs.count
+                where DNSHostEntry.overlaps(parsedPairs[i].entry, parsedPairs[j].entry) {
+                    throw ProfileDraftError.overlappingWildcardHost(
+                        id: parsedPairs[j].id,
+                        value: parsedPairs[j].entry.domain
+                    )
+                }
+            }
+            let parsedHosts = parsedPairs.map(\.entry)
 
             return try DNSProfile(
                 id: id,
@@ -226,6 +239,8 @@ struct ProfileDraft: Identifiable, Equatable, Sendable {
                 throw ProfileDraftError.emptyName
             case let .duplicateHost(domain, _):
                 throw ProfileDraftError.duplicateHost(id: id, value: domain)
+            case let .overlappingWildcardHost(domain, _):
+                throw ProfileDraftError.overlappingWildcardHost(id: id, value: domain)
             case let .tooManyHosts(count):
                 throw ProfileDraftError.tooManyHosts(count)
             }
