@@ -4,6 +4,16 @@ All notable changes to DNSPilot are documented in this file. The format follows 
 
 ## Unreleased
 
+## [1.3] - 2026-08-28
+
+### Added
+
+- Leftmost wildcard (`*.`) Profile hosts entries covering the base domain and every subdomain, with IPv4 and IPv6 addresses.
+
+### Changed
+
+- Same-family Profile hosts entries whose coverage overlaps a wildcard entry are now rejected to keep overrides unambiguous.
+
 ## [1.2] - 2026-08-21
 
 ### Added
