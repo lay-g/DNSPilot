@@ -12,6 +12,8 @@ Both peers install code-signing requirements before activating XPC connections. 
 
 The Mach service name is versioned by the build and lives under the App Group namespace. The service offers read-only status/evidence plus bounded runtime commands for reapply, quiesce, and resume.
 
+Only read-only status discovery may retry the current build service or probe authenticated compatibility endpoints. Runtime mutation remains bound to the endpoint selected by authenticated Provider identity and never fails over after an error.
+
 Selectors accept only `Data` and return `Data` plus `NSError`. Write messages are strict binary property lists with exact keys. Unknown fields require a protocol revision.
 
 - Maximum write envelope: 64 KiB.
@@ -45,6 +47,8 @@ The lifecycle journal contains identity fingerprints and UUIDs only. It excludes
 Default logs avoid those values, including raw generated hosts rules. Debug Logging requires explicit warning and may expose them. Diagnostic summary copying is reduced; explicit export is treated as sensitive and requires confirmation.
 
 Underlying operational errors are logged as private by default and are not rendered directly in user-facing error text. User-facing failures may expose reviewed, stable error categories and non-sensitive codes, but never raw descriptions that can contain private configuration or implementation details. An unstructured dependency failure remains explicitly unclassified. Debug Logging and confirmed diagnostic export may contain detailed failures under their existing sensitive-data warnings.
+
+When all read-only status probes fail, the default Host log records only attempt counts, monotonic elapsed time, and a stable failure category. It excludes service names, identity values, configuration, and raw underlying error text.
 
 ## Failure Policy
 

@@ -19,6 +19,7 @@ Unit and contract tests cover:
 - Mutation journal authentication, compensation, crash recovery, and cleanup.
 - Safe-Quit resume journal encoding, schema 1 compatibility, Extension upgrade prepare/submit/confirm fencing, corruption preservation, one-shot claims, and crash windows before and after manager disable or replacement.
 - Runtime payload validation, exact identity, replay, rate limits, rollback, quiescence, resume, and recovery classification.
+- Current-build runtime-status retry and backoff, authenticated historical-service fallback, cancellation, endpoint binding, and mutation no-failover.
 - Manual and Automatic startup resume, fresh-session network selection, Extension readiness gates, field-level disabled-manager mismatch, prepare-before-replace and confirm-before-resume ordering, duplicate publisher fencing, and explicit Keep System DNS behavior.
 - Quit key-up, repeat rejection, timeout, cancellation, draft handling, and exactly-once dispatch.
 - Privacy-safe display identity and diagnostic redaction.

@@ -185,7 +185,7 @@ struct DNSProxyXPCContractTests {
         _ = try await router.reapplyConfiguration(request)
 
         #expect(status.providerInstanceID == providerInstanceID)
-        #expect(await primary.callCounts() == .init(status: 1, reapply: 0))
+        #expect(await primary.callCounts() == .init(status: 3, reapply: 0))
         #expect(await legacy.callCounts() == .init(status: 1, reapply: 1))
     }
 
@@ -253,7 +253,7 @@ struct DNSProxyXPCContractTests {
         )
 
         #expect(status.providerInstanceID == providerInstanceID)
-        #expect(await current.callCounts() == .init(status: 1, reapply: 0))
+        #expect(await current.callCounts() == .init(status: 3, reapply: 0))
         #expect(await previous.callCounts() == .init(status: 1, reapply: 1))
         #expect(await legacy.callCounts() == .init(status: 0, reapply: 0))
     }
@@ -275,11 +275,11 @@ struct DNSProxyXPCContractTests {
             routingReapplyRequest(providerInstanceID: oldProvider)
         )
 
-        #expect(await current.callCounts() == .init(status: 2, reapply: 0))
+        #expect(await current.callCounts() == .init(status: 4, reapply: 0))
         #expect(await previous.callCounts() == .init(status: 1, reapply: 1))
     }
 
-    @Test func routerBoundsEachStatusProbeBeforeFallback() async throws {
+    @Test func routerRetriesPrimaryBeforeFallback() async throws {
         let providerInstanceID = UUID()
         let primary = RoutingXPCStub(
             status: routingStatus(providerInstanceID: UUID()),
@@ -291,16 +291,79 @@ struct DNSProxyXPCContractTests {
                 "group.example.status.build20": primary,
                 "group.example.status": legacy,
             ],
-            discoveryTimeout: .milliseconds(10)
+            discoveryTimeout: .milliseconds(10),
+            primaryStatusAttemptTimeout: .milliseconds(10),
+            primaryStatusRetryDelays: [.milliseconds(1), .milliseconds(1)]
         )
 
         let status = try await router.runtimeStatus()
 
         #expect(status.providerInstanceID == providerInstanceID)
-        #expect(await primary.callCounts().status == 1)
+        #expect(await primary.callCounts().status == 3)
         #expect(await legacy.callCounts().status == 1)
         try await Task.sleep(for: .milliseconds(10))
-        #expect(await primary.statusCancellationCount() == 1)
+        #expect(await primary.statusCancellationCount() == 3)
+    }
+
+    @Test func routerRetriesPrimaryBeforeUsingFallback() async throws {
+        let primaryProviderInstanceID = UUID()
+        let primary = RoutingXPCStub(
+            status: routingStatus(providerInstanceID: primaryProviderInstanceID),
+            statusDelays: [.milliseconds(20), .milliseconds(20), nil]
+        )
+        let legacy = RoutingXPCStub(status: routingStatus(providerInstanceID: UUID()))
+        let router = makeRouter(
+            clients: [
+                "group.example.status.build20": primary,
+                "group.example.status": legacy,
+            ],
+            discoveryTimeout: .milliseconds(10),
+            primaryStatusAttemptTimeout: .milliseconds(10),
+            primaryStatusRetryDelays: [.milliseconds(1), .milliseconds(1)]
+        )
+
+        let status = try await router.runtimeStatus()
+
+        #expect(status.providerInstanceID == primaryProviderInstanceID)
+        #expect(await primary.callCounts().status == 3)
+        #expect(await legacy.callCounts().status == 0)
+        try await Task.sleep(for: .milliseconds(10))
+        #expect(await primary.statusCancellationCount() == 2)
+    }
+
+    @Test func cancellingStatusRetryDoesNotProbeAgainOrFallback() async throws {
+        let primary = RoutingXPCStub(
+            status: routingStatus(providerInstanceID: UUID()),
+            statusDelay: .seconds(1)
+        )
+        let legacy = RoutingXPCStub(status: routingStatus(providerInstanceID: UUID()))
+        let router = makeRouter(
+            clients: [
+                "group.example.status.build20": primary,
+                "group.example.status": legacy,
+            ],
+            discoveryTimeout: .milliseconds(10),
+            primaryStatusAttemptTimeout: .milliseconds(10),
+            primaryStatusRetryDelays: [.seconds(1), .seconds(1)]
+        )
+        let task = Task { try await router.runtimeStatus() }
+
+        while await primary.statusCancellationCount() == 0 {
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        task.cancel()
+
+        do {
+            _ = try await task.value
+            Issue.record("Expected cancellation to stop status retry")
+        } catch is CancellationError {
+            // Cancellation must not advance to another endpoint.
+        } catch {
+            Issue.record("Expected CancellationError, got \(error)")
+        }
+
+        #expect(await primary.callCounts().status == 1)
+        #expect(await legacy.callCounts().status == 0)
     }
 
     @Test func routerNeverFallsBackMutationAfterSelectedEndpointFailure() async throws {
@@ -359,7 +422,9 @@ struct DNSProxyXPCContractTests {
     private func makeRouter(
         clients: [String: RoutingXPCStub],
         historicalServiceNames: [String] = [],
-        discoveryTimeout: Duration = .milliseconds(125)
+        discoveryTimeout: Duration = .milliseconds(125),
+        primaryStatusAttemptTimeout: Duration = .milliseconds(250),
+        primaryStatusRetryDelays: [Duration] = [.milliseconds(50), .milliseconds(100)]
     ) -> MachXPCServiceRouter {
         MachXPCServiceRouter(
             configuration: MachXPCServiceConfiguration(
@@ -369,7 +434,9 @@ struct DNSProxyXPCContractTests {
                 legacyServiceName: "group.example.status",
                 codeSigningRequirement: "requirement"
             ),
-            discoveryTimeout: discoveryTimeout
+            discoveryTimeout: discoveryTimeout,
+            primaryStatusAttemptTimeout: primaryStatusAttemptTimeout,
+            primaryStatusRetryDelays: primaryStatusRetryDelays
         ) { serviceName, _ in
             guard let client = clients[serviceName] else {
                 throw RoutingXPCStubError.unavailable
@@ -1028,6 +1095,7 @@ private actor RoutingXPCStub: MachXPCRequesting {
 
     private var status: ProxyRuntimeStatus?
     private let statusDelay: Duration?
+    private let statusDelays: [Duration?]
     private let failReapply: Bool
     private var statusCalls = 0
     private var statusCancellations = 0
@@ -1036,15 +1104,20 @@ private actor RoutingXPCStub: MachXPCRequesting {
     init(
         status: ProxyRuntimeStatus?,
         statusDelay: Duration? = nil,
+        statusDelays: [Duration?] = [],
         failReapply: Bool = false
     ) {
         self.status = status
         self.statusDelay = statusDelay
+        self.statusDelays = statusDelays
         self.failReapply = failReapply
     }
 
     func runtimeStatus() async throws -> ProxyRuntimeStatus {
         statusCalls += 1
+        let statusDelay = statusDelays.indices.contains(statusCalls - 1)
+            ? statusDelays[statusCalls - 1]
+            : statusDelay
         if let statusDelay {
             do {
                 try await Task.sleep(for: statusDelay)

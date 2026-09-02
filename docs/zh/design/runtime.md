@@ -73,6 +73,8 @@ DnsLibs reapply 失败被视为可能已经修改 engine。Flow admission 仍被
 | Keyboard Quit confirmation | 2 秒 |
 | Confirmed safe Quit decision | 5 秒 |
 
+只读 runtime-status discovery 会先对当前 build-derived Mach service 进行最多三次带有界退避的探测；只有全部失败后，才为 upgrade compatibility 各探测一次经过认证的 historical 或 legacy service name。它绝不重试或 failover runtime mutation。没有任何 probe 返回可 decode 且经过认证的 status 时，Host 必须在 manager mutation 或 reapply 前 fail closed。
+
 `AGDnsProxy.reapplySettings` 是同步且不可取消的。Host cancellation 只终止 Host 等待。发生 timeout、reply 丢失或 XPC interruption 后，Host 读取 authenticated actual status，并且只能使用同一 operation ID 重放相同 request bytes。
 
 ## Restore System DNS 与 Quit

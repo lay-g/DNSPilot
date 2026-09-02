@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 import Synchronization
 
 enum MachXPCClientError: LocalizedError, Sendable {
@@ -239,9 +240,22 @@ actor MachXPCServiceRouter: MachXPCRequesting {
     private let configurationError: MachXPCClientError?
     private let clientFactory: ClientFactory
     private let discoveryTimeout: Duration
+    private let primaryStatusAttemptTimeout: Duration
+    private let primaryStatusRetryDelays: [Duration]
     private let historyStore: MachXPCServiceHistoryStore?
+    private let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "DNSPilot",
+        category: "MachXPC"
+    )
     private var serviceNameByProviderInstanceID: [UUID: String] = [:]
     private var evidenceServiceName: String?
+
+    private static let primaryStatusAttemptCount = 3
+    private static let defaultPrimaryStatusAttemptTimeout = Duration.milliseconds(250)
+    private static let defaultPrimaryStatusRetryDelays: [Duration] = [
+        .milliseconds(50),
+        .milliseconds(100),
+    ]
 
     init(
         bundle: Bundle = .main,
@@ -264,12 +278,18 @@ actor MachXPCServiceRouter: MachXPCRequesting {
             )
         }
         self.discoveryTimeout = discoveryTimeout
+        primaryStatusAttemptTimeout = Self.defaultPrimaryStatusAttemptTimeout
+        primaryStatusRetryDelays = Self.defaultPrimaryStatusRetryDelays
         historyStore = MachXPCServiceHistoryStore()
     }
 
     init(
         configuration: MachXPCServiceConfiguration,
         discoveryTimeout: Duration = .milliseconds(125),
+        primaryStatusAttemptTimeout: Duration = MachXPCServiceRouter
+            .defaultPrimaryStatusAttemptTimeout,
+        primaryStatusRetryDelays: [Duration] = MachXPCServiceRouter
+            .defaultPrimaryStatusRetryDelays,
         historyStore: MachXPCServiceHistoryStore? = nil,
         clientFactory: @escaping ClientFactory
     ) {
@@ -277,17 +297,49 @@ actor MachXPCServiceRouter: MachXPCRequesting {
         configurationError = nil
         self.clientFactory = clientFactory
         self.discoveryTimeout = discoveryTimeout
+        self.primaryStatusAttemptTimeout = primaryStatusAttemptTimeout
+        self.primaryStatusRetryDelays = primaryStatusRetryDelays
         self.historyStore = historyStore
     }
 
     func runtimeStatus() async throws -> ProxyRuntimeStatus {
         let configuration = try requiredConfiguration()
         var lastError: (any Error)?
-        for serviceName in configuration.candidateServiceNames {
+        var primaryAttempts = 0
+        var fallbackAttempts = 0
+        let clock = ContinuousClock()
+        let startedAt = clock.now
+
+        for attempt in 0 ..< Self.primaryStatusAttemptCount {
+            primaryAttempts += 1
+            do {
+                let status = try await discoverStatus(
+                    serviceName: configuration.primaryServiceName,
+                    configuration: configuration,
+                    timeout: primaryStatusAttemptTimeout
+                )
+                recordBinding(status: status, serviceName: configuration.primaryServiceName)
+                evidenceServiceName = configuration.primaryServiceName
+                return status
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                lastError = error
+            }
+
+            if attempt < primaryStatusRetryDelays.count {
+                try await Task.sleep(for: primaryStatusRetryDelays[attempt])
+            }
+        }
+
+        for serviceName in configuration.candidateServiceNames where serviceName
+            != configuration.primaryServiceName {
+            fallbackAttempts += 1
             do {
                 let status = try await discoverStatus(
                     serviceName: serviceName,
-                    configuration: configuration
+                    configuration: configuration,
+                    timeout: discoveryTimeout
                 )
                 recordBinding(status: status, serviceName: serviceName)
                 evidenceServiceName = serviceName
@@ -298,7 +350,15 @@ actor MachXPCServiceRouter: MachXPCRequesting {
                 lastError = error
             }
         }
-        throw lastError ?? MachXPCClientError.unavailable
+
+        let error = lastError ?? MachXPCClientError.unavailable
+        let elapsed = startedAt.duration(to: clock.now).components
+        let elapsedMilliseconds = elapsed.seconds * 1_000
+            + elapsed.attoseconds / 1_000_000_000_000_000
+        logger.error(
+            "Runtime status discovery exhausted: primary_attempts=\(primaryAttempts, privacy: .public) fallback_attempts=\(fallbackAttempts, privacy: .public) failure=\(Self.statusDiscoveryFailureCategory(error), privacy: .public) elapsed_ms=\(elapsedMilliseconds, privacy: .public)"
+        )
+        throw error
     }
 
     func runtimeEvidence() async throws -> ProxyRuntimeEvidence {
@@ -358,7 +418,8 @@ actor MachXPCServiceRouter: MachXPCRequesting {
             do {
                 let status = try await discoverStatus(
                     serviceName: serviceName,
-                    configuration: configuration
+                    configuration: configuration,
+                    timeout: discoveryTimeout
                 )
                 recordBinding(status: status, serviceName: serviceName)
                 if status.providerInstanceID == expectedProviderInstanceID {
@@ -388,11 +449,28 @@ actor MachXPCServiceRouter: MachXPCRequesting {
 
     private func discoverStatus(
         serviceName: String,
-        configuration: MachXPCServiceConfiguration
+        configuration: MachXPCServiceConfiguration,
+        timeout: Duration
     ) async throws -> ProxyRuntimeStatus {
         let client = try makeClient(serviceName: serviceName, configuration: configuration)
-        return try await withDiscoveryTimeout {
+        return try await withDiscoveryTimeout(timeout: timeout) {
             try await client.runtimeStatus()
+        }
+    }
+
+    private static func statusDiscoveryFailureCategory(_ error: any Error) -> String {
+        guard let error = error as? MachXPCClientError else { return "other" }
+        switch error {
+        case .discoveryTimedOut:
+            return "timeout"
+        case .unavailable:
+            return "unavailable"
+        case .requestFailed:
+            return "requestFailed"
+        case .invalidResponse:
+            return "invalidResponse"
+        case .missingConfiguration, .invalidCodeSigningRequirement, .requestTooLarge:
+            return "other"
         }
     }
 
@@ -409,6 +487,7 @@ actor MachXPCServiceRouter: MachXPCRequesting {
     }
 
     private func withDiscoveryTimeout<Value: Sendable>(
+        timeout: Duration,
         operation: @escaping @Sendable () async throws -> Value
     ) async throws -> Value {
         let (stream, continuation) = AsyncThrowingStream<Value, any Error>.makeStream(
@@ -424,7 +503,7 @@ actor MachXPCServiceRouter: MachXPCRequesting {
         }
         let timeoutTask = Task {
             do {
-                try await Task.sleep(for: discoveryTimeout)
+                try await Task.sleep(for: timeout)
                 continuation.finish(throwing: MachXPCClientError.discoveryTimedOut)
             } catch {
                 // The operation completed first or the caller was cancelled.

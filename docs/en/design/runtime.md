@@ -73,6 +73,8 @@ A DnsLibs reapply failure is treated as potentially mutating. Rollback uses the 
 | Keyboard Quit confirmation | 2 seconds |
 | Confirmed safe Quit decision | 5 seconds |
 
+Read-only runtime-status discovery probes the current build-derived Mach service up to three times with bounded backoff before probing authenticated historical or legacy service names once each for upgrade compatibility. It never retries or fails over a runtime mutation. If no probe returns decodable authenticated status, the Host fails closed before manager mutation or reapply.
+
 `AGDnsProxy.reapplySettings` is synchronous and non-cancellable. Host cancellation ends only the Host wait. After timeout, reply loss, or XPC interruption, the Host reads authenticated actual status and may replay only identical request bytes with the same operation ID.
 
 ## Restore System DNS And Quit

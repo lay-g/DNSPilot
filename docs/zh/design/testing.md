@@ -19,6 +19,7 @@ Unit 与 contract test 覆盖：
 - Mutation journal authentication、compensation、crash recovery 和 cleanup。
 - Safe Quit resume journal encoding、schema 1 compatibility、Extension upgrade prepare/submit/confirm fencing、损坏保留、一次性 claim，以及 manager disable 或 replacement 前后的 crash window。
 - Runtime payload、exact identity、replay、rate limit、rollback、quiescence、resume 和 recovery classification。
+- current-build runtime-status retry/backoff、经过认证的 historical-service fallback、cancellation、endpoint binding 和 mutation no-failover。
 - Manual/Automatic startup resume、fresh-session network selection、Extension readiness gate、字段级 disabled-manager mismatch、prepare-before-replace 与 confirm-before-resume 顺序、重复 publisher fencing 和显式 Keep System DNS 行为。
 - Quit key-up、repeat rejection、timeout、cancellation、draft handling 和 exactly-once dispatch。
 - 隐私安全的显示 identity 与 diagnostic redaction。

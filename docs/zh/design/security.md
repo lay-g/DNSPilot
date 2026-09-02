@@ -12,6 +12,8 @@ Team 与 Bundle identity 通过被忽略的本地配置或受保护 CI 值注入
 
 Mach service name 按 build version 化，并位于 App Group namespace。Service 提供只读 status/evidence，以及有界的 reapply、quiesce、resume runtime command。
 
+只有只读 status discovery 可以重试当前 build service 或探测经过认证的 compatibility endpoint。runtime mutation 仍绑定到经过认证的 Provider identity 选定的 endpoint，发生错误后绝不 failover。
+
 Selector 只接收 `Data`，返回 `Data` 与 `NSError`。Write message 必须是 exact-key strict binary property list。未知字段需要 protocol revision。
 
 - 最大 write envelope：64 KiB。
@@ -45,6 +47,8 @@ Lifecycle journal 只包含 identity fingerprint 与 UUID，不包含 upstream v
 默认日志避开这些值，包括 raw generated hosts rule。Debug Logging 必须先警告，并可能暴露这些内容。复制 diagnostic summary 需要降敏；显式 export 被视为敏感操作并要求确认。
 
 底层操作错误默认按私有信息记录，不直接渲染到面向用户的错误文案。面向用户的失败可以展示经过审核的稳定错误类别和非敏感错误码，但绝不展示可能包含私有配置或实现细节的原始描述。非结构化的依赖错误必须明确标记为未分类。Debug Logging 和已确认的 diagnostic export 可在现有敏感数据警告约束下包含详细失败信息。
+
+当所有只读 status probe 均失败时，默认 Host log 只记录尝试次数、monotonic elapsed time 和稳定失败类别；不记录 service name、identity value、configuration 或原始底层错误文本。
 
 ## 失败策略
 
