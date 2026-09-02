@@ -4,6 +4,12 @@ All notable changes to DNSPilot are documented in this file. The format follows 
 
 ## Unreleased
 
+## [1.4] - 2026-09-02
+
+### Fixed
+
+- Profile switching now tolerates short-lived DNS Proxy Extension runtime-status response delays before failing.
+
 ## [1.3] - 2026-08-28
 
 ### Added
