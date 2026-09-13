@@ -1829,7 +1829,9 @@ actor DNSProxyController {
             targetPersistedConfiguration = try PersistedProxyConfiguration(
                 value: targetConfiguration
             )
-            try await validate(upstream: target.upstream)
+            if oldConfiguration == nil {
+                try await validate(upstream: target.upstream)
+            }
             try checkForTerminationRequest()
         } catch {
             if terminationRequested {

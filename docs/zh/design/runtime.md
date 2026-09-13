@@ -39,7 +39,7 @@ Provider process 只拥有一个 `AGDnsProxy` 和一个 `AGDnsAppProxyFlowManage
 普通切换全程保持 `NEDNSProxyManager` enabled：
 
 1. 确认 manager ownership、exact desired bytes、Active Profile、Provider instance、runtime identity、`.ready` phase 和 runtime-control compatibility。
-2. 对 target upstream 做预检。
+2. 校验 target 配置与 schema capability，不进行联网可达性预检。
 3. 创建 fresh generation 与 operation ID，只编码一次 target。
 4. 使用 compare-and-save 把 exact target bytes 写入 enabled manager。
 5. Reload 并验证 enabled、owner、bytes、generation 和 fingerprint。
@@ -50,6 +50,8 @@ Provider process 只拥有一个 `AGDnsProxy` 和一个 `AGDnsAppProxyFlowManage
 10. Host 等待 exact target `.ready`，reload manager ownership，最后才发布新 Active Profile。
 
 只保留最新且不同的 pending target。Preference save 完成或 DnsLibs 返回成功都不能单独证明切换成功。
+
+Automatic 和 Manual Profile 切换均不检测 upstream 可达性。优先应用选中的配置，不以联网成功为前提；exact `.ready` identity 证明 runtime 已应用配置，不代表 DNS 解析成功。Enabled manager 上的 logging-mode reapply 同样跳过联网预检。首次 enable、startup resume 和修改 upstream 的 Profile 编辑保留现有预检；用户仍可显式测试 Profile。
 
 ## 失败语义
 

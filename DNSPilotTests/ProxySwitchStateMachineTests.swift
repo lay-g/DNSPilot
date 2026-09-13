@@ -254,7 +254,8 @@ struct ProxySwitchStateMachineTests {
         #expect(await controller.loggingMode() == .debug)
     }
 
-    @Test func targetPreflightFailureLeavesOldRuntimeUntouched() async throws {
+    @Test(arguments: [false, true])
+    func switchingSkipsUpstreamPreflight(useSwitchTarget: Bool) async throws {
         let old = try configuration(profileID: UUID(), upstream: .fixedCloudflare)
         let target = try plainTarget()
         let manager = FakeDNSProxyManager(isEnabled: true, activeConfiguration: old)
@@ -270,31 +271,55 @@ struct ProxySwitchStateMachineTests {
         )
         _ = await controller.synchronizeState()
 
+        let result = if useSwitchTarget {
+            await controller.switchTarget(to: target)
+        } else {
+            await controller.activate(target)
+        }
+        let persisted = try #require(await manager.currentSnapshot.persistedConfiguration)
+
+        #expect(result.state == .active(persisted.value.generation))
+        #expect(result.activeProfileID == target.profileID)
+        #expect(result.activeGeneration != old.generation)
+        #expect(result.targetProfileID == nil)
+        #expect(result.lastSwitchFailure == nil)
+        #expect(await validator.validationCount == 0)
+        #expect(persisted.value.upstream == target.upstream)
+        #expect(await runtime.requests.count == 1)
+        #expect(await runtime.runtimeStatus().configurationFingerprint == persisted.fingerprint)
+        #expect(await manager.disableSaveCount == 0)
+    }
+
+    @Test func initialTargetPreflightFailurePreventsEnable() async throws {
+        let target = DNSProxyTarget(profileID: UUID(), upstream: .fixedCloudflare)
+        let manager = FakeDNSProxyManager(isEnabled: false)
+        let validator = FakeUpstreamValidator { throw FakeTestError.unavailable }
+        let controller = makeController(
+            manager: manager,
+            validator: validator,
+            statusProvider: readyStatusFollowingManager(manager)
+        )
+
         let result = await controller.activate(target)
 
-        #expect(result.state == .active(old.generation))
-        #expect(result.activeProfileID == old.profileID)
-        #expect(result.activeGeneration == old.generation)
-        #expect(result.targetProfileID == target.profileID)
         #expect(result.lastSwitchFailure?.code == .targetPreflightFailed)
-        #expect(await manager.events == [.load, .load, .load])
-        #expect(await manager.currentSnapshot.activeConfiguration == old)
-        #expect(await runtime.requests.isEmpty)
+        #expect(result.activeProfileID == nil)
+        #expect(await validator.validationCount == 1)
+        #expect(await manager.enableSaveCount == 0)
+        #expect(await manager.currentSnapshot.isEnabled == false)
     }
 
     @Test func differentTargetAndRestoreClearFailurePresentation() async throws {
         let old = try configuration(profileID: UUID(), upstream: .fixedCloudflare)
         let rejected = try plainTarget()
         let accepted = try httpsTarget(endpoint: "https://dns.alidns.com/dns-query")
-        let validation = FailFirstValidation()
-        let validator = FakeUpstreamValidator { try await validation.run() }
         let manager = FakeDNSProxyManager(isEnabled: true, activeConfiguration: old)
         let runtime = FakeRuntimeSession(
-            activeConfiguration: try PersistedProxyConfiguration(value: old)
+            activeConfiguration: try PersistedProxyConfiguration(value: old),
+            outcomes: [.rejectedPreservingBase, .applied]
         )
         let controller = makeController(
             manager: manager,
-            validator: validator,
             statusProvider: runtime,
             runtimeController: runtime
         )
@@ -921,7 +946,7 @@ struct ProxySwitchStateMachineTests {
         #expect(enabledProfiles == [targetA.profileID])
         #expect(replacementCount == 1)
         #expect(result.activeProfileID == targetC.profileID)
-        #expect(await validator.validationCount == 2)
+        #expect(await validator.validationCount == 1)
     }
 
     @Test func duplicateInflightAndActiveTargetsAreSuppressed() async {
@@ -956,16 +981,24 @@ struct ProxySwitchStateMachineTests {
         )
         let target = try plainTarget()
         let gate = AsyncGate()
-        let validator = FakeUpstreamValidator { await gate.wait() }
+        let mutationStarted = AsyncGate()
         let manager = FakeDNSProxyManager(isEnabled: true, activeConfiguration: old)
+        let runtime = FakeRuntimeSession(
+            activeConfiguration: try PersistedProxyConfiguration(value: old)
+        )
+        let runtimeController = FakeRuntimeController { request in
+            await mutationStarted.open()
+            await gate.wait()
+            return try await runtime.reapplyConfiguration(request)
+        }
         let controller = makeController(
             manager: manager,
-            validator: validator,
-            statusProvider: readyStatusFollowingManager(manager)
+            statusProvider: runtime,
+            runtimeController: runtimeController
         )
         _ = await controller.synchronizeState()
         let first = Task { await controller.activate(target) }
-        await waitUntilValidationStarts(validator)
+        await mutationStarted.wait()
 
         _ = await controller.activate(oldTarget)
         await gate.open()
@@ -991,11 +1024,14 @@ struct ProxySwitchStateMachineTests {
         )
         let rejected = try plainTarget()
         let manager = FakeDNSProxyManager(isEnabled: true, activeConfiguration: old)
-        let validator = FakeUpstreamValidator { throw FakeTestError.unavailable }
+        let runtime = FakeRuntimeSession(
+            activeConfiguration: try PersistedProxyConfiguration(value: old),
+            outcomes: [.rejectedPreservingBase]
+        )
         let controller = makeController(
             manager: manager,
-            validator: validator,
-            statusProvider: readyStatusFollowingManager(manager)
+            statusProvider: runtime,
+            runtimeController: runtime
         )
         _ = await controller.synchronizeState()
 
@@ -1136,17 +1172,6 @@ private func managerConfigurationIsAbsent(_ manager: FakeDNSProxyManager) async 
 private func waitUntilValidationStarts(_ validator: FakeUpstreamValidator) async {
     while await validator.validationCount == 0 {
         await Task.yield()
-    }
-}
-
-private actor FailFirstValidation {
-    private var shouldFail = true
-
-    func run() throws {
-        if shouldFail {
-            shouldFail = false
-            throw FakeTestError.unavailable
-        }
     }
 }
 

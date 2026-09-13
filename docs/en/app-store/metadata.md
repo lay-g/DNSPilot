@@ -61,7 +61,7 @@ App Store Connect does not provide the What's New field for an app's first versi
 
 ## Version 1.4 What's New
 
-Improves Profile switching reliability when the DNS Proxy Extension briefly delays a runtime-status response.
+Improves Profile switching reliability when the DNS Proxy Extension briefly delays a runtime-status response. Automatic and Manual Profile switches now apply the selected configuration without waiting for an upstream connectivity test, while retaining configuration validation and exact runtime confirmation.
 
 ## App Privacy Draft
 

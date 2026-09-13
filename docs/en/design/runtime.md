@@ -39,7 +39,7 @@ Late callbacks from an old generation, lifecycle epoch, or Provider instance can
 An ordinary switch keeps `NEDNSProxyManager` enabled:
 
 1. Confirm manager ownership, exact desired bytes, Active Profile, Provider instance, runtime identity, `.ready` phase, and runtime-control compatibility.
-2. Preflight the target upstream.
+2. Validate target configuration and schema capability without a network reachability preflight.
 3. Create a fresh generation and operation ID; encode the target once.
 4. Compare-and-save exact target bytes into the enabled manager.
 5. Reload and verify enabled state, owner, bytes, generation, and fingerprint.
@@ -50,6 +50,8 @@ An ordinary switch keeps `NEDNSProxyManager` enabled:
 10. The Host waits for exact target `.ready`, reloads manager ownership, and only then publishes the new Active Profile.
 
 Only the latest distinct pending target is retained. Preference-save completion or a DnsLibs return value alone never proves success.
+
+Automatic and Manual Profile switches do not test upstream reachability. Applying the selected configuration takes priority over connectivity; exact `.ready` identity confirms runtime application, not successful DNS resolution. Logging-mode reapply on an enabled manager likewise skips network preflight. Initial enablement, startup resume, and upstream-changing Profile edits retain their existing preflight checks; explicit Profile testing remains available.
 
 ## Failure Semantics
 

@@ -61,7 +61,7 @@ App Store Connect 不为 App 的首个版本提供“此版本的新功能”字
 
 ## 版本 1.4 更新说明
 
-改进 DNS Proxy Extension 短暂延迟返回运行时状态时的 Profile 切换可靠性。
+改进 DNS Proxy Extension 短暂延迟返回运行时状态时的 Profile 切换可靠性。自动与手动 Profile 切换不再等待上游联网检测，优先应用选中的配置，同时保留配置校验和精确运行状态确认。
 
 ## App 隐私草案
 

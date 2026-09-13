@@ -6,6 +6,10 @@ All notable changes to DNSPilot are documented in this file. The format follows 
 
 ## [1.4] - 2026-09-02
 
+### Changed
+
+- Automatic and Manual Profile switching now applies the selected configuration without waiting for an upstream connectivity test. Configuration validation and exact runtime confirmation remain required.
+
 ### Fixed
 
 - Profile switching now tolerates short-lived DNS Proxy Extension runtime-status response delays before failing.
