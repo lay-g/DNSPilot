@@ -51,7 +51,7 @@ An ordinary switch keeps `NEDNSProxyManager` enabled:
 
 Only the latest distinct pending target is retained. Preference-save completion or a DnsLibs return value alone never proves success.
 
-Automatic and Manual Profile switches do not test upstream reachability. Applying the selected configuration takes priority over connectivity; exact `.ready` identity confirms runtime application, not successful DNS resolution. Logging-mode reapply on an enabled manager likewise skips network preflight. Initial enablement, startup resume, and upstream-changing Profile edits retain their existing preflight checks; explicit Profile testing remains available.
+Automatic and Manual Profile switches do not test upstream reachability. Applying the selected configuration takes priority over connectivity; exact `.ready` identity confirms runtime application, not successful DNS resolution. Logging-mode reapply on an enabled manager likewise skips network preflight. Startup safe-Quit resume likewise skips network preflight, so a transient upstream failure right after launch or System Extension replacement does not consume the one-shot resume. Initial enablement and upstream-changing Profile edits retain their existing preflight checks; explicit Profile testing remains available.
 
 ## Failure Semantics
 

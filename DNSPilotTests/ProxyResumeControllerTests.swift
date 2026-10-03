@@ -155,6 +155,55 @@ struct ProxyResumeControllerTests {
         }
     }
 
+    @Test func startupResumeSkipsUpstreamReachabilityPreflight() async throws {
+        try await withFixture { directoryURL in
+            let old = try PersistedProxyConfiguration(value: makeConfiguration())
+            let manager = FakeDNSProxyManager(
+                isEnabled: false,
+                persistedConfiguration: old
+            )
+            let journal = ProxyResumeJournal(directoryURL: directoryURL)
+            let appFingerprint = AppConfigurationFingerprint(data: Data("app".utf8))
+            let record = makeRecord(
+                managerSnapshot: await manager.currentSnapshot,
+                appFingerprint: appFingerprint,
+                configuration: old
+            )
+            try journal.prepare(record)
+            try journal.confirmDisabled(operationID: record.operationID)
+            let validator = FakeUpstreamValidator {
+                throw FakeTestError.unavailable
+            }
+            let controller = makeController(
+                manager: manager,
+                validator: validator,
+                statusProvider: ManagerBackedStatusProvider(manager: manager)
+            )
+            await controller.configureResumeJournal(
+                journal,
+                appConfigurationFingerprint: appFingerprint
+            )
+            _ = await controller.synchronizeState()
+
+            let snapshot = await controller.resumeAfterSafeQuit(
+                target: DNSProxyTarget(
+                    profileID: old.value.profileID,
+                    upstream: old.value.upstream
+                ),
+                record: record.updating(phase: .disabledConfirmed),
+                appConfigurationFingerprint: appFingerprint
+            )
+
+            guard case .active = snapshot.state else {
+                Issue.record("Expected resumed Active state")
+                return
+            }
+            #expect(await validator.validationCount == 0)
+            #expect(await manager.enableSaveCount == 1)
+            #expect(try journal.load() == .missing)
+        }
+    }
+
     @Test func changedManagerBlocksStartupResumeWithoutEnableSave() async throws {
         try await withFixture { directoryURL in
             let old = try PersistedProxyConfiguration(value: makeConfiguration())

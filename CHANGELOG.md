@@ -9,6 +9,10 @@ All notable changes to DNSPilot are documented in this file. The format follows 
 - Redesigned the management window with grouped layouts. Overview shows a status header and inline recovery notices, the sidebar keeps a persistent DNS Proxy status summary, Profiles show transport, Active, and Default markers with Upstream, Hosts, and Usage details, and Rules mark the Rule that matches the current network. Floating list controls use Liquid Glass on macOS 26 and a system material on earlier releases.
 - Building now accepts Xcode 26.4 or later with Apple Swift 6.3 or later instead of requiring an exact Xcode build.
 
+### Fixed
+
+- Restoring DNS Proxy at launch after a safe Quit, including after a System Extension update, no longer waits for an upstream connectivity test. Configuration validation and exact runtime confirmation remain required.
+
 ## [1.4] - 2026-09-02
 
 ### Changed

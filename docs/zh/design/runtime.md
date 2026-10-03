@@ -51,7 +51,7 @@ Provider process 只拥有一个 `AGDnsProxy` 和一个 `AGDnsAppProxyFlowManage
 
 只保留最新且不同的 pending target。Preference save 完成或 DnsLibs 返回成功都不能单独证明切换成功。
 
-Automatic 和 Manual Profile 切换均不检测 upstream 可达性。优先应用选中的配置，不以联网成功为前提；exact `.ready` identity 证明 runtime 已应用配置，不代表 DNS 解析成功。Enabled manager 上的 logging-mode reapply 同样跳过联网预检。首次 enable、startup resume 和修改 upstream 的 Profile 编辑保留现有预检；用户仍可显式测试 Profile。
+Automatic 和 Manual Profile 切换均不检测 upstream 可达性。优先应用选中的配置，不以联网成功为前提；exact `.ready` identity 证明 runtime 已应用配置，不代表 DNS 解析成功。Enabled manager 上的 logging-mode reapply 同样跳过联网预检。Startup safe Quit resume 同样跳过联网预检，避免启动或 System Extension replacement 刚完成时的短暂 upstream 失败耗尽一次性 resume。首次 enable 和修改 upstream 的 Profile 编辑保留现有预检；用户仍可显式测试 Profile。
 
 ## 失败语义
 

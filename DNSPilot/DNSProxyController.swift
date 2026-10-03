@@ -475,7 +475,6 @@ actor DNSProxyController {
                 attemptID: attemptID
             )
             let schemaVersion = try await compatibleSchemaVersion(for: target)
-            try await validate(upstream: target.upstream)
             let configuration = try ActiveProxyConfiguration(
                 generation: generation,
                 profileID: target.profileID,
