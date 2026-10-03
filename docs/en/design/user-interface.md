@@ -6,7 +6,9 @@
 
 DNSPilot is a quiet, native macOS utility with one management window, one standard Settings window, and a persistent menu-bar menu. Closing the window leaves the app running and preserves the current DNS Proxy state.
 
-The management window uses a two-column navigation split view with Overview, Profiles, Rules, and Test. Settings contains General, Privacy, Diagnostics, and About. Use native lists, forms, sheets, alerts, menus, segmented controls, toggles, system typography, semantic colors, and SF Symbols. Color never carries status alone.
+The management window uses a two-column navigation split view with Overview, Profiles, Rules, and Test. Settings contains General, Privacy, Diagnostics, and About. Use native lists, grouped forms, sheets, alerts, menus, segmented controls, toggles, system typography, semantic colors, and SF Symbols, and let the system apply its own material, including Liquid Glass on macOS 26. Custom floating control clusters use Liquid Glass on macOS 26 and a system material on earlier releases; content areas do not use glass. Color never carries status alone.
+
+The bottom of the navigation sidebar shows a persistent Proxy status summary that pairs a status symbol with the state and the Active Profile or System DNS. Activating it opens Overview.
 
 General includes a staged DNS Cache section. Cache is enabled by default with a maximum of 1,000 responses. Users may disable it or enter an exact capacity from 1 through 10,000. Disabling retains the last valid capacity and disables its field; Restore Default reenables cache at 1,000. Save validates once and performs at most one runtime mutation. While applying, related controls are disabled. A Proxy-off save states that the setting applies on the next enable. An Active save reports success only after exact runtime confirmation; failure preserves the confirmed value and the draft for correction or retry.
 
@@ -20,7 +22,7 @@ Standalone Profile tests in Overview, Profile detail, and the Profile editor kee
 
 ## Overview
 
-Overview presents DNS Proxy state and control, Automatic/Manual mode, Target and Active Profiles, selection source, current network, Profile testing, diagnostics access, and recovery actions.
+Overview presents DNS Proxy state and control, Automatic/Manual mode, Target and Active Profiles, selection source, current network, Profile testing, diagnostics access, and recovery actions. A status header pairs a symbol, the state, and the Active Profile with the DNS Proxy switch. Resume, Extension, recovery, and switch-failure conditions appear as inline notices that state the condition and offer their recovery actions. Diagnostic shortcuts live in the toolbar's More Actions menu.
 
 After safe Quit, startup resume may show `Waiting for System Extension`, `Waiting for Network`, or `Restoring DNS Proxy`. A compatible Extension upgrade proceeds through those existing states without an error banner and the menu continues to report `DNS Proxy Off` until exact Active proof exists. Approval and restart requirements use the existing System Extension status and actions. Retry is offered only for retryable Extension or activation failures. A permanent manager-identity change explains that the configuration changed and offers `Keep System DNS`, not an ineffective resume retry. The app never retries continuously in the background.
 
@@ -30,11 +32,11 @@ Selecting Manual persists the requested Profile while preserving the current Pro
 
 Profile and Rule editors use staged drafts. Only Save commits domain configuration. Validation focuses the first invalid field. Editing an Active Profile uses the journaled runtime/configuration transaction and publishes the draft as Active after exact verification.
 
-Profiles expose create, edit, duplicate, test, make-default, replacement, and delete workflows. Custom Profile editors support Plain DNS, DNS over TLS, and DNS over HTTPS. DoT input contains server name or address, port, and bootstrap addresses. List identity uses privacy-safe DoT and DoH server summaries.
+Profiles expose create, edit, duplicate, test, make-default, replacement, and delete workflows. List rows show a transport symbol, the privacy-safe summary, and Active and Default markers; a floating action cluster below the list offers New, Delete, and More. Profile detail groups Upstream, Hosts, and Usage, where Usage shows Active and Default status and links to the Rules that target the Profile. Custom Profile editors support Plain DNS, DNS over TLS, and DNS over HTTPS. DoT input contains server name or address, port, and bootstrap addresses. List identity uses privacy-safe DoT and DoH server summaries.
 
 Each Profile editor also provides a staged Hosts section for exact or leftmost-wildcard (`*.`) A/AAAA address overrides. A wildcard entry covers the base domain and all subdomains, and overlapping same-family entries are rejected. Hosts are validated, canonicalized, sorted, and committed with the Profile. Raw filter syntax and hosts file paths are not accepted. Profile detail shows saved host entries without changing the Profile list identity.
 
-Rules show enabled state, priority, condition summary, and target Profile. Reordering saves once and reevaluates once. Dragging has Move Up/Move Down keyboard alternatives. The Default Profile selector remains visible and cannot be empty while the Proxy is usable.
+Rules show enabled state, priority, condition summary, and target Profile in one list below a Fallback section. In Automatic mode the Rule that matches the current network is marked `Matches Now`. Double-click edits a Rule. Reordering saves once and reevaluates once. Dragging has Move Up/Move Down alternatives in the context menu and in the floating action cluster with `Option-Command-Up/Down`. The Default Profile selector remains visible and cannot be empty while the Proxy is usable.
 
 ## DNS Test
 

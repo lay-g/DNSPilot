@@ -20,23 +20,35 @@ struct ProfilesView: View {
     var body: some View {
         HSplitView {
             List(appState.profiles, selection: $selection) { profile in
-                HStack {
+                HStack(spacing: 10) {
+                    Image(systemName: profile.upstream.transportSymbolName)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 20)
+                        .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(displayNames[profile.id] ?? profile.name)
+                            .fontWeight(.medium)
+                            .lineLimit(1)
                         Text(identity(for: profile).displaySummary)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                             .truncationMode(.middle)
+                    }
+                    Spacer(minLength: 4)
+                    VStack(alignment: .trailing, spacing: 2) {
+                        if profile.id == appState.proxy.activeProfileID {
+                            Label("Active", systemImage: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                        }
                         if profile.id == appState.configuration?.defaultProfileID {
-                            Text("Default").font(.caption).foregroundStyle(.secondary)
+                            Text("Default").foregroundStyle(.secondary)
                         }
                     }
-                    Spacer()
-                    if profile.id == appState.proxy.activeProfileID {
-                        Image(systemName: "checkmark").accessibilityLabel("Active")
-                    }
+                    .font(.caption)
                 }
+                .padding(.vertical, 3)
+                .accessibilityElement(children: .combine)
                 .tag(profile.id)
                 .contextMenu {
                     Button("Edit") { appState.requestEditor(.editProfile(profile.id)) }
@@ -55,6 +67,44 @@ struct ProfilesView: View {
                     }
                 }
             }
+            .safeAreaInset(edge: .bottom, alignment: .leading) {
+                ListActionBar {
+                    Button {
+                        appState.requestEditor(.newProfile)
+                    } label: {
+                        Label("New Profile", systemImage: "plus")
+                    }
+                    .help("New Profile")
+                    Button {
+                        if let selectedProfile { requestDeletion(of: selectedProfile) }
+                    } label: {
+                        Label("Delete Profile", systemImage: "minus")
+                    }
+                    .help("Delete Profile")
+                    .disabled(selectedProfile == nil)
+                    Divider().frame(height: 14)
+                    Menu {
+                        if let profile = selectedProfile {
+                            Button("Edit…") { appState.requestEditor(.editProfile(profile.id)) }
+                            Button("Duplicate") { appState.requestEditor(.duplicateProfile(profile.id)) }
+                            Button("Test") { test(profile) }
+                                .disabled(appState.configurationWritesLocked)
+                            Button("Make Default") {
+                                Task { await appState.setDefaultProfile(profile.id) }
+                            }
+                            .disabled(profile.id == appState.configuration?.defaultProfileID)
+                        }
+                    } label: {
+                        Label("More Profile Actions", systemImage: "ellipsis")
+                    }
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+                    .help("More Profile Actions")
+                    .disabled(selectedProfile == nil)
+                }
+                .padding(10)
+            }
             .frame(minWidth: 240, idealWidth: 270, maxWidth: 320)
 
             Group {
@@ -65,6 +115,8 @@ struct ProfilesView: View {
                         isDefault: profile.id == appState.configuration?.defaultProfileID,
                         isTestDisabled: appState.configurationWritesLocked,
                         testStatus: testedProfile == profile ? profileTestStatus : nil,
+                        rules: appState.rules.filter { $0.profileID == profile.id },
+                        openRule: { appState.navigateToRule($0) },
                         edit: { appState.requestEditor(.editProfile(profile.id)) },
                         test: {
                             test(profile)
@@ -195,6 +247,8 @@ private struct ProfileDetailView: View {
     let isDefault: Bool
     let isTestDisabled: Bool
     let testStatus: ProfileTestStatus?
+    let rules: [DNSRule]
+    let openRule: (DNSRule.ID) -> Void
     let edit: () -> Void
     let test: () -> Void
     let duplicate: () -> Void
@@ -202,70 +256,158 @@ private struct ProfileDetailView: View {
     let delete: () -> Void
 
     var body: some View {
-        Form {
-            LabeledContent("Name", value: profile.name)
-            switch profile.upstream {
-            case let .plain(configuration):
-                LabeledContent("Protocol", value: "Plain DNS")
-                LabeledContent("Server", value: configuration.serverAddress.stringValue)
-                LabeledContent("Port", value: String(configuration.port))
-            case let .tls(configuration):
-                LabeledContent("Protocol", value: "DNS over TLS")
-                LabeledContent("Server", value: configuration.serverName)
-                LabeledContent("Port", value: String(configuration.port))
-                LabeledContent("Bootstrap Servers") {
-                    Text(configuration.bootstrapServers.map(\.stringValue).joined(separator: ", "))
-                        .textSelection(.enabled)
-                }
-            case let .https(configuration):
-                LabeledContent("Protocol", value: "DNS over HTTPS")
-                LabeledContent("Endpoint") {
-                    Text(configuration.endpointURL.absoluteString)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .help(configuration.endpointURL.absoluteString)
-                        .textSelection(.enabled)
-                }
-                LabeledContent("Bootstrap Servers") {
-                    Text(configuration.bootstrapServers.map(\.stringValue).joined(separator: ", "))
-                        .textSelection(.enabled)
-                }
-            }
-            if !profile.hosts.isEmpty {
-                Section("Hosts") {
-                    ForEach(profile.hosts, id: \.self) { host in
-                        LabeledContent(host.domain) {
-                            Text(host.address.stringValue)
+        VStack(spacing: 0) {
+            header
+            Form {
+                Section("Upstream") {
+                    LabeledContent("Protocol", value: profile.upstream.transportTitle)
+                    switch profile.upstream {
+                    case let .plain(configuration):
+                        LabeledContent("Server") { monospaced(configuration.serverAddress.stringValue) }
+                        LabeledContent("Port", value: String(configuration.port))
+                    case let .tls(configuration):
+                        LabeledContent("Server") { monospaced(configuration.serverName) }
+                        LabeledContent("Port", value: String(configuration.port))
+                        LabeledContent("Bootstrap Servers") {
+                            monospaced(configuration.bootstrapServers.map(\.stringValue).joined(separator: "\n"))
+                        }
+                    case let .https(configuration):
+                        LabeledContent("Endpoint") {
+                            Text(configuration.endpointURL.absoluteString)
+                                .font(.callout.monospaced())
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .help(configuration.endpointURL.absoluteString)
                                 .textSelection(.enabled)
+                        }
+                        LabeledContent("Bootstrap Servers") {
+                            monospaced(configuration.bootstrapServers.map(\.stringValue).joined(separator: "\n"))
+                        }
+                    }
+                }
+                Section {
+                    if profile.hosts.isEmpty {
+                        Text("No host overrides")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(profile.hosts, id: \.self) { host in
+                            LabeledContent {
+                                monospaced(host.address.stringValue)
+                            } label: {
+                                Text(host.domain).font(.callout.monospaced())
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Hosts")
+                } footer: {
+                    Text("Overrides A and AAAA answers before the upstream is queried. *.example.com also covers example.com.")
+                        .foregroundStyle(.secondary)
+                }
+                Section("Usage") {
+                    LabeledContent("Status") {
+                        if isActive {
+                            Label("Active", systemImage: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                        } else {
+                            Text("Not Active")
+                        }
+                    }
+                    LabeledContent("Default Profile") {
+                        if isDefault {
+                            Text("Yes")
+                        } else {
+                            Button("Make Default", action: makeDefault)
+                                .buttonStyle(.link)
+                        }
+                    }
+                    LabeledContent("Used by Rules") {
+                        if rules.isEmpty {
+                            Text("None")
+                        } else {
+                            HStack(spacing: 6) {
+                                ForEach(rules) { rule in
+                                    Button(rule.name) { openRule(rule.id) }
+                                        .buttonStyle(.link)
+                                }
+                            }
                         }
                     }
                 }
             }
-            if isDefault { LabeledContent("Default Profile", value: "Yes") }
-            if isActive { LabeledContent("Active", value: "Yes") }
-            HStack {
-                Spacer()
-                if let testStatus {
-                    ProfileTestStatusView(status: testStatus)
-                        .font(.caption)
-                }
-                Button("Test", action: test)
-                    .disabled(isTestDisabled)
-                Button("Edit", action: edit)
-                Menu {
-                    Button("Duplicate", action: duplicate)
-                    Button("Make Default", action: makeDefault).disabled(isDefault)
-                    Divider()
-                    Button("Delete", role: .destructive, action: delete)
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                }
-                .help("More Profile Actions")
-                .accessibilityLabel("More Profile Actions")
+            .formStyle(.grouped)
+        }
+    }
+
+    private var header: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) {
+                headerTitle
+                Spacer(minLength: 12)
+                headerActions
+            }
+            VStack(alignment: .leading, spacing: 10) {
+                headerTitle
+                headerActions
             }
         }
-        .formStyle(.grouped)
-        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 20)
+        .padding(.top, 12)
+    }
+
+    private var headerTitle: some View {
+        HStack(spacing: 12) {
+            Image(systemName: profile.upstream.transportSymbolName)
+                .font(.title2)
+                .foregroundStyle(.secondary)
+                .frame(width: 40, height: 40)
+                .background(.quaternary.opacity(0.6), in: .rect(cornerRadius: 10))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(profile.name)
+                    .font(.title3.weight(.bold))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Text(profile.upstream.transportTitle)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var headerActions: some View {
+        HStack(spacing: 8) {
+            if let testStatus {
+                ProfileTestStatusView(status: testStatus)
+                    .font(.callout)
+            }
+            Button("Test", action: test)
+                .disabled(isTestDisabled)
+            Button("Edit…", action: edit)
+            Menu {
+                Button("Duplicate", action: duplicate)
+                Button("Make Default", action: makeDefault).disabled(isDefault)
+                Divider()
+                Button("Delete…", role: .destructive, action: delete)
+            } label: {
+                Image(systemName: "ellipsis")
+                    .frame(height: 16)
+                    .accessibilityLabel("More Profile Actions")
+            }
+            .menuStyle(.button)
+            .buttonStyle(.bordered)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("More Profile Actions")
+        }
+    }
+
+    private func monospaced(_ value: String) -> some View {
+        Text(value)
+            .font(.callout.monospaced())
+            .multilineTextAlignment(.trailing)
+            .textSelection(.enabled)
     }
 }
 
@@ -295,65 +437,73 @@ private struct ProfileEditorView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            Text(editorTitle)
+                .font(.title3.weight(.bold))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 20)
+                .padding(.top, 18)
             Form {
-                TextField("Name", text: $draft.name, prompt: Text("Home DNS"))
-                    .focused($focusedField, equals: .name)
-                fieldError(.name)
-                Picker("Protocol", selection: $draft.transport) {
-                    Text("Plain DNS").tag(ProfileTransport.plain)
-                    Text("DNS over TLS").tag(ProfileTransport.tls)
-                    Text("DNS over HTTPS").tag(ProfileTransport.https)
+                Section {
+                    TextField("Name", text: $draft.name, prompt: Text("Home DNS"))
+                        .focused($focusedField, equals: .name)
+                    fieldError(.name)
                 }
-                .pickerStyle(.segmented)
+                Section("Upstream") {
+                    Picker("Protocol", selection: $draft.transport) {
+                        Text("Plain DNS").tag(ProfileTransport.plain)
+                        Text("DNS over TLS").tag(ProfileTransport.tls)
+                        Text("DNS over HTTPS").tag(ProfileTransport.https)
+                    }
+                    .pickerStyle(.segmented)
 
-                switch draft.transport {
-                case .plain:
-                    TextField(
-                        "Server Address",
-                        text: $draft.plainServerAddress,
-                        prompt: Text("1.1.1.1")
-                    )
-                        .focused($focusedField, equals: .server)
-                    fieldError(.server)
-                    TextField(
-                        "Port",
-                        value: $draft.plainPort,
-                        format: .number,
-                        prompt: Text("53")
-                    )
-                        .focused($focusedField, equals: .port)
-                    fieldError(.port)
-                case .tls:
-                    TextField(
-                        "Server Name or Address",
-                        text: $draft.dotServerName,
-                        prompt: Text("dns.example.com")
-                    )
-                        .focused($focusedField, equals: .server)
-                    fieldError(.server)
-                    TextField(
-                        "Port",
-                        value: $draft.dotPort,
-                        format: .number,
-                        prompt: Text("853")
-                    )
-                        .focused($focusedField, equals: .port)
-                    fieldError(.port)
-                    bootstrapEditor
-                case .https:
-                    TextField(
-                        "Endpoint URL",
-                        text: $draft.endpointURL,
-                        prompt: Text("https://dns.example.com/dns-query")
-                    )
-                        .focused($focusedField, equals: .endpoint)
-                    fieldError(.endpoint)
-                    bootstrapEditor
+                    switch draft.transport {
+                    case .plain:
+                        TextField(
+                            "Server Address",
+                            text: $draft.plainServerAddress,
+                            prompt: Text("1.1.1.1")
+                        )
+                            .focused($focusedField, equals: .server)
+                        fieldError(.server)
+                        TextField(
+                            "Port",
+                            value: $draft.plainPort,
+                            format: .number,
+                            prompt: Text("53")
+                        )
+                            .focused($focusedField, equals: .port)
+                        fieldError(.port)
+                    case .tls:
+                        TextField(
+                            "Server Name or Address",
+                            text: $draft.dotServerName,
+                            prompt: Text("dns.example.com")
+                        )
+                            .focused($focusedField, equals: .server)
+                        fieldError(.server)
+                        TextField(
+                            "Port",
+                            value: $draft.dotPort,
+                            format: .number,
+                            prompt: Text("853")
+                        )
+                            .focused($focusedField, equals: .port)
+                        fieldError(.port)
+                        bootstrapEditor
+                    case .https:
+                        TextField(
+                            "Endpoint URL",
+                            text: $draft.endpointURL,
+                            prompt: Text("https://dns.example.com/dns-query")
+                        )
+                            .focused($focusedField, equals: .endpoint)
+                        fieldError(.endpoint)
+                        bootstrapEditor
+                    }
                 }
                 hostsEditor
             }
             .formStyle(.grouped)
-            Divider()
             HStack {
                 Button("Test") { startProfileTest() }
                 if let profileTestStatus {
@@ -366,10 +516,13 @@ private struct ProfileEditorView: View {
                     validateAndSave()
                 }
                 .keyboardShortcut(.defaultAction)
+                .buttonStyle(.borderedProminent)
             }
-            .padding()
+            .padding(.horizontal, 20)
+            .padding(.bottom, 18)
+            .padding(.top, 4)
         }
-        .frame(minWidth: 520, idealWidth: 560, minHeight: 430, idealHeight: 520)
+        .frame(minWidth: 520, idealWidth: 560, minHeight: 430, idealHeight: 560)
         .disabled(appState.isPerformingAction)
         .onAppear { appState.beginDraft(.profile) }
         .onDisappear {
@@ -514,9 +667,17 @@ private struct ProfileEditorView: View {
         }
     }
 
+    private var editorTitle: String {
+        switch operation {
+        case .create: "New Profile"
+        case .edit: "Edit Profile"
+        case .duplicate: "Duplicate Profile"
+        }
+    }
+
     @ViewBuilder
     private var hostsEditor: some View {
-        Section("Hosts") {
+        Section {
             ForEach($draft.hosts) { $host in
                 HStack(spacing: 8) {
                     TextField("Domain", text: $host.domain)
@@ -526,8 +687,9 @@ private struct ProfileEditorView: View {
                     Button(role: .destructive) {
                         draft.hosts.removeAll { $0.id == host.id }
                     } label: {
-                        Image(systemName: "trash")
+                        Image(systemName: "minus.circle")
                     }
+                    .buttonStyle(.borderless)
                     .help("Remove Host")
                     .accessibilityLabel("Remove Host")
                 }
@@ -542,6 +704,12 @@ private struct ProfileEditorView: View {
             } label: {
                 Label("Add Host", systemImage: "plus")
             }
+            .buttonStyle(.link)
+        } header: {
+            Text("Hosts")
+        } footer: {
+            Text("Use an exact domain or a leftmost wildcard. *.example.com also covers example.com.")
+                .foregroundStyle(.secondary)
         }
     }
 

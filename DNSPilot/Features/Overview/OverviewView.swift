@@ -14,48 +14,49 @@ struct OverviewView: View {
     @State private var testedProfile: DNSProfile?
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                header
-                proxyResumeNotice
-                proxyRecoveryActions
-                extensionStatus
-                networkStatusNotice
-                Divider()
-                modeSection
-                selectionSection
-                networkSection
-                Divider()
-                HStack {
-                    Spacer()
-                    if let activeProfile {
+        Form {
+            Section { header }
+            proxyResumeNotice
+            proxyRecoveryActions
+            extensionStatus
+            networkStatusNotice
+            modeSection
+            selectionSection
+            networkSection
+            if let activeProfile {
+                Section {
+                    HStack(spacing: 10) {
                         Button("Test Active Profile") {
                             test(activeProfile)
                         }
                         .disabled(appState.configurationWritesLocked)
                         if testedProfile == activeProfile, let profileTestStatus {
                             ProfileTestStatusView(status: profileTestStatus)
-                                .font(.caption)
+                                .font(.callout)
                         }
+                        Spacer(minLength: 0)
                     }
-                    Menu {
-                        Button("Copy Diagnostic Summary") { appState.copyDiagnosticSummary() }
-                        Button("Restore System DNS") {
-                            Task { await appState.restoreSystemDNS() }
-                        }
-                        .disabled(appState.isPerformingAction || appState.proxy.state == .disabled)
-                        Button("Open Diagnostics Settings") { openDiagnostics() }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                    }
-                    .help("More Actions")
-                    .accessibilityLabel("More Actions")
                 }
             }
-            .padding(24)
-            .frame(maxWidth: 720, alignment: .leading)
         }
+        .formStyle(.grouped)
         .navigationTitle("Overview")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    Button("Copy Diagnostic Summary") { appState.copyDiagnosticSummary() }
+                    Button("Open Diagnostics Settings") { openDiagnostics() }
+                    Divider()
+                    Button("Restore System DNS") {
+                        Task { await appState.restoreSystemDNS() }
+                    }
+                    .disabled(appState.isPerformingAction || appState.proxy.state == .disabled)
+                } label: {
+                    Label("More Actions", systemImage: "ellipsis")
+                }
+                .help("More Actions")
+            }
+        }
         .onDisappear {
             profileTestTask?.cancel()
             profileTestStatus = nil
@@ -64,19 +65,18 @@ struct OverviewView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .top) {
-            Label {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(appState.menuPresentation?.statusText ?? "DNS Proxy Off")
-                        .font(.title2.weight(.semibold))
-                    Text(appState.menuPresentation?.profileLines.first ?? "System DNS is active")
-                        .foregroundStyle(.secondary)
-                }
-            } icon: {
-                Image(systemName: appState.menuPresentation?.symbolName ?? "network.slash")
-                    .font(.title2)
+        let appearance = ProxyStatusAppearance(appState: appState)
+        return HStack(spacing: 14) {
+            ProxyStatusBadge(appearance: appearance)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(appearance.title)
+                    .font(.title2.weight(.bold))
+                Text(appearance.subtitle)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
             }
-            Spacer()
+            .accessibilityElement(children: .combine)
+            Spacer(minLength: 12)
             Toggle("DNS Proxy", isOn: Binding(
                 get: { if case .active = appState.proxy.state { true } else { false } },
                 set: { enabled in
@@ -87,12 +87,16 @@ struct OverviewView: View {
                 }
             ))
             .toggleStyle(.switch)
+            .controlSize(.large)
+            .labelsHidden()
+            .accessibilityLabel("DNS Proxy")
             .disabled(
                 appState.configurationWritesLocked
                     || appState.profiles.isEmpty
                     || appState.proxyResumeState != .none
             )
         }
+        .padding(.vertical, 6)
     }
 
     @ViewBuilder
@@ -101,59 +105,89 @@ struct OverviewView: View {
         case .none:
             EmptyView()
         case .waitingForExtension:
-            Label("Waiting for System Extension", systemImage: "puzzlepiece.extension")
-                .foregroundStyle(.secondary)
-        case .waitingForNetwork:
-            Label("Waiting for Network to Restore DNS Proxy", systemImage: "network.slash")
-                .foregroundStyle(.secondary)
-        case .restoring:
-            Label("Restoring DNS Proxy", systemImage: "arrow.clockwise")
-                .foregroundStyle(.secondary)
-        case .failed(.managerChanged):
-            VStack(alignment: .leading, spacing: 8) {
-                Text("DNS Proxy Configuration Changed").font(.headline)
-                Text("System DNS remains active. Keep System DNS, then turn on DNS Proxy to use the current configuration.")
-                    .foregroundStyle(.secondary)
-                Button("Keep System DNS") {
-                    Task { await appState.keepSystemDNSAfterResumeFailure() }
-                }
+            Section {
+                StatusNotice(
+                    "Waiting for System Extension",
+                    message: "DNSPilot restores the DNS Proxy when the extension is ready.",
+                    symbolName: "puzzlepiece.extension",
+                    tint: .secondary
+                )
             }
-            .disabled(appState.isPerformingAction)
+        case .waitingForNetwork:
+            Section {
+                StatusNotice(
+                    "Waiting for Network to Restore DNS Proxy",
+                    message: "DNSPilot restores the DNS Proxy when a network becomes available.",
+                    symbolName: "network.slash",
+                    tint: .secondary
+                )
+            }
+        case .restoring:
+            Section {
+                StatusNotice(
+                    "Restoring DNS Proxy",
+                    message: "DNSPilot is restoring the DNS Proxy state from the last session.",
+                    symbolName: "arrow.clockwise",
+                    tint: .accentColor
+                )
+            }
+        case .failed(.managerChanged):
+            Section {
+                StatusNotice(
+                    "DNS Proxy Configuration Changed",
+                    message: "System DNS remains active. Keep System DNS, then turn on DNS Proxy to use the current configuration.",
+                    symbolName: "exclamationmark.triangle.fill",
+                    tint: .orange
+                ) {
+                    Button("Keep System DNS") {
+                        Task { await appState.keepSystemDNSAfterResumeFailure() }
+                    }
+                }
+                .disabled(appState.isPerformingAction)
+            }
         case .failed:
-            VStack(alignment: .leading, spacing: 8) {
-                Text("DNS Proxy Was Not Restored").font(.headline)
-                Text("System DNS remains active. Retry after resolving the current configuration or Extension issue.")
-                    .foregroundStyle(.secondary)
-                HStack {
+            Section {
+                StatusNotice(
+                    "DNS Proxy Was Not Restored",
+                    message: "System DNS remains active. Retry after resolving the current configuration or Extension issue.",
+                    symbolName: "exclamationmark.triangle.fill",
+                    tint: .orange
+                ) {
                     Button("Retry") { Task { await appState.retryProxyResume() } }
                     Button("Keep System DNS") {
                         Task { await appState.keepSystemDNSAfterResumeFailure() }
                     }
                 }
+                .disabled(appState.isPerformingAction)
             }
-            .disabled(appState.isPerformingAction)
         }
     }
 
     @ViewBuilder
     private var proxyRecoveryActions: some View {
         if case .recoveryRequired = appState.proxy.state {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("DNS Proxy state cannot be confirmed because ownership or manager state changed outside DNSPilot.")
-                    .foregroundStyle(.secondary)
-                HStack {
+            Section {
+                StatusNotice(
+                    "DNS Proxy State Cannot Be Confirmed",
+                    message: "Ownership or manager state changed outside DNSPilot. Reconnect to verify it, or restore System DNS.",
+                    symbolName: "exclamationmark.triangle.fill",
+                    tint: .orange
+                ) {
                     Button("Reconnect") { Task { await appState.reconnect() } }
                     Button("Restore System DNS") { Task { await appState.restoreSystemDNS() } }
                     Button("Open Diagnostics") { openDiagnostics() }
                 }
+                .disabled(appState.isPerformingAction)
             }
-            .disabled(appState.isPerformingAction)
         } else if let switchFailure = appState.proxy.lastSwitchFailure {
             let failure = switchFailure.productActionFailure
-            VStack(alignment: .leading, spacing: 8) {
-                Text(failure.title).font(.headline)
-                Text(failure.message).foregroundStyle(.secondary)
-                HStack {
+            Section {
+                StatusNotice(
+                    failure.title,
+                    message: failure.message,
+                    symbolName: "exclamationmark.triangle.fill",
+                    tint: .orange
+                ) {
                     Button("Retry") {
                         Task { await appState.turnOnDNSProxy() }
                     }
@@ -175,19 +209,23 @@ struct OverviewView: View {
                         Button("Open Diagnostics") { openDiagnostics() }
                     }
                 }
+                .disabled(appState.isPerformingAction)
             }
-            .disabled(appState.isPerformingAction)
         } else {
             switch appState.proxy.state {
             case .failed, .degraded:
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(proxyStateFailureMessage).foregroundStyle(.secondary)
-                    HStack {
+                Section {
+                    StatusNotice(
+                        proxyStateFailed ? "DNS Proxy Did Not Start" : "DNS Proxy Is Limited",
+                        message: proxyStateFailureMessage,
+                        symbolName: "xmark.octagon.fill",
+                        tint: proxyStateFailed ? .red : .orange
+                    ) {
                         Button("Retry") { Task { await appState.turnOnDNSProxy() } }
                         Button("Open Diagnostics") { openDiagnostics() }
                     }
+                    .disabled(appState.isPerformingAction)
                 }
-                .disabled(appState.isPerformingAction)
             case .disabled, .preparing, .applying, .repairing, .active, .stopping,
                  .recoveryRequired:
                 EmptyView()
@@ -199,14 +237,20 @@ struct OverviewView: View {
     private var networkStatusNotice: some View {
         if case .automatic = appState.configuration?.operatingMode,
            appState.network?.status != .satisfied {
-            Label("Waiting for Network", systemImage: "network.slash")
-                .foregroundStyle(.secondary)
+            Section {
+                StatusNotice(
+                    "Waiting for Network",
+                    message: "Automatic mode chooses a Profile when a network becomes available.",
+                    symbolName: "network.slash",
+                    tint: .secondary
+                )
+            }
         }
     }
 
     private var modeSection: some View {
-        Form {
-            Picker("Mode", selection: Binding(
+        Section {
+            Picker("Selection", selection: Binding(
                 get: {
                     if case .manual = appState.configuration?.operatingMode { Mode.manual }
                     else { Mode.automatic }
@@ -229,6 +273,7 @@ struct OverviewView: View {
                 Text("Manual").tag(Mode.manual)
             }
             .pickerStyle(.segmented)
+            .fixedSize()
 
             if case let .manual(profileID) = appState.configuration?.operatingMode {
                 Picker("Manual Profile", selection: Binding(
@@ -240,9 +285,20 @@ struct OverviewView: View {
                     }
                 }
             }
+        } header: {
+            Text("Mode")
+        } footer: {
+            Text(modeFooter)
+                .foregroundStyle(.secondary)
         }
-        .formStyle(.grouped)
         .disabled(appState.configurationWritesLocked)
+    }
+
+    private var modeFooter: String {
+        if case .manual = appState.configuration?.operatingMode {
+            return "Manual selection stays until you return to Automatic."
+        }
+        return "The first enabled Rule that matches the current network wins. Otherwise the Default Profile is used."
     }
 
     @ViewBuilder
@@ -251,37 +307,62 @@ struct OverviewView: View {
         case .active:
             EmptyView()
         case .awaitingApproval:
-            LabeledContent("System Extension Approval Required") {
-                HStack {
+            Section {
+                StatusNotice(
+                    "System Extension Approval Required",
+                    message: "Allow the DNSPilot extension in System Settings, then check again.",
+                    symbolName: "puzzlepiece.extension.fill",
+                    tint: .orange
+                ) {
                     Button("Open System Settings") { appState.openSystemExtensionSettings() }
                     Button("Check Again") { appState.synchronizeSystemExtension() }
                 }
             }
         case .notInstalled, .inactive:
-            LabeledContent("System Extension Required") {
-                Button("Resume Setup") { appState.requestSetupWindow() }
+            Section {
+                StatusNotice(
+                    "System Extension Required",
+                    message: "The DNS Proxy extension is not installed. Resume setup to install it.",
+                    symbolName: "puzzlepiece.extension.fill",
+                    tint: .orange
+                ) {
+                    Button("Resume Setup") { appState.requestSetupWindow() }
+                }
             }
         case .failed:
-            LabeledContent("System Extension Request Failed") {
-                VStack(alignment: .trailing, spacing: 6) {
-                    Text(appState.systemExtensionState.userDescription)
-                    HStack {
-                        Button("Open System Settings") { appState.openSystemExtensionSettings() }
-                        Button("Retry") { appState.installSystemExtension() }
-                    }
+            Section {
+                StatusNotice(
+                    "System Extension Request Failed",
+                    message: appState.systemExtensionState.userDescription,
+                    symbolName: "xmark.octagon.fill",
+                    tint: .red
+                ) {
+                    Button("Open System Settings") { appState.openSystemExtensionSettings() }
+                    Button("Retry") { appState.installSystemExtension() }
                 }
             }
         case .updateRequired:
-            LabeledContent("System Extension Update Required") {
-                Button("Update Safely") {
-                    Task { await appState.updateSystemExtensionSafely() }
+            Section {
+                StatusNotice(
+                    "System Extension Update Required",
+                    message: "DNSPilot restores System DNS, updates the extension, and then resumes the previous state.",
+                    symbolName: "arrow.down.circle.fill",
+                    tint: .accentColor
+                ) {
+                    Button("Update Safely") {
+                        Task { await appState.updateSystemExtensionSafely() }
+                    }
+                    .disabled(appState.systemExtensionRequestInProgress)
                 }
-                .disabled(appState.systemExtensionRequestInProgress)
             }
         case .updateFailed:
-            LabeledContent("System Extension Update Failed") {
-                VStack(alignment: .trailing, spacing: 6) {
-                    Text(appState.systemExtensionState.userDescription)
+            Section {
+                StatusNotice(
+                    "System Extension Update Failed",
+                    message: appState.systemExtensionState.userDescription,
+                    symbolName: "xmark.octagon.fill",
+                    tint: .red
+                ) {
                     Button("Retry Safely") {
                         Task { await appState.updateSystemExtensionSafely() }
                     }
@@ -289,18 +370,23 @@ struct OverviewView: View {
                 }
             }
         case .downgradeBlocked:
-            LabeledContent(
-                "System Extension",
-                value: "A newer DNSPilot build is required"
-            )
+            Section {
+                StatusNotice(
+                    "System Extension",
+                    message: "A newer DNSPilot build is required.",
+                    symbolName: "exclamationmark.triangle.fill",
+                    tint: .orange
+                )
+            }
         case .checking, .activating, .deactivating, .uninstalling, .restartRequired:
-            LabeledContent("System Extension", value: appState.systemExtensionState.userDescription)
+            Section {
+                LabeledContent("System Extension", value: appState.systemExtensionState.userDescription)
+            }
         }
     }
 
     private var selectionSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Current Selection").font(.headline)
+        Section("Current Selection") {
             LabeledContent("Active Profile") {
                 if let activeProfileID = appState.proxy.activeProfileID {
                     Button(profileName(activeProfileID) ?? "Unknown Profile") {
@@ -312,12 +398,15 @@ struct OverviewView: View {
                 }
             }
             if let target = appState.proxy.targetProfileID, target != appState.proxy.activeProfileID {
-                LabeledContent("Target Profile", value: profileName(target) ?? "Unknown Profile")
+                LabeledContent("Target Profile") {
+                    Text(profileName(target) ?? "Unknown Profile")
+                        .foregroundStyle(.orange)
+                }
             }
-            LabeledContent("Selection Source") {
+            LabeledContent("Selected By") {
                 switch appState.selectionSource {
                 case let .rule(id, name):
-                    Button(name) { appState.navigateToRule(id) }
+                    Button("Rule \u{201C}\(name)\u{201D}") { appState.navigateToRule(id) }
                         .buttonStyle(.link)
                 case .defaultProfile:
                     if let profileID = appState.configuration?.defaultProfileID {
@@ -332,15 +421,27 @@ struct OverviewView: View {
     }
 
     private var networkSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Current Network").font(.headline)
-            LabeledContent("Wi-Fi", value: wifiSummary)
+        Section("Network") {
+            LabeledContent {
+                Text(wifiSummary)
+            } label: {
+                Label("Wi-Fi", systemImage: "wifi")
+            }
             if appState.network?.ssidAvailability == .permissionDenied {
                 Button("Open System Settings") { appState.openLocationSettings() }
             }
-            LabeledContent("Interfaces", value: interfaceSummary)
-            LabeledContent("Addresses") {
-                Text(addressSummary).textSelection(.enabled)
+            LabeledContent {
+                Text(interfaceSummary)
+            } label: {
+                Label("Interfaces", systemImage: "network")
+            }
+            LabeledContent {
+                Text(addressSummary)
+                    .font(.callout.monospaced())
+                    .multilineTextAlignment(.trailing)
+                    .textSelection(.enabled)
+            } label: {
+                Label("Addresses", systemImage: "number")
             }
         }
     }
@@ -394,7 +495,12 @@ struct OverviewView: View {
 
     private var addressSummary: String {
         let values = appState.network?.addresses.map(\.address.stringValue) ?? []
-        return values.isEmpty ? "None" : values.joined(separator: ", ")
+        return values.isEmpty ? "None" : values.joined(separator: "\n")
+    }
+
+    private var proxyStateFailed: Bool {
+        if case .failed = appState.proxy.state { return true }
+        return false
     }
 
     private func openDiagnostics() {

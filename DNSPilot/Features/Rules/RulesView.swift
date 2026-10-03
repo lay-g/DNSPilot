@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 @MainActor
 struct RulesView: View {
@@ -6,6 +7,10 @@ struct RulesView: View {
     @State private var selection: DNSRule.ID?
     @State private var draft: RuleDraft?
     @State private var deletionRequest: DNSRule?
+    @FocusState private var focusedRule: DNSRule.ID?
+    @State private var draggingRuleID: DNSRule.ID?
+    @State private var dropIndicator: RuleDropIndicator?
+    @State private var rowHeights: [DNSRule.ID: CGFloat] = [:]
 
     var body: some View {
         Group {
@@ -65,115 +70,276 @@ struct RulesView: View {
     }
 
     private var rulesContent: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text("Default Profile")
-                Spacer()
-                Picker("Default Profile", selection: Binding(
-                    get: { appState.configuration?.defaultProfileID ?? appState.profiles[0].id },
-                    set: { id in Task { await appState.setDefaultProfile(id) } }
-                )) {
-                    ForEach(appState.profiles) { profile in
-                        Text(displayNames[profile.id] ?? profile.name).tag(profile.id)
+        Form {
+            Section {
+                LabeledContent("Default Profile") {
+                    Picker("Default Profile", selection: Binding(
+                        get: { appState.configuration?.defaultProfileID ?? appState.profiles[0].id },
+                        set: { id in Task { await appState.setDefaultProfile(id) } }
+                    )) {
+                        ForEach(appState.profiles) { profile in
+                            Text(displayNames[profile.id] ?? profile.name).tag(profile.id)
+                        }
                     }
+                    .labelsHidden()
+                    .fixedSize()
+                    .disabled(appState.isPerformingAction)
                 }
-                .labelsHidden()
-                .frame(minWidth: 160, idealWidth: 220, maxWidth: 280)
-                .disabled(appState.isPerformingAction)
+            } header: {
+                Text("Fallback")
+            } footer: {
+                Text("Used in Automatic mode when no enabled Rule matches.")
+                    .foregroundStyle(.secondary)
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
-            Divider()
-            HSplitView {
-                List(selection: $selection) {
-                    ForEach(Array(appState.rules.enumerated()), id: \.element.id) { index, rule in
-                        HStack(alignment: .top) {
-                            Toggle("Enable \(rule.name)", isOn: Binding(
-                                get: { rule.isEnabled },
-                                set: { enabled in
-                                    var updated = RuleDraft(rule: rule)
-                                    updated.isEnabled = enabled
-                                    Task { await appState.saveRule(updated) }
-                                }
-                            ))
-                            .labelsHidden()
-                            .accessibilityLabel(
-                                "Priority \(index + 1), \(rule.name), \(rule.isEnabled ? "enabled" : "disabled"), \(conditionSummary(rule)), Profile \(displayNames[rule.profileID] ?? "Unknown")"
-                            )
-                            Text("\(index + 1)")
-                                .foregroundStyle(.secondary)
-                                .monospacedDigit()
-                                .accessibilityHidden(true)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(rule.name)
-                                Text(conditionSummary(rule))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                                Text(displayNames[rule.profileID] ?? "Unknown Profile")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                            }
-                            .accessibilityHidden(true)
-                        }
-                        .tag(rule.id)
-                        .contextMenu {
-                            Button("Edit") { appState.requestEditor(.editRule(rule.id)) }
-                            Button("Duplicate") { appState.requestEditor(.duplicateRule(rule.id)) }
-                            Button(rule.isEnabled ? "Disable" : "Enable") {
-                                var updated = RuleDraft(rule: rule)
-                                updated.isEnabled.toggle()
-                                Task { await appState.saveRule(updated) }
-                            }
-                            Button("Move Up") { move(rule.id, offset: -1) }.disabled(index == 0)
-                            Button("Move Down") { move(rule.id, offset: 1) }
-                                .disabled(index == appState.rules.count - 1)
-                            Divider()
-                            Button("Delete", role: .destructive) {
-                                deletionRequest = rule
-                            }
-                        }
-                    }
-                    .onMove(perform: reorder)
-                }
-                .frame(minWidth: 220, idealWidth: 280, maxWidth: 360)
-                .disabled(appState.isPerformingAction)
 
-                Group {
-                    if let rule = selectedRule {
-                        Form {
-                            detailRow("Name", value: rule.name)
-                            detailRow("Enabled", value: rule.isEnabled ? "Yes" : "No")
-                            detailRow("Conditions", value: conditionSummary(rule))
-                            detailRow("Profile", value: displayNames[rule.profileID] ?? "Unknown")
-                            HStack {
-                                Spacer()
-                                Button("Edit") { appState.requestEditor(.editRule(rule.id)) }
-                            }
-                        }
-                        .formStyle(.grouped)
-                        .padding()
-                    } else {
-                        ContentUnavailableView {
-                            Label(
-                                appState.rules.isEmpty ? "No Rules" : "Select a Rule",
-                                systemImage: "arrow.triangle.branch"
-                            )
-                        } description: {
-                            if appState.rules.isEmpty {
-                                Text("Automatic mode uses \(defaultProfileName) when no Rule matches.")
-                            }
-                        } actions: {
-                            if appState.rules.isEmpty {
-                                Button("Create Rule") { appState.requestEditor(.newRule) }
-                            }
-                        }
+            Section {
+                if appState.rules.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("No Rules").font(.headline)
+                        Text("Automatic mode uses \(defaultProfileName) on every network.")
+                            .foregroundStyle(.secondary)
+                        Button("Create Rule") { appState.requestEditor(.newRule) }
                     }
+                    .padding(.vertical, 4)
                 }
-                .frame(minWidth: 260, idealWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
+                ForEach(Array(appState.rules.enumerated()), id: \.element.id) { index, rule in
+                    ruleRow(rule, index: index)
+                }
+                .disabled(appState.isPerformingAction)
+            } header: {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Rules")
+                    Spacer()
+                    Text(isManualMode
+                        ? "Paused in Manual mode"
+                        : "Checked from top to bottom. The first match wins.")
+                        .font(.callout)
+                        .fontWeight(.regular)
+                        .foregroundStyle(.secondary)
+                }
+            } footer: {
+                Text("Every condition type you set must match. Within a type, any listed value matches. Drag to reorder; double-click to edit.")
+                    .foregroundStyle(.secondary)
             }
         }
+        .formStyle(.grouped)
+        .contentMargins(.bottom, 56, for: .scrollContent)
+        .onChange(of: focusedRule) { _, id in
+            if let id { selection = id }
+        }
+        .safeAreaInset(edge: .bottom, alignment: .leading) {
+            ListActionBar {
+                Button {
+                    appState.requestEditor(.newRule)
+                } label: {
+                    Label("New Rule", systemImage: "plus")
+                }
+                .help("New Rule")
+                Button {
+                    deletionRequest = selectedRule
+                } label: {
+                    Label("Delete Rule", systemImage: "minus")
+                }
+                .help("Delete Rule")
+                .disabled(selectedRule == nil)
+                Divider().frame(height: 14)
+                Button {
+                    if let selection { move(selection, offset: -1) }
+                } label: {
+                    Label("Move Up", systemImage: "arrow.up")
+                }
+                .help("Move Up")
+                .keyboardShortcut(.upArrow, modifiers: [.command, .option])
+                .disabled(selectedIndex.map { $0 == 0 } ?? true)
+                Button {
+                    if let selection { move(selection, offset: 1) }
+                } label: {
+                    Label("Move Down", systemImage: "arrow.down")
+                }
+                .help("Move Down")
+                .keyboardShortcut(.downArrow, modifiers: [.command, .option])
+                .disabled(selectedIndex.map { $0 == appState.rules.count - 1 } ?? true)
+                Divider().frame(height: 14)
+                Button {
+                    if let selection { appState.requestEditor(.editRule(selection)) }
+                } label: {
+                    Label("Edit Rule", systemImage: "pencil")
+                }
+                .help("Edit Rule")
+                .disabled(selectedRule == nil)
+            }
+            .disabled(appState.isPerformingAction)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 12)
+        }
+    }
+
+    private func ruleRow(_ rule: DNSRule, index: Int) -> some View {
+        let matches = isMatchingRule(rule.id)
+        let isSelected = selection == rule.id
+        let profileName = displayNames[rule.profileID] ?? "Unknown Profile"
+        return HStack(spacing: 10) {
+            Toggle("Enable \(rule.name)", isOn: Binding(
+                get: { rule.isEnabled },
+                set: { enabled in
+                    var updated = RuleDraft(rule: rule)
+                    updated.isEnabled = enabled
+                    Task { await appState.saveRule(updated) }
+                }
+            ))
+            .toggleStyle(.switch)
+            .controlSize(.small)
+            .labelsHidden()
+            .accessibilityLabel(
+                "Priority \(index + 1), \(rule.name), \(rule.isEnabled ? "enabled" : "disabled"), \(conditionSummary(rule)), Profile \(profileName)\(matches ? ", matches the current network" : "")"
+            )
+            Text("\(index + 1)")
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+                .frame(minWidth: 16, alignment: .trailing)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(rule.name)
+                        .fontWeight(.medium)
+                        .lineLimit(1)
+                    if matches {
+                        Label("Matches Now", systemImage: "checkmark.circle.fill")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.green)
+                    }
+                }
+                Text(conditionSummary(rule))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            .opacity(rule.isEnabled ? 1 : 0.55)
+            .accessibilityHidden(true)
+            Spacer(minLength: 8)
+            Label(profileName, systemImage: "arrow.right")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .opacity(rule.isEnabled ? 1 : 0.55)
+                .accessibilityHidden(true)
+        }
+        .padding(.vertical, 6)
+        .padding(.horizontal, 8)
+        .background(
+            isSelected ? Color.accentColor.opacity(0.14) : .clear,
+            in: .rect(cornerRadius: 10)
+        )
+        .padding(.horizontal, -8)
+        .padding(.vertical, -4)
+        .overlay(alignment: dropIndicator?.edge == .below ? .bottom : .top) {
+            if dropIndicator?.ruleID == rule.id {
+                Capsule()
+                    .fill(Color.accentColor)
+                    .frame(height: 3)
+                    .offset(y: dropIndicator?.edge == .below ? 6 : -6)
+                    .allowsHitTesting(false)
+            }
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+            rowHeights[rule.id] = height
+        }
+        .contentShape(.rect)
+        .focusable()
+        .focused($focusedRule, equals: rule.id)
+        .focusEffectDisabled()
+        .onTapGesture(count: 2) { appState.requestEditor(.editRule(rule.id)) }
+        .onTapGesture {
+            selection = rule.id
+            focusedRule = rule.id
+        }
+        .onKeyPress(.return) {
+            appState.requestEditor(.editRule(rule.id))
+            return .handled
+        }
+        .onKeyPress(.delete) {
+            deletionRequest = rule
+            return .handled
+        }
+        .onKeyPress(keys: [.upArrow, .downArrow]) { press in
+            // Modified arrows stay with the Move Up/Down shortcuts.
+            guard press.modifiers.isEmpty else { return .ignored }
+            selectAdjacentRule(to: rule.id, offset: press.key == .upArrow ? -1 : 1)
+            return .handled
+        }
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityAction(named: "Edit") { appState.requestEditor(.editRule(rule.id)) }
+        .onDrag {
+            draggingRuleID = rule.id
+            return NSItemProvider(object: rule.id.uuidString as NSString)
+        } preview: {
+            Label(rule.name, systemImage: "line.3.horizontal")
+                .padding(8)
+                .background(.regularMaterial, in: .rect(cornerRadius: 8))
+        }
+        .onDrop(of: [.utf8PlainText], delegate: RuleDropDelegate(
+            targetID: rule.id,
+            rowHeight: rowHeights[rule.id] ?? 44,
+            draggingRuleID: $draggingRuleID,
+            indicator: $dropIndicator,
+            perform: moveRule
+        ))
+        .contextMenu {
+            Button("Edit…") { appState.requestEditor(.editRule(rule.id)) }
+            Button("Duplicate") { appState.requestEditor(.duplicateRule(rule.id)) }
+            Button(rule.isEnabled ? "Disable" : "Enable") {
+                var updated = RuleDraft(rule: rule)
+                updated.isEnabled.toggle()
+                Task { await appState.saveRule(updated) }
+            }
+            Divider()
+            Button("Move Up") { move(rule.id, offset: -1) }.disabled(index == 0)
+            Button("Move Down") { move(rule.id, offset: 1) }
+                .disabled(index == appState.rules.count - 1)
+            Divider()
+            Button("Delete…", role: .destructive) {
+                deletionRequest = rule
+            }
+        }
+    }
+
+    /// Moves a dragged Rule above or below the drop target; saves and reevaluates once.
+    private func moveRule(_ id: DNSRule.ID, to indicator: RuleDropIndicator) -> Bool {
+        guard !appState.isPerformingAction,
+              let source = appState.rules.firstIndex(where: { $0.id == id }),
+              let target = appState.rules.firstIndex(where: { $0.id == indicator.ruleID }) else { return false }
+        let insertion = indicator.edge == .below ? target + 1 : target
+        // Dropping onto its own slot is a no-op.
+        guard insertion != source, insertion != source + 1 else { return false }
+        var ids = appState.rules.map(\.id)
+        ids.move(fromOffsets: IndexSet(integer: source), toOffset: insertion)
+        selection = id
+        Task { await appState.reorderRules(ids) }
+        return true
+    }
+
+    private func selectAdjacentRule(to id: DNSRule.ID, offset: Int) {
+        guard let index = appState.rules.firstIndex(where: { $0.id == id }) else { return }
+        let next = index + offset
+        guard appState.rules.indices.contains(next) else { return }
+        let nextID = appState.rules[next].id
+        selection = nextID
+        focusedRule = nextID
+    }
+
+    private var isManualMode: Bool {
+        if case .manual = appState.configuration?.operatingMode { return true }
+        return false
+    }
+
+    private func isMatchingRule(_ id: DNSRule.ID) -> Bool {
+        if case let .rule(matchedID, _) = appState.selectionSource { return matchedID == id }
+        return false
+    }
+
+    private var selectedIndex: Int? {
+        appState.rules.firstIndex { $0.id == selection }
     }
 
     private var selectedRule: DNSRule? { appState.rules.first { $0.id == selection } }
@@ -182,21 +348,18 @@ struct RulesView: View {
     }
 
     private func conditionSummary(_ rule: DNSRule) -> String {
-        var values = rule.conditions.ssids
-        values += rule.conditions.interfaceTypes.map(\.rawValue).sorted()
-        values += rule.conditions.subnets.map(\.stringValue)
-        return values.joined(separator: ", ")
-    }
-
-    private func detailRow(_ label: String, value: String) -> some View {
-        LabeledContent(label) {
-            Text(value)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-                .help(value)
+        var parts: [String] = []
+        if !rule.conditions.ssids.isEmpty {
+            parts.append("Wi-Fi \(rule.conditions.ssids.joined(separator: ", "))")
         }
+        if !rule.conditions.interfaceTypes.isEmpty {
+            let names = rule.conditions.interfaceTypes.map(\.displayName).sorted()
+            parts.append("\(names.joined(separator: " or ")) interface")
+        }
+        if !rule.conditions.subnets.isEmpty {
+            parts.append("Subnet \(rule.conditions.subnets.map(\.stringValue).joined(separator: ", "))")
+        }
+        return parts.isEmpty ? "Any network" : parts.joined(separator: " · ")
     }
 
     private func move(_ id: DNSRule.ID, offset: Int) {
@@ -206,13 +369,6 @@ struct RulesView: View {
         guard appState.rules.indices.contains(destination) else { return }
         var ids = appState.rules.map(\.id)
         ids.swapAt(index, destination)
-        Task { await appState.reorderRules(ids) }
-    }
-
-    private func reorder(from offsets: IndexSet, to destination: Int) {
-        guard !appState.isPerformingAction else { return }
-        var ids = appState.rules.map(\.id)
-        ids.move(fromOffsets: offsets, toOffset: destination)
         Task { await appState.reorderRules(ids) }
     }
 
@@ -266,39 +422,53 @@ private struct RuleEditorView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            Text(appState.rules.contains { $0.id == draft.id } ? "Edit Rule" : "New Rule")
+                .font(.title3.weight(.bold))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 20)
+                .padding(.top, 18)
             Form {
-                TextField("Name", text: $draft.name)
-                    .focused($focusedField, equals: .name)
-                fieldError(.name)
-                Toggle("Enabled", isOn: $draft.isEnabled)
-                StringListEditor(
-                    label: "Wi-Fi Networks",
-                    itemLabel: "Wi-Fi Network",
-                    addLabel: "Add Network",
-                    values: $draft.ssids
-                )
-                Toggle("Wi-Fi", isOn: interfaceBinding(.wifi))
-                Toggle("Ethernet", isOn: interfaceBinding(.wiredEthernet))
-                Toggle("Other Interfaces", isOn: interfaceBinding(.other))
-                StringListEditor(
-                    label: "IP Subnets",
-                    itemLabel: "IP Subnet",
-                    addLabel: "Add Subnet",
-                    values: $draft.subnets,
-                    normalize: normalizeSubnet
-                )
-                    .focused($focusedField, equals: .conditions)
-                fieldError(.conditions)
-                Picker("Use Profile", selection: $draft.profileID) {
-                    ForEach(appState.profiles) { profile in
-                        Text(displayNames[profile.id] ?? profile.name).tag(Optional(profile.id))
+                Section {
+                    TextField("Name", text: $draft.name, prompt: Text("Office"))
+                        .focused($focusedField, equals: .name)
+                    fieldError(.name)
+                    Toggle("Enabled", isOn: $draft.isEnabled)
+                    Picker("Use Profile", selection: $draft.profileID) {
+                        ForEach(appState.profiles) { profile in
+                            Text(displayNames[profile.id] ?? profile.name).tag(Optional(profile.id))
+                        }
                     }
+                    .focused($focusedField, equals: .profile)
+                    fieldError(.profile)
                 }
-                .focused($focusedField, equals: .profile)
-                fieldError(.profile)
+                Section {
+                    StringListEditor(
+                        label: "Wi-Fi Networks",
+                        itemLabel: "Wi-Fi Network",
+                        addLabel: "Add Network",
+                        values: $draft.ssids
+                    )
+                    Toggle("Wi-Fi", isOn: interfaceBinding(.wifi))
+                    Toggle("Ethernet", isOn: interfaceBinding(.wiredEthernet))
+                    Toggle("Other Interfaces", isOn: interfaceBinding(.other))
+                    StringListEditor(
+                        label: "IP Subnets",
+                        itemLabel: "IP Subnet",
+                        addLabel: "Add Subnet",
+                        values: $draft.subnets,
+                        normalize: normalizeSubnet,
+                        itemPrompt: "192.168.1.0/24"
+                    )
+                        .focused($focusedField, equals: .conditions)
+                    fieldError(.conditions)
+                } header: {
+                    Text("Conditions")
+                } footer: {
+                    Text("Every condition type you set must match. Within a type, any listed value matches.")
+                        .foregroundStyle(.secondary)
+                }
             }
             .formStyle(.grouped)
-            Divider()
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }
@@ -306,10 +476,13 @@ private struct RuleEditorView: View {
                     validateAndSave()
                 }
                 .keyboardShortcut(.defaultAction)
+                .buttonStyle(.borderedProminent)
             }
-            .padding()
+            .padding(.horizontal, 20)
+            .padding(.bottom, 18)
+            .padding(.top, 4)
         }
-        .frame(width: 520, height: 460)
+        .frame(width: 540, height: 540)
         .disabled(appState.isPerformingAction)
         .onAppear { appState.beginDraft(.rule) }
         .alert(
@@ -405,5 +578,63 @@ private struct RuleEditorView: View {
                 .foregroundStyle(.red)
                 .accessibilityLabel("Error: \(validationError.errorDescription ?? "Invalid value")")
         }
+    }
+}
+
+private struct RuleDropIndicator: Equatable {
+    enum Edge: Equatable {
+        case above
+        case below
+    }
+
+    let ruleID: DNSRule.ID
+    let edge: Edge
+}
+
+/// Tracks an in-window Rule drag over one row and reports whether it lands above or below it.
+@MainActor
+private struct RuleDropDelegate: DropDelegate {
+    let targetID: DNSRule.ID
+    let rowHeight: CGFloat
+    @Binding var draggingRuleID: DNSRule.ID?
+    @Binding var indicator: RuleDropIndicator?
+    let perform: (DNSRule.ID, RuleDropIndicator) -> Bool
+
+    func validateDrop(info: DropInfo) -> Bool {
+        draggingRuleID != nil
+    }
+
+    func dropEntered(info: DropInfo) {
+        updateIndicator(info)
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        updateIndicator(info)
+        return DropProposal(operation: .move)
+    }
+
+    func dropExited(info: DropInfo) {
+        if indicator?.ruleID == targetID { indicator = nil }
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        defer {
+            indicator = nil
+            draggingRuleID = nil
+        }
+        guard let draggingRuleID else { return false }
+        return perform(draggingRuleID, edge(for: info))
+    }
+
+    private func updateIndicator(_ info: DropInfo) {
+        guard draggingRuleID != nil else { return }
+        indicator = edge(for: info)
+    }
+
+    private func edge(for info: DropInfo) -> RuleDropIndicator {
+        RuleDropIndicator(
+            ruleID: targetID,
+            edge: info.location.y > rowHeight / 2 ? .below : .above
+        )
     }
 }

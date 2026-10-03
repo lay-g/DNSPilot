@@ -85,7 +85,6 @@ struct DNSTestView: View {
                 .formStyle(.grouped)
                 .disabled(isRunning)
 
-                Divider()
                 HStack {
                     if isRunning {
                         ProgressView()
@@ -101,6 +100,7 @@ struct DNSTestView: View {
                         startQuery()
                     }
                     .keyboardShortcut(.defaultAction)
+                    .buttonStyle(.borderedProminent)
                     .disabled(isRunning || (source == .profile && selectedProfile == nil))
                 }
                 .padding(.horizontal, 20)
@@ -177,6 +177,8 @@ struct DNSTestView: View {
         case .idle:
             ContentUnavailableView {
                 Label("No Query Result", systemImage: "magnifyingglass")
+            } description: {
+                Text("Enter a domain and choose Query.")
             }
         case .running:
             ProgressView("Waiting for DNS Response")
@@ -187,47 +189,56 @@ struct DNSTestView: View {
                 Text(message)
             }
         case let .response(result):
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    Label(
-                        result.status,
-                        systemImage: result.status == "NOERROR"
-                            ? "checkmark.circle"
-                            : "exclamationmark.circle"
-                    )
-                    .font(.headline)
-                    .foregroundStyle(result.status == "NOERROR" ? .green : .orange)
+            VStack(spacing: 0) {
+                HStack(spacing: 10) {
+                    Image(systemName: result.status == "NOERROR"
+                        ? "checkmark.circle.fill"
+                        : "exclamationmark.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(result.status == "NOERROR" ? .green : .orange)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(result.status)
+                            .font(.headline.monospaced())
+                        Text("\(result.domain) · \(result.type.rawValue)")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    .accessibilityElement(children: .combine)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 14)
 
-                    Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 6) {
+                Form {
+                    Section {
                         resultRow("Server", result.server)
                         resultRow("Duration", "\(result.elapsedMilliseconds) ms")
-                        resultRow("Query", "\(result.domain)  \(result.type.rawValue)")
                         resultRow(
                             "Transfer",
                             "\(result.bytesSent) B sent, \(result.bytesReceived) B received"
                         )
                     }
-
-                    Divider()
-                    Text("Answer")
-                        .font(.headline)
-                    Text(result.answer.isEmpty ? "No records returned." : result.answer)
-                        .font(.system(.body, design: .monospaced))
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Section("Answer") {
+                        Text(result.answer.isEmpty ? "No records returned." : result.answer)
+                            .font(.callout.monospaced())
+                            .foregroundStyle(result.answer.isEmpty ? .secondary : .primary)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                 }
-                .padding(20)
+                .formStyle(.grouped)
             }
         }
     }
 
     private func resultRow(_ label: String, _ value: String) -> some View {
-        GridRow {
-            Text(label)
-                .foregroundStyle(.secondary)
+        LabeledContent(label) {
             Text(value)
+                .multilineTextAlignment(.trailing)
                 .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 

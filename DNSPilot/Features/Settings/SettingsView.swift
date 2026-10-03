@@ -13,26 +13,28 @@ struct SettingsView: View {
     var body: some View {
         TabView(selection: $appState.settingsSection) {
             Form {
-                Toggle("Launch at Login", isOn: Binding(
-                    get: { appState.launchAtLoginStatus.isEnabled },
-                    set: { enabled in appState.setLaunchAtLoginEnabled(enabled) }
-                ))
-                if appState.launchAtLoginStatus == .requiresApproval {
-                    Text("Approval is required in System Settings.")
-                        .foregroundStyle(.secondary)
-                    Button("Open Login Items Settings") { appState.openLoginItemsSettings() }
-                }
-                if case .failed = appState.launchAtLoginStatus {
-                    Text("DNSPilot could not complete the Launch at Login change. Open Login Items Settings and verify the current macOS status.")
-                        .foregroundStyle(.red)
-                }
-                if appState.launchAtLoginStatus == .notFound {
-                    Text("Launch at Login is unavailable because macOS could not find the app service. Reinstall DNSPilot in Applications, then try again.")
-                        .foregroundStyle(.red)
-                }
-                if appState.launchAtLoginStatus == .unavailable {
-                    Text("macOS returned an unrecognized Launch at Login status. Open Login Items Settings to review the current state.")
-                        .foregroundStyle(.red)
+                Section("Startup") {
+                    Toggle("Launch at Login", isOn: Binding(
+                        get: { appState.launchAtLoginStatus.isEnabled },
+                        set: { enabled in appState.setLaunchAtLoginEnabled(enabled) }
+                    ))
+                    if appState.launchAtLoginStatus == .requiresApproval {
+                        Text("Approval is required in System Settings.")
+                            .foregroundStyle(.secondary)
+                        Button("Open Login Items Settings") { appState.openLoginItemsSettings() }
+                    }
+                    if case .failed = appState.launchAtLoginStatus {
+                        Text("DNSPilot could not complete the Launch at Login change. Open Login Items Settings and verify the current macOS status.")
+                            .foregroundStyle(.red)
+                    }
+                    if appState.launchAtLoginStatus == .notFound {
+                        Text("Launch at Login is unavailable because macOS could not find the app service. Reinstall DNSPilot in Applications, then try again.")
+                            .foregroundStyle(.red)
+                    }
+                    if appState.launchAtLoginStatus == .unavailable {
+                        Text("macOS returned an unrecognized Launch at Login status. Open Login Items Settings to review the current state.")
+                            .foregroundStyle(.red)
+                    }
                 }
                 DNSCacheSettingsSection()
             }
@@ -41,19 +43,30 @@ struct SettingsView: View {
             .tag(ProductSettingsSection.general)
 
             Form {
-                LabeledContent("Wi-Fi Name Access", value: locationSummary)
-                Text("Location is used only to read the current Wi-Fi name for SSID Rules.")
-                    .foregroundStyle(.secondary)
-                LabeledContent("Debug Logging", value: debugLoggingEnabled ? "On" : "Off")
-                switch appState.locationAuthorization {
-                case .denied:
-                    Button("Open System Settings") { appState.openLocationSettings() }
-                case .notDetermined:
-                    Button("Request Access") {
-                        Task { await appState.requestLocationAuthorization() }
+                Section {
+                    LabeledContent("Wi-Fi Name Access") {
+                        HStack(spacing: 8) {
+                            Text(locationSummary)
+                            switch appState.locationAuthorization {
+                            case .denied:
+                                Button("Open System Settings") { appState.openLocationSettings() }
+                            case .notDetermined:
+                                Button("Request Access") {
+                                    Task { await appState.requestLocationAuthorization() }
+                                }
+                            case .authorized:
+                                EmptyView()
+                            }
+                        }
                     }
-                case .authorized:
-                    EmptyView()
+                } header: {
+                    Text("Location")
+                } footer: {
+                    Text("Location is used only to read the current Wi-Fi name for SSID Rules.")
+                        .foregroundStyle(.secondary)
+                }
+                Section("Logging") {
+                    LabeledContent("Debug Logging", value: debugLoggingEnabled ? "On" : "Off")
                 }
             }
             .formStyle(.grouped)

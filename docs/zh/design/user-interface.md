@@ -6,7 +6,9 @@
 
 DNSPilot 是安静、原生的 macOS utility，包含一个管理窗口、一个标准 Settings 窗口和常驻菜单栏菜单。关闭窗口后 App 继续运行，并保持当前 DNS Proxy 状态。
 
-管理窗口使用两列 NavigationSplitView，包含 Overview、Profiles、Rules、Test。Settings 包含 General、Privacy、Diagnostics、About。使用原生 list、form、sheet、alert、menu、segmented control、toggle、系统字体、语义色和 SF Symbols。颜色不能单独表达状态。
+管理窗口使用两列 NavigationSplitView，包含 Overview、Profiles、Rules、Test。Settings 包含 General、Privacy、Diagnostics、About。使用原生 list、grouped form、sheet、alert、menu、segmented control、toggle、系统字体、语义色和 SF Symbols，并由系统自行应用材质，包括 macOS 26 上的 Liquid Glass。自定义的浮动控件组在 macOS 26 上使用 Liquid Glass，在更早版本上使用系统 material；内容区域不使用玻璃材质。颜色不能单独表达状态。
+
+导航 sidebar 底部常驻 Proxy 状态摘要，用状态符号配合状态文字以及 Active Profile 或 System DNS。激活它会打开 Overview。
 
 General 包含 staged DNS Cache section。Cache 默认开启，最多保存 1,000 条响应。用户可以关闭，或输入 1 到 10,000 的精确容量。关闭时保留最后一个合法容量并禁用输入字段；Restore Default 恢复为开启和 1,000。Save 只校验一次并且最多触发一次 runtime mutation。应用期间禁用相关控件。Proxy Off 时保存要说明设置将在下次 enable 时生效；Active 时只有 exact runtime confirmation 后才能显示成功。失败后保留已确认值和 draft，供用户修正或重试。
 
@@ -20,7 +22,7 @@ Overview、Profile detail 和 Profile editor 中的独立 Profile test，由发�
 
 ## Overview
 
-Overview 展示 DNS Proxy 状态与控制、Automatic/Manual、Target/Active Profile、selection source、当前网络、Profile test、诊断入口和恢复操作。
+Overview 展示 DNS Proxy 状态与控制、Automatic/Manual、Target/Active Profile、selection source、当前网络、Profile test、诊断入口和恢复操作。状态头部用符号、状态文字和 Active Profile 配合 DNS Proxy 开关。Resume、Extension、recovery 和切换失败以 inline notice 展示，说明当前情况并提供对应恢复操作。诊断快捷操作位于 toolbar 的 More Actions 菜单。
 
 Safe Quit 后的 startup resume 可以显示 `Waiting for System Extension`、`Waiting for Network` 或 `Restoring DNS Proxy`。兼容的 Extension upgrade 使用这些已有状态且不显示错误 banner；在 exact Active proof 出现前，菜单栏继续显示 `DNS Proxy Off`。Approval 与 restart requirement 使用已有 System Extension 状态与操作。只有可重试的 Extension 或 activation failure 才提供 Retry。永久 manager identity change 会说明配置已变化并提供 `Keep System DNS`，不提供无效的 resume retry。App 不得在后台持续重试。
 
@@ -30,11 +32,11 @@ Safe Quit 后的 startup resume 可以显示 `Waiting for System Extension`、`W
 
 Profile/Rule editor 使用 staged draft，只有 Save 才提交 domain configuration。Validation 聚焦第一个无效字段。编辑 Active Profile 使用 journaled runtime/configuration transaction，并在 exact verification 后把 draft 发布为 Active。
 
-Profiles 提供 create、edit、duplicate、test、make-default、replacement 和 delete。自定义 Profile editor 支持 Plain DNS、DNS over TLS 和 DNS over HTTPS。DoT 输入包含 server name 或 address、port 和 bootstrap address。列表身份使用隐私安全的 DoT 与 DoH server 摘要。
+Profiles 提供 create、edit、duplicate、test、make-default、replacement 和 delete。列表行显示 transport 符号、隐私安全摘要以及 Active 与 Default 标记；列表下方的浮动操作组提供 New、Delete 和 More。Profile detail 分为 Upstream、Hosts 和 Usage，Usage 显示 Active 与 Default 状态，并链接到以该 Profile 为目标的 Rules。自定义 Profile editor 支持 Plain DNS、DNS over TLS 和 DNS over HTTPS。DoT 输入包含 server name 或 address、port 和 bootstrap address。列表身份使用隐私安全的 DoT 与 DoH server 摘要。
 
 每个 Profile editor 还提供 staged Hosts section，用于 exact 或最左侧 wildcard（`*.`）的 A/AAAA address override。Wildcard entry 覆盖 base domain 与全部 subdomain，同 family 内覆盖集重叠的 entry 会被拒绝。Hosts 会被校验、canonicalize、排序，并和 Profile 一起提交。不接受 raw filter syntax 或 hosts file path。Profile detail 展示已保存的 hosts entry，但不改变 Profile list identity。
 
-Rules 显示 enabled、priority、condition summary 和 target Profile。Reorder 只保存一次并 reevaluate 一次。Drag 必须提供 Move Up/Move Down 键盘替代。Default Profile selector 保持可见，Proxy 可用时不能为空。
+Rules 在 Fallback section 下方的单一列表中显示 enabled、priority、condition summary 和 target Profile。Automatic 模式下，匹配当前网络的 Rule 标记为 `Matches Now`。双击编辑 Rule。Reorder 只保存一次并 reevaluate 一次。Drag 必须提供 Move Up/Move Down 替代：位于 context menu，以及浮动操作组中的 `Option-Command-Up/Down`。Default Profile selector 保持可见，Proxy 可用时不能为空。
 
 ## DNS Test
 

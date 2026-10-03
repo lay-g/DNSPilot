@@ -101,6 +101,10 @@ struct ContentView: View {
                     .tag(section)
             }
             .navigationTitle("DNSPilot")
+            .safeAreaInset(edge: .bottom) {
+                SidebarStatusSummary()
+                    .padding(10)
+            }
             .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 240)
         } detail: {
             switch appState.navigation {
@@ -114,17 +118,46 @@ struct ContentView: View {
                 DNSTestView()
             }
         }
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    appState.navigate(to: .overview)
-                } label: {
-                    Image(systemName: appState.menuPresentation?.symbolName ?? "network.slash")
+    }
+}
+
+/// Persistent Proxy status at the bottom of the sidebar; opens Overview.
+@MainActor
+private struct SidebarStatusSummary: View {
+    @EnvironmentObject private var appState: AppState
+
+    var body: some View {
+        let appearance = ProxyStatusAppearance(appState: appState)
+        Button {
+            appState.navigate(to: .overview)
+        } label: {
+            HStack(spacing: 8) {
+                ProxyStatusBadge(appearance: appearance, diameter: 26)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(appearance.title)
+                        .font(.callout.weight(.semibold))
+                        .lineLimit(1)
+                    Text(summary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                 }
-                .help(appState.menuPresentation?.statusText ?? "DNS Proxy status")
-                .accessibilityLabel(appState.menuPresentation?.statusText ?? "DNS Proxy status")
+                Spacer(minLength: 0)
             }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .contentShape(.rect)
+            .background(.quaternary.opacity(0.6), in: .rect(cornerRadius: 12))
         }
+        .buttonStyle(.plain)
+        .help("Show Overview")
+        .accessibilityLabel("\(appearance.title), \(summary)")
+        .accessibilityHint("Shows Overview")
+    }
+
+    private var summary: String {
+        appState.menuPresentation?.profileLines.first ?? "System DNS"
     }
 }
 

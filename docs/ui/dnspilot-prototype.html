@@ -1,0 +1,1677 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DNSPilot UI Prototype</title>
+<style>
+/* ===== Tokens: macOS 26 Liquid Glass approximations ===== */
+:root {
+  color-scheme: light;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "PingFang SC", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --wallpaper:
+    radial-gradient(1200px 700px at 12% 18%, #8fc3e8 0%, transparent 60%),
+    radial-gradient(900px 700px at 85% 25%, #f2c99a 0%, transparent 55%),
+    radial-gradient(1000px 800px at 60% 95%, #5f9fb8 0%, transparent 60%),
+    linear-gradient(160deg, #cfe3ee 0%, #a9cbd9 100%);
+  --window: #ffffff;               /* Tahoe window/content background */
+  --content: #ffffff;
+  --group: rgba(0,0,0,.036);       /* grouped Form section fill */
+  --group-strong: rgba(0,0,0,.055);
+  --fill: rgba(0,0,0,.06);         /* bordered button / track fill */
+  --fill-press: rgba(0,0,0,.11);
+  --field: #ffffff;
+  --field-border: rgba(0,0,0,.13);
+  --label: rgba(0,0,0,.86);
+  --secondary: rgba(0,0,0,.5);
+  --tertiary: rgba(0,0,0,.26);
+  --separator: rgba(0,0,0,.08);
+  --hover: rgba(0,0,0,.045);
+  --selection: rgba(0,0,0,.075);
+  --accent: #0088ff;
+  --accent-text: #ffffff;
+  --accent-soft: rgba(0,136,255,.13);
+  --green: #1aa53a; --red: #e5322a; --orange: #e0820a;
+  --green-soft: rgba(52,199,89,.15); --red-soft: rgba(255,56,60,.12); --orange-soft: rgba(255,141,40,.16); --gray-soft: rgba(0,0,0,.055);
+  /* glass */
+  --glass: rgba(255,255,255,.58);
+  --glass-strong: rgba(250,250,252,.78);
+  --glass-tint-sidebar: rgba(244,245,247,.62);
+  --glass-hi: rgba(255,255,255,.95);
+  --glass-edge: rgba(0,0,0,.07);
+  --glass-shadow: 0 6px 22px rgba(0,0,0,.09), 0 1px 3px rgba(0,0,0,.06);
+  --glass-blur: blur(18px) saturate(1.9);
+  --switch-off: rgba(0,0,0,.1);
+  --shadow-window: 0 0 0 .5px rgba(0,0,0,.16), 0 30px 80px rgba(0,0,0,.24), 0 6px 18px rgba(0,0,0,.1);
+  --shadow-menu: 0 0 0 .5px rgba(0,0,0,.1), 0 14px 40px rgba(0,0,0,.18);
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --wallpaper:
+    radial-gradient(1200px 700px at 12% 18%, #1d4a6b 0%, transparent 60%),
+    radial-gradient(900px 700px at 85% 25%, #5a3d22 0%, transparent 55%),
+    radial-gradient(1000px 800px at 60% 95%, #123c4a 0%, transparent 60%),
+    linear-gradient(160deg, #0f1a22 0%, #0b1217 100%);
+  --window: #1e1e20;
+  --content: #1e1e20;
+  --group: rgba(255,255,255,.05);
+  --group-strong: rgba(255,255,255,.08);
+  --fill: rgba(255,255,255,.1);
+  --fill-press: rgba(255,255,255,.16);
+  --field: rgba(0,0,0,.25);
+  --field-border: rgba(255,255,255,.13);
+  --label: rgba(255,255,255,.9);
+  --secondary: rgba(255,255,255,.55);
+  --tertiary: rgba(255,255,255,.25);
+  --separator: rgba(255,255,255,.08);
+  --hover: rgba(255,255,255,.06);
+  --selection: rgba(255,255,255,.1);
+  --accent: #0a8cff;
+  --accent-soft: rgba(10,140,255,.24);
+  --green: #30d158; --red: #ff4245; --orange: #ff9f0a;
+  --green-soft: rgba(48,209,88,.17); --red-soft: rgba(255,66,69,.17); --orange-soft: rgba(255,159,10,.18); --gray-soft: rgba(255,255,255,.08);
+  --glass: rgba(58,58,62,.5);
+  --glass-strong: rgba(44,44,48,.8);
+  --glass-tint-sidebar: rgba(46,46,50,.62);
+  --glass-hi: rgba(255,255,255,.2);
+  --glass-edge: rgba(255,255,255,.08);
+  --glass-shadow: 0 6px 22px rgba(0,0,0,.35), 0 1px 3px rgba(0,0,0,.3);
+  --switch-off: rgba(255,255,255,.16);
+  --shadow-window: 0 0 0 .5px rgba(0,0,0,.7), 0 0 0 1px rgba(255,255,255,.07) inset, 0 30px 80px rgba(0,0,0,.6);
+  --shadow-menu: 0 0 0 .5px rgba(0,0,0,.5), 0 14px 40px rgba(0,0,0,.5);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { font: 13px/1.38 var(--font); color: var(--label); background: var(--wallpaper); -webkit-font-smoothing: antialiased; overflow: hidden; user-select: none; }
+button, input, select { font: inherit; color: inherit; }
+svg.i { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.mono { font-family: var(--mono); font-size: 12px; }
+.secondary { color: var(--secondary); } .tertiary { color: var(--tertiary); } .caption { font-size: 11px; }
+.green { color: var(--green); } .red { color: var(--red); } .orange { color: var(--orange); } .accent { color: var(--accent); }
+.selectable { user-select: text; cursor: text; }
+
+/* ===== Liquid Glass material =====
+   Translucent fill + backdrop blur, a bright specular top edge,
+   a hairline outline, and a soft lift shadow. Never nest glass in glass. */
+.glass {
+  background: var(--glass);
+  backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: inset 0 1px 0 var(--glass-hi), inset 0 0 0 .5px var(--glass-edge), var(--glass-shadow);
+}
+.glass-strong { background: var(--glass-strong); }
+@media (prefers-reduced-transparency: reduce) { .glass { background: var(--glass-strong); backdrop-filter: none; } }
+
+/* ===== Desktop ===== */
+.menubar { position: fixed; inset: 0 0 auto 0; height: 28px; z-index: 50; display: flex; align-items: center; gap: 2px; padding: 0 10px; font-size: 13px; background: transparent; color: var(--label); }
+.menubar .mb-item { padding: 2px 10px; border-radius: 8px; }
+.menubar .mb-item.app { font-weight: 700; }
+.menubar .spacer { flex: 1; }
+.menubar .extra { display: flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 8px; cursor: default; }
+.menubar .extra.open, .menubar .extra:hover { background: rgba(255,255,255,.35); }
+:root[data-theme="dark"] .menubar .extra.open, :root[data-theme="dark"] .menubar .extra:hover { background: rgba(255,255,255,.14); }
+.desktop { position: fixed; inset: 28px 0 0 0; overflow: auto; }
+.stage { position: relative; min-width: 1320px; min-height: 820px; height: 100%; }
+
+/* ===== Prototype control panel (not part of the app) ===== */
+.proto { position: absolute; right: 18px; top: 16px; width: 272px; z-index: 5; border-radius: 22px; padding: 14px 16px 16px; font-size: 12px; }
+.proto h3 { margin: 0 0 2px; font-size: 13px; }
+.proto .sub { color: var(--secondary); margin-bottom: 10px; }
+.proto label { display: grid; grid-template-columns: 74px 1fr; align-items: center; gap: 8px; margin: 6px 0; }
+.proto select { width: 100%; height: 24px; padding: 0 8px; border-radius: 12px; border: 0; background: var(--fill); }
+.proto .proto-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.proto .notes { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--separator); }
+.proto .notes b { display: block; margin-bottom: 4px; }
+.proto .notes ul { margin: 0; padding-left: 16px; color: var(--secondary); }
+.proto .notes li { margin: 3px 0; }
+
+/* ===== Window chrome ===== */
+.window { position: absolute; background: var(--window); border-radius: 26px; overflow: hidden; box-shadow: var(--shadow-window); display: flex; }
+.window.inactive .traffic span { background: var(--tertiary) !important; box-shadow: none; }
+.traffic { display: flex; gap: 9px; }
+.traffic span { width: 13px; height: 13px; border-radius: 50%; box-shadow: inset 0 0 0 .5px rgba(0,0,0,.12); }
+.traffic span:nth-child(1) { background: #ff5f57; } .traffic span:nth-child(2) { background: #febc2e; } .traffic span:nth-child(3) { background: #28c840; }
+
+/* Main window: floating glass sidebar over a full-bleed content layer */
+#main { left: 56px; top: 44px; }
+.sidebar {
+  width: 222px; flex: none; margin: 8px 0 8px 8px; border-radius: 18px;
+  background: var(--glass-tint-sidebar);
+  display: flex; flex-direction: column; padding: 10px 8px 8px; position: relative; z-index: 4;
+}
+.sidebar[hidden] { display: none; }
+.sb-top { display: flex; align-items: center; height: 34px; padding: 0 2px 0 8px; margin-bottom: 10px; }
+.sb-top .spacer { flex: 1; }
+.sb-item { display: flex; align-items: center; gap: 9px; height: 32px; padding: 0 10px; border-radius: 10px; cursor: default; }
+.sb-item svg { color: var(--accent); width: 17px; height: 17px; }
+.sb-item:hover { background: var(--hover); }
+.sb-item.sel { background: var(--selection); font-weight: 600; }
+.sb-item .key { margin-left: auto; color: var(--tertiary); font-size: 11px; font-weight: 400; }
+.sb-status { margin-top: auto; padding: 10px 12px; border-radius: 14px; background: var(--group-strong); display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; align-items: center; cursor: default; }
+.sb-status:hover { background: var(--selection); }
+.sb-status .t { font-weight: 600; font-size: 12px; }
+.sb-status .s { grid-column: 2; font-size: 11px; color: var(--secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.detail { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; background: var(--content); }
+/* Toolbar floats over content; a scroll-edge blur keeps it legible */
+.toolbar { position: absolute; inset: 0 0 auto 0; height: 60px; z-index: 3; display: flex; align-items: center; gap: 8px; padding: 0 14px 0 22px; }
+.toolbar::before { content: ""; position: absolute; inset: 0 0 -14px 0; z-index: -1; pointer-events: none;
+  background: linear-gradient(var(--content) 30%, transparent);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  mask-image: linear-gradient(#000 55%, transparent); -webkit-mask-image: linear-gradient(#000 55%, transparent); }
+.toolbar .title { font-size: 15px; font-weight: 600; }
+.toolbar .subtitle { font-size: 11px; color: var(--secondary); margin-left: 2px; }
+.toolbar .spacer { flex: 1; }
+.tb-group { display: flex; align-items: center; height: 36px; padding: 0 3px; border-radius: 18px; }
+.tb-btn { width: 36px; height: 30px; border-radius: 15px; border: 0; background: none; display: grid; place-items: center; color: var(--label); cursor: default; }
+.tb-group > .tb-btn + .tb-btn { width: 32px; }
+.tb-btn svg { width: 17px; height: 17px; }
+.tb-btn:hover { background: var(--hover); }
+.tb-btn:disabled { color: var(--tertiary); }
+.tb-circle { width: 36px; height: 36px; border-radius: 50%; border: 0; display: grid; place-items: center; color: var(--label); cursor: default; padding: 0; }
+.tb-circle svg { width: 17px; height: 17px; }
+.page { flex: 1; min-height: 0; overflow: auto; padding-top: 60px; }
+.page-inner { max-width: 700px; margin: 0 auto; padding: 4px 26px 32px; }
+
+/* ===== Grouped form (Tahoe: plain background, softly filled sections) ===== */
+.section { margin: 0 0 20px; }
+.section-header { font-size: 13px; font-weight: 600; color: var(--label); padding: 0 12px 7px; display: flex; align-items: baseline; gap: 8px; }
+.section-header .hint { font-weight: 400; font-size: 12px; color: var(--secondary); }
+.group { background: var(--group); border-radius: 16px; }
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; min-height: 42px; padding: 7px 14px; position: relative; }
+.row + .row::before, .row + .field-error + .row::before { content: ""; position: absolute; top: 0; left: 14px; right: 14px; height: 1px; background: var(--separator); }
+.row > .val { margin-left: auto; text-align: right; color: var(--secondary); min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.row.stack { flex-direction: column; align-items: stretch; gap: 8px; }
+.row.clickable { cursor: default; }
+.row.clickable:hover { background: var(--hover); }
+.group > .row:first-child { border-radius: 16px 16px 0 0; } .group > .row:last-child { border-radius: 0 0 16px 16px; } .group > .row:only-child { border-radius: 16px; }
+.section-footer { font-size: 11px; color: var(--secondary); padding: 7px 12px 0; }
+.trunc { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ip-list { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+
+/* ===== Controls ===== */
+.btn { height: 28px; padding: 0 14px; border-radius: 14px; border: 0; cursor: default; background: var(--fill); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; color: var(--label); }
+.btn:hover { background: var(--fill-press); }
+.btn:active { transform: scale(.98); }
+.btn.primary { background: var(--accent); color: var(--accent-text); box-shadow: inset 0 1px 0 rgba(255,255,255,.28); }
+.btn.primary:hover { filter: brightness(1.06); }
+.btn.destructive { color: var(--red); }
+.btn.large { height: 34px; padding: 0 20px; border-radius: 17px; }
+.btn.icon { width: 28px; padding: 0; justify-content: center; }
+.btn:disabled { opacity: .4; transform: none; }
+.link { border: 0; background: none; color: var(--accent); padding: 0; cursor: default; display: inline-flex; align-items: center; gap: 3px; }
+.link svg { width: 12px; height: 12px; }
+.link:hover { text-decoration: underline; }
+.link:disabled { color: var(--tertiary); text-decoration: none; }
+
+/* Tahoe switch: wide track, pill-shaped knob */
+.switch { position: relative; width: 42px; height: 24px; border-radius: 12px; border: 0; padding: 0; background: var(--switch-off); flex: none; cursor: default; transition: background .2s; }
+.switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 26px; height: 20px; border-radius: 10px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25), 0 0 0 .5px rgba(0,0,0,.05); transition: transform .22s cubic-bezier(.3,1.4,.5,1); }
+.switch.on { background: var(--accent); }
+.switch.on::after { transform: translateX(12px); }
+.switch.large { width: 52px; height: 30px; border-radius: 15px; }
+.switch.large::after { width: 32px; height: 26px; border-radius: 13px; }
+.switch.large.on::after { transform: translateX(16px); }
+.switch:disabled { opacity: .4; }
+
+/* Tahoe segmented: capsule track, accent-filled selection */
+.seg { display: inline-flex; padding: 2px; border-radius: 15px; background: var(--fill); }
+.seg button { border: 0; background: none; height: 26px; padding: 0 14px; border-radius: 13px; cursor: default; white-space: nowrap; color: var(--label); transition: background .15s; }
+.seg button:hover:not(.on) { background: var(--hover); }
+.seg button.on { background: var(--accent); color: #fff; font-weight: 500; box-shadow: inset 0 1px 0 rgba(255,255,255,.25); }
+.seg.full { display: flex; } .seg.full button { flex: 1; }
+.seg:has(button:disabled) { opacity: .45; }
+
+.popup { height: 28px; padding: 0 10px 0 13px; border-radius: 14px; border: 0; background: var(--fill); display: inline-flex; align-items: center; gap: 6px; cursor: default; max-width: 260px; color: var(--label); }
+.popup:hover { background: var(--fill-press); }
+.popup .txt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.popup svg { width: 11px; height: 11px; color: var(--secondary); }
+.popup:disabled { opacity: .4; }
+
+.field { height: 28px; border-radius: 9px; border: 0; background: var(--field); box-shadow: inset 0 0 0 1px var(--field-border); padding: 0 10px; outline: none; min-width: 0; user-select: text; }
+.field:focus { box-shadow: inset 0 0 0 1px var(--accent), 0 0 0 3.5px var(--accent-soft); }
+.field.invalid { box-shadow: inset 0 0 0 1px var(--red), 0 0 0 3.5px var(--red-soft); }
+.field:disabled { opacity: .5; }
+.field.grow { flex: 1; } .field.right { text-align: right; }
+.field-error { display: flex; gap: 5px; align-items: center; color: var(--red); font-size: 11px; padding: 0 14px 9px; margin-top: -3px; justify-content: flex-end; }
+.field-error svg { width: 13px; height: 13px; }
+
+.spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--tertiary); border-top-color: var(--secondary); animation: spin .8s linear infinite; flex: none; }
+.spinner.large { width: 26px; height: 26px; border-width: 3px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } * { transition: none !important; } }
+.status-inline { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; }
+.status-inline svg { width: 14px; height: 14px; }
+.tag { font-size: 11px; color: var(--secondary); display: inline-flex; align-items: center; gap: 3px; }
+.tag svg { width: 12px; height: 12px; }
+
+/* ===== Overview ===== */
+.hero { display: flex; align-items: center; gap: 16px; padding: 18px 18px 18px 16px; }
+.hero .badge { width: 50px; height: 50px; border-radius: 50%; display: grid; place-items: center; flex: none; }
+.hero .badge svg { width: 26px; height: 26px; stroke-width: 1.7; }
+.hero .badge.on { background: var(--green-soft); color: var(--green); }
+.hero .badge.off { background: var(--gray-soft); color: var(--secondary); }
+.hero .badge.warn { background: var(--orange-soft); color: var(--orange); }
+.hero .badge.err { background: var(--red-soft); color: var(--red); }
+.hero .badge.busy { background: var(--accent-soft); color: var(--accent); }
+.hero h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -.015em; }
+.hero p { margin: 2px 0 0; color: var(--secondary); }
+.hero .grow { flex: 1; min-width: 0; }
+.notice { display: grid; grid-template-columns: 22px 1fr; gap: 2px 10px; padding: 14px 16px; }
+.notice > span:first-child svg { width: 20px; height: 20px; margin-top: 1px; }
+.notice .t { font-weight: 600; }
+.notice .m { grid-column: 2; color: var(--secondary); }
+.notice .a { grid-column: 2; display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.footer-actions { display: flex; align-items: center; gap: 10px; padding: 2px 2px 0; }
+.footer-actions .spacer { flex: 1; }
+
+/* ===== Split panes ===== */
+.split { flex: 1; min-height: 0; display: flex; margin-top: 60px; }
+.pane { min-width: 0; display: flex; flex-direction: column; position: relative; }
+.pane.list { flex: 0 1 34%; min-width: 0; max-width: 320px; }
+.pane.fill { flex: 1; }
+.divider { width: 9px; margin: 0 -4px; cursor: col-resize; z-index: 2; flex: none; position: relative; }
+.divider::after { content: ""; position: absolute; top: 0; bottom: 12px; left: 4px; width: 1px; background: var(--separator); }
+.list-scroll { flex: 1; overflow: auto; padding: 2px 10px 60px; }
+.list-filter { padding: 0 12px 10px; }
+.list-filter .field { width: 100%; padding-left: 30px; border-radius: 14px; background: var(--fill); box-shadow: none; }
+.list-filter .field:focus { box-shadow: 0 0 0 3.5px var(--accent-soft), inset 0 0 0 1px var(--accent); }
+.list-filter .wrap { position: relative; }
+.list-filter svg { position: absolute; left: 10px; top: 6px; color: var(--secondary); width: 15px; height: 15px; }
+.lrow { display: grid; grid-template-columns: 24px 1fr auto; gap: 1px 9px; padding: 8px 10px; border-radius: 12px; align-items: center; cursor: default; }
+.lrow:hover { background: var(--hover); }
+.lrow.sel { background: var(--accent); color: var(--accent-text); }
+.lrow.sel .secondary, .lrow.sel .tag, .lrow.sel .proto-ic { color: rgba(255,255,255,.85); }
+.lrow.sel .tag svg { color: #fff; }
+.lrow .name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lrow .sum { grid-column: 2; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lrow .proto-ic { color: var(--secondary); grid-row: span 2; }
+.lrow .trail { grid-row: span 2; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+/* Floating glass control cluster at the bottom of a list */
+.bottombar { position: absolute; left: 12px; bottom: 12px; height: 36px; display: flex; align-items: center; gap: 0; padding: 0 3px; border-radius: 18px; z-index: 2; }
+.bb-btn { width: 32px; height: 30px; border-radius: 15px; border: 0; background: none; display: grid; place-items: center; cursor: default; color: var(--label); }
+.bb-btn:hover { background: var(--hover); }
+.bb-btn:disabled { color: var(--tertiary); background: none; }
+.bb-sep { width: 1px; height: 16px; background: var(--separator); margin: 0 3px; }
+.bottombar .info, .group-bottombar .info { margin-left: auto; font-size: 11px; color: var(--secondary); padding-right: 8px; }
+
+.detail-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; padding: 6px 24px 18px; }
+.detail-head .ic { width: 42px; height: 42px; border-radius: 12px; background: var(--group-strong); display: grid; place-items: center; color: var(--secondary); flex: none; }
+.detail-head .ic svg { width: 21px; height: 21px; }
+.detail-head h2 { margin: 0; font-size: 18px; font-weight: 700; }
+.detail-head p { margin: 1px 0 0; color: var(--secondary); font-size: 12px; }
+.detail-head .grow { flex: 1 1 140px; min-width: 120px; }
+.detail-head .actions { display: flex; margin-left: auto; gap: 8px; align-items: center; }
+.detail-body { padding: 0 24px 28px; overflow: auto; flex: 1; }
+
+.empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 6px; padding: 24px; color: var(--secondary); }
+.empty svg { width: 42px; height: 42px; stroke-width: 1.3; color: var(--tertiary); margin-bottom: 6px; }
+.empty .t { font-size: 17px; font-weight: 700; color: var(--label); }
+.empty .btn { margin-top: 8px; }
+
+/* Rules */
+.rule-row { display: grid; grid-template-columns: 14px 18px 42px 1fr auto; align-items: center; gap: 10px; padding: 9px 14px; position: relative; cursor: default; }
+.rule-row + .rule-row::before { content: ""; position: absolute; top: 0; left: 14px; right: 14px; height: 1px; background: var(--separator); }
+.rule-row:hover { background: var(--hover); }
+.rule-row.sel { background: var(--accent-soft); }
+.rule-row.dragging { opacity: .4; }
+.rule-row.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+.rule-row .grip { color: var(--tertiary); cursor: grab; }
+.rule-row .grip svg { width: 14px; height: 14px; }
+.rule-row .num { color: var(--secondary); font-variant-numeric: tabular-nums; text-align: right; }
+.rule-row .nm { font-weight: 500; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.rule-row .cond { font-size: 11px; color: var(--secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rule-row .target { display: flex; align-items: center; gap: 6px; color: var(--secondary); white-space: nowrap; }
+.rule-row .target svg { width: 12px; height: 12px; }
+.rule-row.disabled .nm, .rule-row.disabled .target { opacity: .5; }
+.match { font-size: 11px; color: var(--green); display: inline-flex; align-items: center; gap: 3px; font-weight: 500; }
+.match svg { width: 12px; height: 12px; }
+.group > .rule-row:first-child { border-radius: 16px 16px 0 0; }
+.group-bottombar { display: flex; align-items: center; gap: 0; padding: 6px 8px; border-top: 1px solid var(--separator); }
+
+/* Test */
+.result-head { display: flex; align-items: center; gap: 10px; padding: 6px 24px 14px; }
+.result-head .code { font-family: var(--mono); font-weight: 600; font-size: 14px; }
+.answers { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 12px; }
+.answers th { text-align: left; font: 600 11px var(--font); color: var(--secondary); padding: 9px 14px 7px; border-bottom: 1px solid var(--separator); }
+.answers td { padding: 7px 14px; border-top: 1px solid var(--separator); user-select: text; }
+.answers tr:first-child td { border-top: 0; }
+
+.list-editor { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.list-editor .item { display: flex; gap: 6px; align-items: center; }
+.minus { width: 22px; height: 22px; border-radius: 50%; border: 0; background: none; color: var(--red); display: grid; place-items: center; cursor: default; flex: none; }
+.minus:hover { background: var(--red-soft); }
+.minus svg { width: 16px; height: 16px; }
+.hosts-table { width: 100%; border-collapse: collapse; }
+.hosts-table th { text-align: left; font-size: 11px; color: var(--secondary); font-weight: 600; padding: 2px 4px 6px; }
+.hosts-table td { padding: 3px 4px; }
+.hosts-table .field { width: 100%; }
+
+/* ===== Sheet / Alert ===== */
+.scrim { position: absolute; inset: 0; z-index: 20; background: rgba(0,0,0,.1); display: flex; justify-content: center; align-items: flex-start; }
+:root[data-theme="dark"] .scrim { background: rgba(0,0,0,.3); }
+.sheet { margin-top: 18px; width: 580px; max-height: calc(100% - 36px); background: var(--window); border-radius: 26px; box-shadow: 0 0 0 .5px var(--glass-edge), 0 24px 70px rgba(0,0,0,.28); display: flex; flex-direction: column; overflow: hidden; animation: sheetIn .26s cubic-bezier(.2,1.2,.4,1); }
+@keyframes sheetIn { from { transform: translateY(-16px) scale(.98); opacity: 0; } }
+.sheet-title { padding: 20px 24px 8px; font-size: 16px; font-weight: 700; }
+.sheet-body { overflow: auto; padding: 8px 20px 4px; flex: 1; }
+.sheet-foot { display: flex; align-items: center; gap: 8px; padding: 14px 18px 18px; }
+.sheet-foot .spacer { flex: 1; }
+.alert-scrim { align-items: center; }
+.alert { width: 280px; border-radius: 28px; padding: 22px 18px 18px; text-align: center; animation: pop .2s cubic-bezier(.2,1.3,.4,1); background: var(--glass-strong); }
+@keyframes pop { from { transform: scale(1.08); opacity: 0; } }
+.alert .app-ic { width: 56px; height: 56px; margin: 0 auto 12px; }
+.alert .t { font-weight: 700; font-size: 14px; margin-bottom: 6px; }
+.alert .m { font-size: 12px; color: var(--secondary); margin-bottom: 16px; }
+.alert .extra { text-align: left; margin-bottom: 12px; }
+.alert .btns { display: flex; flex-direction: column; gap: 8px; }
+.alert .btns .btn { height: 32px; border-radius: 16px; justify-content: center; }
+.alert .btns.row2 { flex-direction: row; } .alert .btns.row2 .btn { flex: 1; }
+
+/* ===== Menus ===== */
+.menu-layer { position: fixed; inset: 0; z-index: 100; }
+.menu { position: fixed; min-width: 210px; padding: 6px; border-radius: 16px; font-size: 13px; }
+.mi { display: grid; grid-template-columns: 16px 1fr auto; align-items: center; gap: 6px; height: 26px; padding: 0 10px 0 8px; border-radius: 9px; cursor: default; white-space: nowrap; }
+.mi .ck svg { width: 13px; height: 13px; stroke-width: 2.2; }
+.mi .kb { color: var(--secondary); font-size: 12px; padding-left: 18px; }
+.mi:hover:not(.dis) { background: var(--accent); color: #fff; }
+.mi:hover:not(.dis) .kb, .mi:hover:not(.dis) .sub-ar { color: rgba(255,255,255,.85); }
+.mi.dis { color: var(--tertiary); }
+.mi.info { color: var(--secondary); }
+.mi.info.strong { color: var(--label); font-weight: 600; }
+.mi.danger { color: var(--red); }
+.mi .sub-ar svg { width: 10px; height: 10px; }
+.msep { height: 1px; background: var(--separator); margin: 5px 10px; }
+.mhead { font-size: 11px; font-weight: 600; color: var(--secondary); padding: 4px 10px 2px 30px; }
+
+/* ===== Settings window ===== */
+#settings { width: 580px; height: 580px; flex-direction: column; }
+.settings-bar { flex: none; padding: 14px 16px 6px; display: flex; flex-direction: column; align-items: center; position: relative; }
+.settings-bar .traffic { position: absolute; left: 18px; top: 18px; }
+.settings-bar .ttl { font-weight: 600; font-size: 13px; margin-bottom: 10px; }
+.settings-tabs { display: flex; gap: 2px; padding: 4px; border-radius: 22px; }
+.settings-tab { width: 78px; padding: 5px 0 4px; border-radius: 16px; border: 0; background: none; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11px; color: var(--secondary); cursor: default; }
+.settings-tab svg { width: 21px; height: 21px; stroke-width: 1.45; }
+.settings-tab:hover { background: var(--hover); }
+.settings-tab.on { background: var(--selection); color: var(--accent); }
+.settings-body { flex: 1; overflow: auto; padding: 14px 22px 22px; }
+
+/* ===== Onboarding window ===== */
+#onboarding { width: 700px; height: 520px; }
+.ob-steps { width: 196px; flex: none; margin: 8px 0 8px 8px; border-radius: 18px; background: var(--glass-tint-sidebar); padding: 18px 8px; display: flex; flex-direction: column; gap: 2px; }
+.ob-steps .traffic { margin: 0 0 24px 10px; }
+.ob-step { display: flex; align-items: center; gap: 9px; height: 32px; padding: 0 10px; border-radius: 10px; color: var(--secondary); }
+.ob-step .dot { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 10px; font-weight: 600; box-shadow: inset 0 0 0 1.2px var(--tertiary); flex: none; }
+.ob-step.done .dot { background: var(--green); box-shadow: none; color: #fff; }
+.ob-step.done .dot svg { width: 11px; height: 11px; stroke-width: 2.4; }
+.ob-step.cur { background: var(--selection); color: var(--label); font-weight: 600; }
+.ob-step.cur .dot { box-shadow: inset 0 0 0 1.5px var(--accent); color: var(--accent); }
+.ob-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.ob-content { flex: 1; overflow: auto; padding: 40px 34px 16px; }
+.ob-content h2 { margin: 0 0 6px; font-size: 22px; font-weight: 700; letter-spacing: -.01em; }
+.ob-content > p { margin: 0 0 20px; color: var(--secondary); max-width: 430px; }
+.ob-foot { display: flex; gap: 8px; padding: 14px 18px 18px; align-items: center; }
+.ob-foot .spacer { flex: 1; }
+.choice { display: grid; grid-template-columns: 18px 1fr; gap: 0 12px; align-items: center; padding: 10px 14px; position: relative; cursor: default; }
+.choice:hover { background: var(--hover); }
+.group > .choice:first-child { border-radius: 16px 16px 0 0; } .group > .choice:last-child { border-radius: 0 0 16px 16px; }
+.choice + .choice::before { content: ""; position: absolute; top: 0; left: 44px; right: 14px; height: 1px; background: var(--separator); }
+.choice .radio { width: 17px; height: 17px; border-radius: 50%; box-shadow: inset 0 0 0 1px var(--field-border); background: var(--field); }
+.choice.on .radio { background: #fff; box-shadow: inset 0 0 0 5px var(--accent); }
+.choice .s { grid-column: 2; font-size: 11px; color: var(--secondary); }
+.bullets { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 14px; }
+.bullets li { display: grid; grid-template-columns: 26px 1fr; gap: 12px; }
+.bullets li svg { width: 22px; height: 22px; color: var(--accent); stroke-width: 1.5; }
+.bullets b { display: block; }
+.bullets span { color: var(--secondary); }
+
+/* ===== HUD / Quit ===== */
+.hud { position: fixed; left: 50%; top: 110px; transform: translateX(-50%); z-index: 90; padding: 14px 22px; border-radius: 22px; font-size: 14px; display: flex; gap: 10px; align-items: center; animation: pop .18s ease-out; }
+.hud kbd { font: 600 13px var(--font); background: var(--fill); border-radius: 7px; padding: 1px 7px; }
+.quit-done { position: absolute; inset: 0; display: grid; place-items: center; z-index: 4; background: var(--content); }
+.quit-done .card { border-radius: 22px; padding: 22px 26px; text-align: center; background: var(--group); }
+.quit-done .card .app-ic { margin: 0 auto; }
+
+.app-ic { border-radius: 24%; background: linear-gradient(180deg, #4aa3f0, #1d63c4); display: grid; place-items: center; color: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,.45), 0 2px 6px rgba(0,0,0,.2); }
+.app-ic svg { width: 58%; height: 58%; stroke-width: 1.6; }
+</style>
+</head>
+<body>
+<div class="menubar">
+  <span class="mb-item app">DNSPilot</span>
+  <span class="mb-item">File</span><span class="mb-item">Edit</span><span class="mb-item">View</span><span class="mb-item">Window</span><span class="mb-item">Help</span>
+  <span class="spacer"></span>
+  <span class="extra" id="menuExtra" data-action="menuExtra" title="DNSPilot"></span>
+  <span class="mb-item secondary" id="clock"></span>
+</div>
+<div class="desktop"><div class="stage" id="stage">
+  <div class="proto glass" id="proto"></div>
+  <div class="window" id="main"></div>
+  <div class="window" id="settings" style="display:none"></div>
+  <div class="window" id="onboarding" style="display:none"></div>
+</div></div>
+<div id="hudLayer"></div>
+<div id="menuLayer"></div>
+
+<script>
+/* ============================================================
+   Icons — simplified stand-ins for SF Symbols
+   ============================================================ */
+const P = {
+  network: '<circle cx="8" cy="8" r="6.2"/><path d="M1.8 8h12.4M8 1.8c1.8 1.9 2.6 4 2.6 6.2S9.8 12.3 8 14.2M8 1.8C6.2 3.7 5.4 5.8 5.4 8s.8 4.3 2.6 6.2"/>',
+  profiles: '<rect x="2" y="2.5" width="12" height="11" rx="2.2"/><path d="M5 6h6M5 8.5h6M5 11h3.5"/>',
+  rules: '<path d="M3 2.5v4.2c0 1.3 1 2.3 2.3 2.3h5.4M3 6.7v6.8"/><path d="M9 6.8 11.2 9 9 11.2"/><circle cx="3" cy="13.5" r=".4"/>',
+  test: '<circle cx="7" cy="7" r="4.6"/><path d="m10.4 10.4 3.6 3.6"/>',
+  gear: '<circle cx="8" cy="8" r="2.2"/><path d="M8 1.6v1.6M8 12.8v1.6M1.6 8h1.6M12.8 8h1.6M3.5 3.5l1.1 1.1M11.4 11.4l1.1 1.1M3.5 12.5l1.1-1.1M11.4 4.6l1.1-1.1"/>',
+  plus: '<path d="M8 3v10M3 8h10"/>',
+  minus: '<path d="M3 8h10"/>',
+  minusCircle: '<circle cx="8" cy="8" r="6.2"/><path d="M5 8h6"/>',
+  ellipsis: '<circle cx="8" cy="8" r="6.2"/><circle cx="5.2" cy="8" r=".35"/><circle cx="8" cy="8" r=".35"/><circle cx="10.8" cy="8" r=".35"/>',
+  check: '<path d="m3.5 8.4 2.9 2.8 6.1-6.4"/>',
+  checkCircle: '<circle cx="8" cy="8" r="6.2"/><path d="m5.3 8.2 1.9 1.9 3.6-3.9"/>',
+  xCircle: '<circle cx="8" cy="8" r="6.2"/><path d="m5.8 5.8 4.4 4.4M10.2 5.8l-4.4 4.4"/>',
+  warn: '<path d="M8 2.2 14.3 13H1.7z"/><path d="M8 6.5v3"/><circle cx="8" cy="11.3" r=".3"/>',
+  shieldCheck: '<path d="M8 1.8 13 3.6v4c0 3.2-2.1 5.6-5 6.6-2.9-1-5-3.4-5-6.6v-4z"/><path d="m5.6 7.9 1.7 1.7 3.2-3.4"/>',
+  shieldSlash: '<path d="M8 1.8 13 3.6v4c0 3.2-2.1 5.6-5 6.6-2.9-1-5-3.4-5-6.6v-4z"/><path d="m2.5 2.5 11 11"/>',
+  shieldWarn: '<path d="M8 1.8 13 3.6v4c0 3.2-2.1 5.6-5 6.6-2.9-1-5-3.4-5-6.6v-4z"/><path d="M8 5.2v3.3"/><circle cx="8" cy="10.6" r=".3"/>',
+  lock: '<rect x="3.5" y="7" width="9" height="7" rx="1.6"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/>',
+  globe: '<circle cx="8" cy="8" r="6.2"/><path d="M1.8 8h12.4M8 1.8c1.8 1.9 2.6 4 2.6 6.2S9.8 12.3 8 14.2M8 1.8C6.2 3.7 5.4 5.8 5.4 8s.8 4.3 2.6 6.2"/>',
+  server: '<rect x="2.5" y="2.5" width="11" height="4.5" rx="1.3"/><rect x="2.5" y="9" width="11" height="4.5" rx="1.3"/><circle cx="5" cy="4.75" r=".3"/><circle cx="5" cy="11.25" r=".3"/>',
+  wifi: '<path d="M2 6.2a8.6 8.6 0 0 1 12 0M4.2 8.6a5.5 5.5 0 0 1 7.6 0M6.4 11a2.3 2.3 0 0 1 3.2 0"/><circle cx="8" cy="13" r=".4"/>',
+  ethernet: '<rect x="3" y="3" width="10" height="8" rx="1.5"/><path d="M6 11v2.5h4V11M5.5 6h1M7.5 6h1M9.5 6h1"/>',
+  chevRight: '<path d="m6 3.5 4.5 4.5L6 12.5"/>',
+  chevUpDown: '<path d="m4.5 6 3.5-3.5L11.5 6M4.5 10 8 13.5l3.5-3.5"/>',
+  chevDown: '<path d="m3.5 6 4.5 4.5L12.5 6"/>',
+  arrowUp: '<path d="M8 13V3M4 7l4-4 4 4"/>',
+  arrowDown: '<path d="M8 3v10M4 9l4 4 4-4"/>',
+  arrowRight: '<path d="M3 8h10M9 4l4 4-4 4"/>',
+  refresh: '<path d="M13 3.5v3.2H9.8"/><path d="M12.6 6.5A5 5 0 1 0 13 9"/>',
+  puzzle: '<path d="M3 5h2.6a1.4 1.4 0 1 1 2.8 0H11v2.6a1.4 1.4 0 1 1 0 2.8V13H8.4a1.4 1.4 0 1 0-2.8 0H3z"/>',
+  info: '<circle cx="8" cy="8" r="6.2"/><path d="M8 7.2V11"/><circle cx="8" cy="5" r=".35"/>',
+  power: '<path d="M8 2v5.5"/><path d="M4.6 4.2a5 5 0 1 0 6.8 0"/>',
+  grip: '<path d="M4 5h8M4 8h8M4 11h8"/>',
+  doc: '<path d="M4 1.8h5.2L12 4.6v9.6H4z"/><path d="M9 1.8v3h3M6 8h4M6 10.5h4"/>',
+  location: '<path d="M13.5 2.5 2.5 7l4.8 1.7L9 13.5z"/>',
+  hand: '<path d="M8 2v6.5"/><circle cx="8" cy="11.5" r="2.5"/>',
+  bug: '<rect x="4.5" y="5" width="7" height="8.5" rx="3.5"/><path d="M8 7.5v6M2.5 8h2M11.5 8h2M3 4l2 1.6M13 4l-2 1.6M3 13l2-1.5M13 13l-2-1.5"/>',
+  stethoscope: '<path d="M4 2v4a3 3 0 0 0 6 0V2"/><path d="M7 9v1.5a3 3 0 0 0 6 0V9"/><circle cx="13" cy="7.5" r="1.4"/>',
+  hosts: '<path d="M2.5 4h11M2.5 8h11M2.5 12h11"/><path d="M6 2.5v11"/>',
+  copy: '<rect x="5" y="5" width="8.5" height="8.5" rx="1.6"/><path d="M11 5V3.8A1.3 1.3 0 0 0 9.7 2.5H3.8A1.3 1.3 0 0 0 2.5 3.8v5.9A1.3 1.3 0 0 0 3.8 11H5"/>',
+  external: '<path d="M9 2.5h4.5V7M13.5 2.5 7.5 8.5"/><path d="M11.5 9.5v3.2a.8.8 0 0 1-.8.8H3.3a.8.8 0 0 1-.8-.8V5.3a.8.8 0 0 1 .8-.8h3.2"/>',
+  sun: '<circle cx="8" cy="8" r="2.8"/><path d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1"/>',
+  sidebar: '<rect x="1.8" y="2.5" width="12.4" height="11" rx="2.4"/><path d="M6 2.5v11M3.4 5.2h1M3.4 7.2h1"/>',
+  hourglass: '<path d="M4 2h8M4 14h8M5 2c0 3 6 3 6 6s-6 3-6 6M11 2c0 3-6 3-6 6s6 3 6 6"/>',
+};
+const ic = (n, cls = '') => `<svg class="i ${cls}" viewBox="0 0 16 16" aria-hidden="true">${P[n] || ''}</svg>`;
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const $ = s => document.querySelector(s);
+const uid = () => Math.random().toString(36).slice(2, 9);
+const wait = ms => new Promise(r => setTimeout(r, ms));
+const appIcon = (size = 52) => `<div class="app-ic" style="width:${size}px;height:${size}px">${ic('network')}</div>`;
+
+/* ============================================================
+   Sample data (fictional values only)
+   ============================================================ */
+const NETWORKS = {
+  home:     { label: 'Home Wi-Fi',  ssid: 'HomeNet-5G',  ssidState: 'available', ifaces: ['wifi'],     addrs: ['192.168.1.24', 'fe80::1c2a:9ff:fe41:7b10'], up: true },
+  office:   { label: 'Office Wi-Fi', ssid: 'Office-Corp', ssidState: 'available', ifaces: ['wifi'],     addrs: ['10.20.3.41'], up: true },
+  ethernet: { label: 'Ethernet',    ssid: null, ssidState: 'notOnWiFi',          ifaces: ['ethernet'], addrs: ['10.0.0.12', 'fd00:12::1a'], up: true },
+  cafe:     { label: 'Café Wi-Fi',  ssid: 'Cafe-Guest',  ssidState: 'available', ifaces: ['wifi'],     addrs: ['172.16.8.77'], up: true },
+  denied:   { label: 'Wi-Fi (Location denied)', ssid: null, ssidState: 'denied', ifaces: ['wifi'], addrs: ['192.168.1.24'], up: true },
+  offline:  { label: 'Offline',     ssid: null, ssidState: 'notOnWiFi', ifaces: [], addrs: [], up: false },
+};
+
+const S = {
+  page: 'overview',
+  theme: matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
+  windowSize: 'default',
+  proxy: 'on',               // on | off | preparing | applying | restoring | recovery | error
+  ext: 'active',             // active | approval | notInstalled | updateRequired
+  switchFailed: false,
+  network: 'home',
+  mode: 'auto',
+  manualProfile: null,
+  defaultProfile: 'cf',
+  activeId: null,
+  selectionAtActive: null,
+  selectedProfile: 'router',
+  profileFilter: '',
+  selectedRule: 'r2',
+  profiles: [
+    { id: 'cf', name: 'Cloudflare', transport: 'https', endpoint: 'https://cloudflare-dns.com/dns-query', bootstrap: ['1.1.1.1', '1.0.0.1'], server: '', port: 443, hosts: [] },
+    { id: 'quad9', name: 'Quad9', transport: 'tls', server: 'dns.quad9.net', port: 853, bootstrap: ['9.9.9.9'], endpoint: '', hosts: [] },
+    { id: 'router', name: 'Home Router', transport: 'plain', server: '192.168.1.1', port: 53, bootstrap: [], endpoint: '', hosts: [{ domain: 'nas.home.arpa', address: '192.168.1.10' }, { domain: '*.dev.home.arpa', address: '192.168.1.20' }] },
+    { id: 'google', name: 'Google', transport: 'plain', server: '8.8.8.8', port: 53, bootstrap: [], endpoint: '', hosts: [] },
+  ],
+  rules: [
+    { id: 'r1', name: 'Office', enabled: true, ssids: ['Office-Corp'], ifaces: [], subnets: [], profile: 'quad9' },
+    { id: 'r2', name: 'Home', enabled: true, ssids: ['HomeNet-5G'], ifaces: [], subnets: ['192.168.1.0/24'], profile: 'router' },
+    { id: 'r3', name: 'Wired Desk', enabled: false, ssids: [], ifaces: ['ethernet'], subnets: [], profile: 'cf' },
+  ],
+  testUI: { source: 'profile', profile: null, domain: 'example.com', type: 'A', state: 'empty', result: null, custom: null, leftWidth: 360 },
+  overviewTest: null, profileTest: {}, // presentation-only test state per initiating view
+  sheet: null, alert: null,
+  settingsOpen: false, settingsTab: 'general',
+  settings: { launchAtLogin: true, cacheOn: true, cacheCapacity: 1000, cacheDraftOn: true, cacheDraft: '1000', cacheStatus: null, location: 'allowed', debug: false },
+  onboarding: { open: false, step: 0, template: 'cf-doh', testState: null, location: null, ext: 'idle', proxy: 'idle' },
+  quitArmed: false, quitState: null,
+  focused: 'main',
+};
+S.activeId = 'router';
+S.testUI.custom = blankDraft('Custom DNS');
+
+function blankDraft(name = '') {
+  return { id: uid(), name, transport: 'https', server: '', port: 53, dotServer: '', dotPort: 853, endpoint: '', bootstrap: [''], hosts: [] };
+}
+
+/* ============================================================
+   Domain helpers
+   ============================================================ */
+const prof = id => S.profiles.find(p => p.id === id);
+const pname = id => prof(id)?.name ?? 'Unknown Profile';
+const transportName = t => ({ plain: 'Plain DNS', tls: 'DNS over TLS', https: 'DNS over HTTPS' }[t]);
+const transportShort = t => ({ plain: 'Plain', tls: 'DoT', https: 'DoH' }[t]);
+const transportIcon = t => ({ plain: 'server', tls: 'lock', https: 'globe' }[t]);
+function profileSummary(p) {
+  if (p.transport === 'plain') return `${p.server}${p.port !== 53 ? ':' + p.port : ''}`;
+  if (p.transport === 'tls') return p.server;
+  try { return new URL(p.endpoint).host; } catch { return p.endpoint; }
+}
+const net = () => NETWORKS[S.network];
+
+function ipv4ToInt(ip) { const p = ip.split('.').map(Number); return ((p[0] << 24) | (p[1] << 16) | (p[2] << 8) | p[3]) >>> 0; }
+const isIPv4 = s => /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/.test(s);
+const isIPv6 = s => /^[0-9a-f:]+$/i.test(s) && s.includes(':') && s.split('::').length <= 2 && s.length >= 2;
+const isIP = s => isIPv4(s) || isIPv6(s);
+const isDomain = s => /^(\*\.)?([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9-]{2,63}$/i.test(s);
+function subnetContains(cidr, ip) {
+  const [base, bits] = cidr.split('/');
+  if (!isIPv4(base) || !isIPv4(ip)) return false;
+  const mask = bits == 0 ? 0 : (~0 << (32 - Number(bits))) >>> 0;
+  return (ipv4ToInt(base) & mask) === (ipv4ToInt(ip) & mask);
+}
+function ruleMatches(r, n) {
+  if (!n.up) return false;
+  const ssid = !r.ssids.length || (n.ssidState === 'available' && r.ssids.includes(n.ssid));
+  const ifc = !r.ifaces.length || r.ifaces.some(i => n.ifaces.includes(i));
+  const sub = !r.subnets.length || r.subnets.some(c => n.addrs.some(a => subnetContains(c, a)));
+  return ssid && ifc && sub;
+}
+function evaluate() {
+  if (S.mode === 'manual') return { profile: S.manualProfile, source: { kind: 'manual' } };
+  const n = net();
+  for (const r of S.rules) if (r.enabled && ruleMatches(r, n)) return { profile: r.profile, source: { kind: 'rule', id: r.id, name: r.name } };
+  return { profile: S.defaultProfile, source: { kind: 'default' } };
+}
+const matchedRuleId = () => { const e = evaluate(); return e.source.kind === 'rule' ? e.source.id : null; };
+function conditionSummary(r) {
+  const parts = [];
+  if (r.ssids.length) parts.push('Wi-Fi ' + r.ssids.join(', '));
+  if (r.ifaces.length) parts.push(r.ifaces.map(i => ({ wifi: 'Wi-Fi', ethernet: 'Ethernet', other: 'Other' }[i])).join(' or ') + ' interface');
+  if (r.subnets.length) parts.push('Subnet ' + r.subnets.join(', '));
+  return parts.length ? parts.join(' · ') : 'Any network';
+}
+const busy = () => ['preparing', 'applying', 'restoring'].includes(S.proxy);
+const proxyUsable = () => S.ext === 'active';
+
+/* Runtime transitions (simulated) */
+async function turnOn() {
+  if (busy() || !proxyUsable()) return;
+  S.proxy = 'preparing'; S.switchFailed = false; renderAll();
+  await wait(1100);
+  S.proxy = 'on'; S.activeId = evaluate().profile; renderAll();
+}
+async function restoreSystemDNS() {
+  if (S.proxy === 'off') return;
+  S.proxy = 'restoring'; renderAll();
+  await wait(1000);
+  S.proxy = 'off'; S.activeId = null; S.switchFailed = false; renderAll();
+}
+async function reapplyIfNeeded() {
+  const target = evaluate().profile;
+  if (S.proxy !== 'on' || target === S.activeId) { renderAll(); return; }
+  S.proxy = 'applying'; renderAll();
+  await wait(900);
+  S.proxy = 'on'; S.activeId = evaluate().profile; S.switchFailed = false; renderAll();
+}
+function setMode(mode, profileId) {
+  S.mode = mode;
+  if (mode === 'manual') S.manualProfile = profileId ?? S.activeId ?? S.defaultProfile;
+  reapplyIfNeeded();
+}
+
+/* ============================================================
+   Generic UI pieces
+   ============================================================ */
+const sw = (on, action, opts = {}) => `<button class="switch ${on ? 'on' : ''} ${opts.large ? 'large' : ''}" role="switch" aria-checked="${on}" aria-label="${esc(opts.label || '')}" data-action="${action}" ${opts.disabled ? 'disabled' : ''} ${opts.data || ''}></button>`;
+const seg = (items, value, action, opts = {}) => `<div class="seg ${opts.full ? 'full' : ''}" role="radiogroup">${items.map(([v, l]) => `<button role="radio" aria-checked="${v === value}" class="${v === value ? 'on' : ''}" data-action="${action}" data-v="${v}" ${opts.disabled ? 'disabled' : ''}>${l}</button>`).join('')}</div>`;
+const popup = (text, action, opts = {}) => `<button class="popup" data-action="${action}" ${opts.data || ''} ${opts.disabled ? 'disabled' : ''} aria-haspopup="menu"><span class="txt">${esc(text)}</span>${ic('chevUpDown')}</button>`;
+const row = (label, value, opts = {}) => `<div class="row ${opts.cls || ''}" ${opts.attrs || ''}><span class="lbl">${label}</span><span class="val">${value}</span></div>`;
+const section = (header, body, opts = {}) => `<div class="section">${header ? `<div class="section-header">${header}${opts.hint ? `<span class="hint">${opts.hint}</span>` : ''}</div>` : ''}<div class="group">${body}</div>${opts.footer ? `<div class="section-footer">${opts.footer}</div>` : ''}</div>`;
+function testStatus(st) {
+  if (!st) return '';
+  if (st.state === 'testing') return `<span class="status-inline secondary"><span class="spinner"></span>Testing…</span>`;
+  if (st.state === 'ok') return `<span class="status-inline green" role="status">${ic('checkCircle')}OK</span>`;
+  return `<span class="status-inline red" role="status">${ic('xCircle')}${esc(st.reason)}</span>`;
+}
+async function runProfileTest(holder, key, profile) {
+  holder[key] = { state: 'testing' }; renderAll();
+  await wait(900 + Math.random() * 500);
+  const fail = profile.transport === 'plain' && profile.server.startsWith('10.') || /fail/.test(profile.name.toLowerCase());
+  holder[key] = fail ? { state: 'fail', reason: 'Upstream timed out' } : { state: 'ok' };
+  renderAll();
+}
+
+/* ============================================================
+   Main window
+   ============================================================ */
+function proxyPresentation() {
+  const active = S.activeId ? prof(S.activeId) : null;
+  const target = evaluate().profile;
+  switch (S.proxy) {
+    case 'on': return { badge: 'on', icon: 'shieldCheck', title: 'DNS Proxy On', sub: active ? `Using ${active.name} · ${transportName(active.transport)}` : '', menu: 'DNS Proxy On' };
+    case 'off': return { badge: 'off', icon: 'shieldSlash', title: 'DNS Proxy Off', sub: 'System DNS is active', menu: 'DNS Proxy Off' };
+    case 'preparing': return { badge: 'busy', spin: true, title: 'Preparing', sub: `Starting ${pname(target)}…`, menu: 'Preparing' };
+    case 'applying': return { badge: 'busy', spin: true, title: 'Applying', sub: `Switching to ${pname(target)}…`, menu: 'Applying' };
+    case 'restoring': return { badge: 'busy', spin: true, title: 'Restoring System DNS', sub: 'Turning off DNS Proxy…', menu: 'Restoring System DNS' };
+    case 'recovery': return { badge: 'warn', icon: 'shieldWarn', title: 'Recovery Required', sub: 'DNS Proxy state cannot be confirmed', menu: 'Recovery Required' };
+    case 'error': return { badge: 'err', icon: 'shieldWarn', title: 'Error', sub: 'DNS Proxy did not confirm an active Profile', menu: 'Error' };
+  }
+}
+
+function renderMain() {
+  const w = S.windowSize === 'min' ? [760, 520] : [1000, 660];
+  const el = $('#main');
+  el.style.width = w[0] + 'px'; el.style.height = w[1] + 'px';
+  el.classList.toggle('inactive', S.focused !== 'main');
+  const pres = proxyPresentation();
+  const nav = [['overview', 'Overview', 'network', '⌘1'], ['profiles', 'Profiles', 'profiles', '⌘2'], ['rules', 'Rules', 'rules', '⌘3'], ['test', 'Test', 'test', '⌘4']];
+  const sbIcon = pres.spin ? '<span class="spinner"></span>' : `<span class="${pres.badge === 'on' ? 'green' : pres.badge === 'warn' ? 'orange' : pres.badge === 'err' ? 'red' : 'secondary'}">${ic(pres.icon)}</span>`;
+  const sbSub = S.proxy === 'on' ? `${pname(S.activeId)} · ${S.mode === 'auto' ? 'Automatic' : 'Manual'}` : S.proxy === 'off' ? 'System DNS' : pres.sub;
+  el.innerHTML = `
+    <aside class="sidebar glass" ${S.sidebarHidden ? 'hidden' : ''} data-drag="main">
+      <div class="sb-top"><div class="traffic"><span class="close" data-action="closeMain" title="Close (app keeps running)"></span><span></span><span></span></div><span class="spacer"></span><button class="tb-btn" data-action="toggleSidebar" title="Hide Sidebar" aria-label="Hide Sidebar">${ic('sidebar')}</button></div>
+      <nav aria-label="Sections">
+        ${nav.map(([id, l, i, k]) => `<div class="sb-item ${S.page === id ? 'sel' : ''}" data-action="nav" data-v="${id}" role="link" aria-current="${S.page === id}">${ic(i)}<span>${l}</span><span class="key">${k}</span></div>`).join('')}
+      </nav>
+      <div class="sb-status" data-action="nav" data-v="overview" title="${esc(pres.title)}">${sbIcon}<span class="t">${esc(pres.menu)}</span><span class="s">${esc(sbSub)}</span></div>
+    </aside>
+    <section class="detail">
+      ${renderPage()}
+    </section>
+      ${S.sheet ? `<div class="scrim">${renderSheet()}</div>` : ''}
+      ${S.alert ? `<div class="scrim alert-scrim">${renderAlert()}</div>` : ''}
+      ${S.quitState === 'done' ? `<div class="quit-done"><div class="card">${appIcon(44)}<p><b>DNSPilot quit.</b><br><span class="secondary">System DNS restored.</span></p><button class="btn" data-action="relaunch">Relaunch</button></div></div>` : ''}
+  `;
+}
+
+function toolbar(title, items = '', subtitle = '') {
+  const lead = S.sidebarHidden ? `<div class="traffic" style="margin-right:10px"><span class="close" data-action="closeMain"></span><span></span><span></span></div><button class="tb-circle glass" data-action="toggleSidebar" title="Show Sidebar" aria-label="Show Sidebar" style="margin-right:8px">${ic('sidebar')}</button>` : '';
+  return `<div class="toolbar" data-drag="main">${lead}<span class="title">${title}</span>${subtitle ? `<span class="subtitle">${subtitle}</span>` : ''}<span class="spacer"></span>${items}</div>`;
+}
+function renderPage() {
+  switch (S.page) {
+    case 'overview': return renderOverview();
+    case 'profiles': return renderProfiles();
+    case 'rules': return renderRules();
+    case 'test': return renderTest();
+  }
+}
+
+/* ---------- Overview ---------- */
+function renderOverview() {
+  const pres = proxyPresentation();
+  const ev = evaluate();
+  const n = net();
+  const on = ['on', 'preparing', 'applying'].includes(S.proxy);
+  const toggleDisabled = busy() || !proxyUsable() || S.proxy === 'recovery';
+  const badge = pres.spin ? `<div class="badge busy"><span class="spinner large"></span></div>` : `<div class="badge ${pres.badge}">${ic(pres.icon)}</div>`;
+
+  const notices = [];
+  if (S.ext === 'approval') notices.push(notice('puzzle', 'orange', 'System Extension Approval Required', 'Allow the DNSPilot extension in System Settings › General › Login Items & Extensions, then check again.', [['Open System Settings', 'noop', 'primary'], ['Check Again', 'extApprove']]));
+  if (S.ext === 'notInstalled') notices.push(notice('puzzle', 'orange', 'System Extension Required', 'The DNS Proxy extension is not installed. Resume setup to install it.', [['Resume Setup', 'openOnboarding', 'primary']]));
+  if (S.ext === 'updateRequired') notices.push(notice('puzzle', 'accent', 'System Extension Update Required', 'DNSPilot restores System DNS, updates the extension, then resumes the previous state.', [['Update Safely', 'extUpdate', 'primary']]));
+  if (S.proxy === 'recovery') notices.push(notice('warn', 'orange', 'DNS Proxy State Cannot Be Confirmed', 'Ownership or manager state changed outside DNSPilot. Reconnect to verify, or restore System DNS.', [['Reconnect', 'reconnect', 'primary'], ['Restore System DNS', 'restore'], ['Open Diagnostics', 'openDiagnostics']]));
+  if (S.proxy === 'error') notices.push(notice('xCircle', 'red', 'DNS Proxy Did Not Start', 'The extension did not confirm the Active Profile (runtime identity mismatch). System DNS remains active.', [['Retry', 'turnOn', 'primary'], ['Open Diagnostics', 'openDiagnostics']]));
+  if (S.switchFailed && S.proxy === 'on') {
+    const target = S.mode === 'manual' ? S.manualProfile : ev.profile;
+    notices.push(notice('warn', 'orange', `Could Not Switch to ${pname(target)}`, `The upstream did not respond during reapply. ${pname(S.activeId)} is still active.`, [['Retry', 'retrySwitch', 'primary'], ...(S.mode === 'manual' ? [[`Use ${pname(S.activeId)} (Manual)`, 'useActiveManual']] : []), ['Restore System DNS', 'restore']]));
+  }
+  if (S.mode === 'auto' && !n.up) notices.push(notice('network', 'secondary', 'Waiting for Network', 'Automatic mode will choose a Profile when a network becomes available.', []));
+
+  const sourceText = ev.source.kind === 'rule' ? `<button class="link" data-action="gotoRule" data-v="${ev.source.id}">Rule “${esc(ev.source.name)}”${ic('chevRight')}</button>`
+    : ev.source.kind === 'default' ? `<button class="link" data-action="gotoProfile" data-v="${S.defaultProfile}">Default Profile${ic('chevRight')}</button>` : 'Manual selection';
+  const targetDiffers = (S.switchFailed || S.proxy === 'applying') && ev.profile !== S.activeId;
+  const wifiText = n.ssidState === 'available' ? esc(n.ssid) : n.ssidState === 'denied' ? 'Permission Denied' : 'Not Connected to Wi-Fi';
+  const ifText = n.ifaces.length ? n.ifaces.map(i => ({ wifi: 'Wi-Fi', ethernet: 'Ethernet' }[i])).join(', ') : 'None';
+  const active = S.activeId ? prof(S.activeId) : null;
+
+  return toolbar('Overview', `<button class="tb-circle glass" data-action="overviewMore" aria-label="More Actions" title="More Actions">${ic('ellipsis')}</button>`) + `
+  <div class="page"><div class="page-inner">
+    <div class="section"><div class="group">
+      <div class="hero">${badge}
+        <div class="grow"><h1>${esc(pres.title)}</h1><p class="trunc">${esc(pres.sub)}</p></div>
+        ${sw(on, 'toggleProxy', { large: true, disabled: toggleDisabled, label: 'DNS Proxy' })}
+      </div>
+    </div></div>
+
+    ${notices.map(x => `<div class="section"><div class="group">${x}</div></div>`).join('')}
+
+    ${section('Mode', `
+      <div class="row"><span class="lbl">Selection</span><span class="val">${seg([['auto', 'Automatic'], ['manual', 'Manual']], S.mode, 'setMode', { disabled: busy() })}</span></div>
+      ${S.mode === 'manual' ? `<div class="row"><span class="lbl">Profile</span><span class="val">${popup(pname(S.manualProfile), 'pickManual', { disabled: busy() })}</span></div>` : ''}
+    `, { footer: S.mode === 'auto' ? 'The first enabled Rule that matches the current network wins. Otherwise the Default Profile is used.' : 'Manual selection stays until you return to Automatic.' })}
+
+    ${section('Current Selection', `
+      ${row('Active Profile', active ? `<button class="link" data-action="gotoProfile" data-v="${active.id}">${esc(active.name)}${ic('chevRight')}</button>` : 'System DNS')}
+      ${targetDiffers ? row('Target Profile', `<span class="orange">${esc(pname(S.mode === 'manual' ? S.manualProfile : ev.profile))}</span>`) : ''}
+      ${row('Selected By', sourceText)}
+    `)}
+
+    ${section('Network', `
+      ${row(`<span style="display:flex;gap:7px;align-items:center">${ic('wifi')}Wi-Fi</span>`, wifiText + (n.ssidState === 'denied' ? ` <button class="btn" data-action="noop">Open System Settings</button>` : ''))}
+      ${row(`<span style="display:flex;gap:7px;align-items:center">${ic('ethernet')}Interfaces</span>`, ifText)}
+      ${row(`<span style="display:flex;gap:7px;align-items:center">${ic('server')}Addresses</span>`, n.addrs.length ? `<span class="ip-list mono selectable">${n.addrs.map(esc).join('<br>')}</span>` : 'None')}
+    `)}
+
+    <div class="footer-actions">
+      <button class="btn" data-action="testActive" ${!active || busy() ? 'disabled' : ''}>Test Active Profile</button>
+      ${testStatus(S.overviewTest)}
+      <span class="spacer"></span>
+      <button class="btn" data-action="restore" ${S.proxy === 'off' || busy() ? 'disabled' : ''}>Restore System DNS</button>
+    </div>
+  </div></div>`;
+}
+function notice(icon, tone, title, message, actions) {
+  return `<div class="notice" role="status">${`<span class="${tone}">${ic(icon)}</span>`}<span class="t">${esc(title)}</span><span class="m">${esc(message)}</span>${actions.length ? `<span class="a">${actions.map(([l, a, k]) => `<button class="btn ${k || ''}" data-action="${a}" ${busy() ? 'disabled' : ''}>${esc(l)}</button>`).join('')}</span>` : ''}</div>`;
+}
+
+/* ---------- Profiles ---------- */
+function renderProfiles() {
+  const list = S.profiles.filter(p => !S.profileFilter || p.name.toLowerCase().includes(S.profileFilter.toLowerCase()));
+  const p = prof(S.selectedProfile);
+  const toolbarItems = `<button class="tb-circle glass" data-action="newProfile" title="New Profile (⌘N)" aria-label="New Profile">${ic('plus')}</button>`;
+  return toolbar('Profiles', toolbarItems, `${S.profiles.length} Profiles`) + `
+  <div class="split">
+    <div class="pane list" id="profileList">
+      <div class="list-filter"><div class="wrap">${ic('test')}<input class="field" placeholder="Filter" value="${esc(S.profileFilter)}" data-input="profileFilter" aria-label="Filter Profiles"></div></div>
+      <div class="list-scroll" role="listbox" aria-label="Profiles">
+        ${list.map(x => `<div class="lrow ${x.id === S.selectedProfile ? 'sel' : ''}" role="option" aria-selected="${x.id === S.selectedProfile}" data-action="selectProfile" data-v="${x.id}" data-context="profile">
+          <span class="proto-ic">${ic(transportIcon(x.transport))}</span>
+          <span class="name">${esc(x.name)}</span>
+          <span class="trail">${x.id === S.activeId && S.proxy === 'on' ? `<span class="tag green">${ic('checkCircle')}Active</span>` : ''}${x.id === S.defaultProfile ? `<span class="tag">Default</span>` : ''}</span>
+          <span class="sum secondary">${transportShort(x.transport)} · ${esc(profileSummary(x))}</span>
+        </div>`).join('') || `<div class="empty"><span>No matches</span></div>`}
+      </div>
+      <div class="bottombar glass">
+        <button class="bb-btn" data-action="newProfile" title="New Profile" aria-label="New Profile">${ic('plus')}</button>
+        <button class="bb-btn" data-action="deleteProfile" data-v="${p?.id || ''}" title="Delete Profile" aria-label="Delete Profile" ${p ? '' : 'disabled'}>${ic('minus')}</button>
+        <span class="bb-sep"></span>
+        <button class="bb-btn" data-action="profileMore" data-v="${p?.id || ''}" title="More Profile Actions" aria-label="More Profile Actions" ${p ? '' : 'disabled'}>${ic('ellipsis')}</button>
+      </div>
+    </div>
+    <div class="divider" data-divider="profileList" role="separator" aria-orientation="vertical"></div>
+    <div class="pane fill">${p ? profileDetail(p) : `<div class="empty">${ic('profiles')}<span class="t">${S.profiles.length ? 'Select a Profile' : 'No DNS Profiles'}</span>${S.profiles.length ? '' : '<button class="btn primary" data-action="newProfile">Create Profile</button>'}</div>`}</div>
+  </div>`;
+}
+function profileDetail(p) {
+  const usedBy = S.rules.filter(r => r.profile === p.id);
+  const isActive = p.id === S.activeId && S.proxy === 'on';
+  const upstream = p.transport === 'plain'
+    ? row('Server', `<span class="mono selectable">${esc(p.server)}</span>`) + row('Port', p.port)
+    : p.transport === 'tls'
+      ? row('Server', `<span class="mono selectable">${esc(p.server)}</span>`) + row('Port', p.port) + row('Bootstrap', `<span class="mono selectable">${p.bootstrap.map(esc).join(', ')}</span>`)
+      : row('Endpoint', `<span class="mono selectable trunc" title="${esc(p.endpoint)}" style="max-width:300px">${esc(p.endpoint)}</span>`) + row('Bootstrap', `<span class="mono selectable">${p.bootstrap.map(esc).join(', ')}</span>`);
+  return `
+  <div class="detail-head">
+    <div class="ic">${ic(transportIcon(p.transport))}</div>
+    <div class="grow"><h2 class="trunc">${esc(p.name)}</h2><p>${transportName(p.transport)}</p></div>
+    <div class="actions">
+      ${testStatus(S.profileTest[p.id])}
+      <button class="btn" data-action="testProfile" data-v="${p.id}" ${busy() ? 'disabled' : ''}>Test</button>
+      <button class="btn" data-action="editProfile" data-v="${p.id}">Edit…</button>
+    </div>
+  </div>
+  <div class="detail-body">
+    ${section('Upstream', row('Protocol', transportName(p.transport)) + upstream)}
+    ${section('Hosts', p.hosts.length ? p.hosts.map(h => row(`<span class="mono">${esc(h.domain)}</span>`, `<span class="mono selectable">${esc(h.address)}</span>`)).join('') : `<div class="row"><span class="secondary">No host overrides</span><span class="val"><button class="link" data-action="editProfile" data-v="${p.id}">Add in Editor</button></span></div>`, { hint: p.hosts.length ? `${p.hosts.length} entries` : '', footer: 'Overrides A/AAAA answers before the upstream is queried. *.domain covers the domain and all subdomains.' })}
+    ${section('Usage', `
+      ${row('Status', isActive ? `<span class="green status-inline">${ic('checkCircle')}Active</span>` : 'Not active')}
+      ${row('Default Profile', p.id === S.defaultProfile ? 'Yes' : `<button class="link" data-action="makeDefault" data-v="${p.id}">Make Default</button>`)}
+      ${row('Used by Rules', usedBy.length ? usedBy.map(r => `<button class="link" data-action="gotoRule" data-v="${r.id}">${esc(r.name)}</button>`).join(', ') : 'None')}
+    `)}
+  </div>`;
+}
+
+/* ---------- Rules ---------- */
+function renderRules() {
+  const matched = matchedRuleId();
+  const items = `<button class="tb-circle glass" data-action="newRule" title="New Rule (⇧⌘N)" aria-label="New Rule">${ic('plus')}</button>`;
+  const sel = S.rules.findIndex(r => r.id === S.selectedRule);
+  return toolbar('Rules', items, `${S.rules.filter(r => r.enabled).length} of ${S.rules.length} enabled`) + `
+  <div class="page"><div class="page-inner">
+    ${section('Fallback', `<div class="row"><span class="lbl">Default Profile</span><span class="val">${popup(pname(S.defaultProfile), 'pickDefault')}</span></div>`, { footer: 'Used in Automatic mode when no enabled Rule matches.' })}
+    <div class="section">
+      <div class="section-header">Rules<span class="hint">Checked from top to bottom — first match wins</span></div>
+      <div class="group" id="ruleGroup" role="listbox" aria-label="Rules">
+        ${S.rules.length ? S.rules.map((r, i) => `
+          <div class="rule-row ${r.id === S.selectedRule ? 'sel' : ''} ${r.enabled ? '' : 'disabled'}" draggable="true" data-rule="${r.id}" data-action="selectRule" data-v="${r.id}" data-context="rule" role="option" aria-selected="${r.id === S.selectedRule}"
+               aria-label="Priority ${i + 1}, ${esc(r.name)}, ${r.enabled ? 'enabled' : 'disabled'}, ${esc(conditionSummary(r))}, Profile ${esc(pname(r.profile))}">
+            <span class="grip" title="Drag to reorder">${ic('grip')}</span>
+            <span class="num">${i + 1}</span>
+            ${sw(r.enabled, 'toggleRule', { data: `data-v="${r.id}"`, label: 'Enable ' + r.name })}
+            <span style="min-width:0"><span class="nm"><span class="trunc">${esc(r.name)}</span>${r.id === matched && S.mode === 'auto' ? `<span class="match">${ic('checkCircle')}Matches now</span>` : ''}</span><span class="cond" style="display:block">${esc(conditionSummary(r))}</span></span>
+            <span class="target">${ic('arrowRight')}${esc(pname(r.profile))}</span>
+          </div>`).join('') : `<div class="empty" style="padding:28px">${ic('rules')}<span class="t">No Rules</span><span>Automatic mode uses ${esc(pname(S.defaultProfile))} on every network.</span><button class="btn primary" data-action="newRule">Create Rule</button></div>`}
+        <div class="group-bottombar">
+          <button class="bb-btn" data-action="newRule" aria-label="New Rule" title="New Rule">${ic('plus')}</button>
+          <button class="bb-btn" data-action="deleteRule" aria-label="Delete Rule" title="Delete Rule" ${sel < 0 ? 'disabled' : ''}>${ic('minus')}</button>
+          <span class="bb-sep"></span>
+          <button class="bb-btn" data-action="moveRule" data-v="-1" aria-label="Move Up" title="Move Up (⌥⌘↑)" ${sel <= 0 ? 'disabled' : ''}>${ic('arrowUp')}</button>
+          <button class="bb-btn" data-action="moveRule" data-v="1" aria-label="Move Down" title="Move Down (⌥⌘↓)" ${sel < 0 || sel === S.rules.length - 1 ? 'disabled' : ''}>${ic('arrowDown')}</button>
+          <span class="bb-sep"></span>
+          <button class="bb-btn" data-action="editRule" aria-label="Edit Rule" title="Edit Rule" ${sel < 0 ? 'disabled' : ''}>${ic('ellipsis')}</button>
+          <span class="info">${S.mode === 'manual' ? 'Rules are paused in Manual mode' : ''}</span>
+        </div>
+      </div>
+      <div class="section-footer">Every condition type you set must match. Within a type, any listed value matches. Double-click a Rule to edit it.</div>
+    </div>
+  </div></div>`;
+}
+
+/* ---------- Test ---------- */
+const RECORD_TYPES = ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'NS', 'SOA', 'SRV', 'CAA', 'PTR'];
+function renderTest() {
+  const t = S.testUI;
+  if (!prof(t.profile)) t.profile = S.activeId || S.defaultProfile || S.profiles[0]?.id;
+  const selected = t.source === 'profile' ? prof(t.profile) : t.custom;
+  const plainWarn = S.proxy === 'on' && selected && selected.transport === 'plain';
+  const querying = t.state === 'loading';
+  return toolbar('Test') + `
+  <div class="split">
+    <div class="pane" id="testLeft" style="flex:0 1 ${t.leftWidth}px;max-width:460px;overflow:auto;padding:4px 18px 18px 20px">
+      ${section('DNS Server', `
+        <div class="row"><span class="lbl">Source</span><span class="val">${seg([['profile', 'Profile'], ['custom', 'Custom']], t.source, 'testSource')}</span></div>
+        ${t.source === 'profile' ? `<div class="row"><span class="lbl">Profile</span><span class="val">${popup(pname(t.profile), 'testPickProfile')}</span></div>` : customUpstreamRows(t.custom, 'test')}
+        ${plainWarn ? `<div class="row" role="note"><span class="orange status-inline" style="align-items:flex-start">${ic('warn')}<span>DNS Proxy is on. Plain DNS queries on port 53 may be routed through the Active Profile instead of directly to this server.</span></span></div>` : ''}
+      `)}
+      ${section('Request', `
+        <div class="row"><span class="lbl">Domain</span><span class="val" style="flex:1"><input class="field grow right ${t.domainError ? 'invalid' : ''}" data-input="testDomain" value="${esc(t.domain)}" placeholder="example.com" aria-label="Domain" spellcheck="false"></span></div>
+        ${t.domainError ? `<div class="field-error">${ic('xCircle')}${esc(t.domainError)}</div>` : ''}
+        <div class="row"><span class="lbl">Record Type</span><span class="val">${popup(t.type, 'testPickType')}</span></div>
+      `)}
+      <div class="footer-actions">
+        <span class="spacer"></span>
+        ${querying ? `<button class="btn" data-action="testCancel">Cancel</button>` : ''}
+        <button class="btn primary" data-action="testQuery" ${querying ? 'disabled' : ''} title="Query (⌘↩)">Query</button>
+      </div>
+    </div>
+    <div class="divider" data-divider="testLeft" role="separator" aria-orientation="vertical"></div>
+    <div class="pane fill" style="border-left:0">${testResult()}</div>
+  </div>`;
+}
+function customUpstreamRows(d, scope) {
+  const err = (d.errors || {});
+  const fe = k => err[k] ? `<div class="field-error">${ic('xCircle')}${esc(err[k])}</div>` : '';
+  const inp = (key, ph, extra = '') => `<input class="field grow right ${err[key] ? 'invalid' : ''}" data-input="${scope}:${key}" value="${esc(d[key])}" placeholder="${ph}" spellcheck="false" ${extra}>`;
+  let html = `<div class="row stack"><span class="lbl">Protocol</span>${seg([['plain', 'Plain DNS'], ['tls', 'DNS over TLS'], ['https', 'DNS over HTTPS']], d.transport, scope + 'Transport', { full: true })}</div>`;
+  if (d.transport === 'plain') {
+    html += `<div class="row"><span class="lbl">Server Address</span><span class="val" style="flex:1">${inp('server', '1.1.1.1')}</span></div>${fe('server')}`;
+    html += `<div class="row"><span class="lbl">Port</span><span class="val">${inp('port', '53', 'style="width:72px" inputmode="numeric"')}</span></div>${fe('port')}`;
+  } else if (d.transport === 'tls') {
+    html += `<div class="row"><span class="lbl">Server Name or Address</span><span class="val" style="flex:1">${inp('dotServer', 'dns.example.com')}</span></div>${fe('dotServer')}`;
+    html += `<div class="row"><span class="lbl">Port</span><span class="val">${inp('dotPort', '853', 'style="width:72px" inputmode="numeric"')}</span></div>${fe('dotPort')}`;
+  } else {
+    html += `<div class="row"><span class="lbl">Endpoint URL</span><span class="val" style="flex:1">${inp('endpoint', 'https://dns.example.com/dns-query')}</span></div>${fe('endpoint')}`;
+  }
+  if (d.transport !== 'plain') {
+    html += `<div class="row stack"><span class="lbl">Bootstrap Servers <span class="secondary caption">— used only to resolve the server name</span></span>
+      <div class="list-editor">${d.bootstrap.map((b, i) => `<div class="item"><input class="field grow ${err['bootstrap' + i] ? 'invalid' : ''}" data-input="${scope}:bootstrap:${i}" value="${esc(b)}" placeholder="1.1.1.1" spellcheck="false" aria-label="Bootstrap Server ${i + 1}"><button class="minus" data-action="${scope}RemoveBootstrap" data-v="${i}" aria-label="Remove Bootstrap Server">${ic('minusCircle')}</button></div>`).join('')}
+      <div><button class="link" data-action="${scope}AddBootstrap">${ic('plus')}Add Bootstrap Server</button></div></div></div>${fe('bootstrap')}`;
+  }
+  return html;
+}
+function testResult() {
+  const t = S.testUI;
+  if (t.state === 'empty') return `<div class="empty">${ic('test')}<span class="t">No Query Result</span><span>Enter a domain and choose Query.</span></div>`;
+  if (t.state === 'loading') return `<div class="empty"><span class="spinner large"></span><span class="t" style="margin-top:8px">Waiting for DNS Response</span><span>${esc(t.result.domain)} · ${t.result.type}</span></div>`;
+  const r = t.result;
+  if (t.state === 'failed') return `<div class="empty"><span class="red">${ic('xCircle')}</span><span class="t">DNS Query Failed</span><span>${esc(r.reason)}</span><span class="caption">${esc(r.server)} · ${esc(r.transport)}</span></div>`;
+  return `
+    <div class="result-head">
+      <span class="${r.code === 'NOERROR' ? 'green' : 'orange'}">${ic(r.code === 'NOERROR' ? 'checkCircle' : 'info')}</span>
+      <span class="code">${r.code}</span>
+      <span class="secondary trunc">${esc(r.domain)} · ${r.type}</span>
+      <span class="spacer" style="flex:1"></span>
+      <button class="btn icon" data-action="noop" title="Copy Answer" aria-label="Copy Answer">${ic('copy')}</button>
+    </div>
+    <div class="detail-body" style="padding-top:0">
+      ${section('', row('Server', `<span class="mono selectable trunc">${esc(r.server)}</span>`) + row('Transport', esc(r.transport)) + row('Duration', `${r.ms} ms`))}
+      ${section('Answer', r.answers.length ? `<table class="answers"><thead><tr><th>Name</th><th>TTL</th><th>Type</th><th>Data</th></tr></thead><tbody>${r.answers.map(a => `<tr><td>${esc(a[0])}</td><td>${a[1]}</td><td>${a[2]}</td><td>${esc(a[3])}</td></tr>`).join('')}</tbody></table>` : `<div class="row"><span class="secondary">No records returned.</span></div>`, { hint: r.answers.length ? `${r.answers.length} records` : '' })}
+    </div>`;
+}
+let testToken = 0;
+async function runQuery() {
+  const t = S.testUI;
+  t.domainError = !t.domain.trim() ? 'Enter a domain.' : !isDomain(t.domain.trim().replace(/\.$/, '')) || t.domain.startsWith('*') ? 'Enter a valid domain name, such as example.com.' : null;
+  if (t.source === 'custom') validateUpstream(t.custom, false);
+  if (t.domainError || (t.source === 'custom' && Object.keys(t.custom.errors).length)) { renderAll(); focusFirstInvalid(); return; }
+  const up = t.source === 'profile' ? prof(t.profile) : normalizeDraft(t.custom);
+  const server = up.transport === 'https' ? up.endpoint : `${up.server}:${up.port}`;
+  const domain = t.domain.trim().toLowerCase();
+  const token = ++testToken;
+  t.state = 'loading'; t.result = { domain, type: t.type }; renderAll();
+  await wait(600 + Math.random() * 700);
+  if (token !== testToken) return;
+  if (domain.includes('fail')) { t.state = 'failed'; t.result = { domain, type: t.type, reason: 'Timed out waiting for the upstream response.', server, transport: transportName(up.transport) }; renderAll(); return; }
+  const host = up.hosts?.find(h => h.domain === domain || (h.domain.startsWith('*.') && (domain === h.domain.slice(2) || domain.endsWith(h.domain.slice(1)))));
+  const sample = {
+    A: [[domain, 300, 'A', host && isIPv4(host.address) ? host.address : '93.184.215.14']],
+    AAAA: [[domain, 300, 'AAAA', '2606:2800:21f:cb07:6820:80da:af6b:8b2c']],
+    CNAME: [], MX: [[domain, 3600, 'MX', '10 mail.' + domain]], TXT: [[domain, 3600, 'TXT', '"v=spf1 -all"']],
+    NS: [[domain, 86400, 'NS', 'a.iana-servers.net'], [domain, 86400, 'NS', 'b.iana-servers.net']],
+    SOA: [[domain, 3600, 'SOA', 'ns.icann.org. noc.dns.icann.org. 2026100301 7200 3600 1209600 3600']],
+    SRV: [], CAA: [[domain, 3600, 'CAA', '0 issue "letsencrypt.org"']], PTR: [],
+  };
+  const nx = domain.startsWith('nx.') || domain.includes('nonexistent');
+  t.state = 'done';
+  t.result = { domain, type: t.type, code: nx ? 'NXDOMAIN' : 'NOERROR', answers: nx ? [] : sample[t.type], server, transport: transportName(up.transport), ms: Math.round(8 + Math.random() * 40) };
+  renderAll();
+}
+
+/* ============================================================
+   Sheets
+   ============================================================ */
+function draftFromProfile(p) {
+  return { id: p.id, name: p.name, transport: p.transport, server: p.transport === 'plain' ? p.server : '', port: p.transport === 'plain' ? p.port : 53, dotServer: p.transport === 'tls' ? p.server : '', dotPort: p.transport === 'tls' ? p.port : 853, endpoint: p.endpoint, bootstrap: p.bootstrap.length ? [...p.bootstrap] : [''], hosts: p.hosts.map(h => ({ ...h, key: uid() })), errors: {} };
+}
+function normalizeDraft(d) {
+  const base = { id: d.id, name: d.name.trim(), transport: d.transport, hosts: (d.hosts || []).map(h => ({ domain: h.domain.trim().toLowerCase(), address: h.address.trim() })).sort((a, b) => a.domain.localeCompare(b.domain)), bootstrap: [], endpoint: '', server: '', port: 53 };
+  if (d.transport === 'plain') return { ...base, server: d.server.trim(), port: Number(d.port) || 53 };
+  const bs = d.bootstrap.map(s => s.trim()).filter(Boolean);
+  if (d.transport === 'tls') return { ...base, server: d.dotServer.trim(), port: Number(d.dotPort) || 853, bootstrap: bs };
+  return { ...base, endpoint: d.endpoint.trim(), port: 443, bootstrap: bs };
+}
+function validateUpstream(d, withName) {
+  const e = {};
+  if (withName && !d.name.trim()) e.name = 'Enter a Profile name.';
+  else if (withName && S.profiles.some(p => p.id !== d.id && p.name.toLowerCase() === d.name.trim().toLowerCase())) e.name = 'Another Profile already uses this name.';
+  const port = (v, k) => { const n = Number(v); if (!/^\d+$/.test(String(v).trim()) || n < 1 || n > 65535) e[k] = 'Enter a port from 1 through 65535.'; };
+  if (d.transport === 'plain') { if (!isIP(d.server.trim())) e.server = 'Enter an IPv4 or IPv6 address.'; port(d.port, 'port'); }
+  if (d.transport === 'tls') { const s = d.dotServer.trim(); if (!(isIP(s) || isDomain(s))) e.dotServer = 'Enter a server name or IP address.'; port(d.dotPort, 'dotPort'); }
+  if (d.transport === 'https') { const u = d.endpoint.trim(); if (!/^https:\/\/[^\s/]+\.[^\s/]+\/\S*$/.test(u)) e.endpoint = 'Enter an https:// URL with a path, such as /dns-query.'; }
+  if (d.transport !== 'plain') d.bootstrap.forEach((b, i) => { if (b.trim() && !isIP(b.trim())) e['bootstrap' + i] = 'x'; });
+  if (d.transport !== 'plain' && Object.keys(e).some(k => k.startsWith('bootstrap'))) e.bootstrap = 'Bootstrap servers must be IP addresses.';
+  if (d.transport === 'tls' && isDomain(d.dotServer.trim()) && !d.bootstrap.some(b => b.trim())) e.bootstrap = 'Add at least one bootstrap server for a server name.';
+  (d.hosts || []).forEach((h, i) => {
+    const dom = h.domain.trim(); const wild = dom.startsWith('*.');
+    if (!isDomain(dom) || dom.indexOf('*', 1) > 0) e['hd' + i] = 'Use example.com or *.example.com.';
+    if (!isIP(h.address.trim())) e['ha' + i] = 'Enter an IPv4 or IPv6 address.';
+    const fam = isIPv4(h.address.trim()) ? 4 : 6;
+    (d.hosts || []).forEach((o, j) => {
+      if (j >= i || e['hd' + i]) return;
+      const od = o.domain.trim(); const ofam = isIPv4(o.address.trim()) ? 4 : 6;
+      if (ofam !== fam) return;
+      const covers = (w, x) => w.startsWith('*.') && (x === w.slice(2) || x.endsWith(w.slice(1)));
+      if (od === dom || covers(od, dom.replace(/^\*\./, '')) || covers(dom, od.replace(/^\*\./, ''))) e['hd' + i] = `Overlaps with ${od} for the same address family.`;
+    });
+    void wild;
+  });
+  d.errors = e;
+  return !Object.keys(e).length;
+}
+function focusFirstInvalid() { setTimeout(() => document.querySelector('.field.invalid')?.focus(), 0); }
+
+function renderSheet() {
+  const sh = S.sheet;
+  if (sh.type === 'profile') return profileEditor(sh);
+  if (sh.type === 'rule') return ruleEditor(sh);
+  if (sh.type === 'deleteProfile') return deleteProfileSheet(sh);
+}
+function profileEditor(sh) {
+  const d = sh.draft; const e = d.errors || {};
+  const fe = k => e[k] ? `<div class="field-error">${ic('xCircle')}${esc(e[k])}</div>` : '';
+  const title = sh.mode === 'create' ? 'New Profile' : sh.mode === 'duplicate' ? 'Duplicate Profile' : `Edit “${esc(prof(d.id)?.name)}”`;
+  const editingActive = sh.mode === 'edit' && d.id === S.activeId && S.proxy === 'on';
+  return `<div class="sheet" role="dialog" aria-label="${title}">
+    <div class="sheet-title">${title}</div>
+    <div class="sheet-body">
+      ${editingActive ? `<div class="section"><div class="group"><div class="notice">${`<span class="accent">${ic('info')}</span>`}<span class="t">This Profile is active</span><span class="m">Saving reapplies it to the running DNS Proxy and confirms the result before publishing.</span></div></div></div>` : ''}
+      ${section('', `<div class="row"><span class="lbl">Name</span><span class="val" style="flex:1"><input class="field grow right ${e.name ? 'invalid' : ''}" data-input="sheet:name" value="${esc(d.name)}" placeholder="Home DNS" aria-label="Name"></span></div>${fe('name')}`)}
+      ${section('Upstream', customUpstreamRows(d, 'sheet'))}
+      <div class="section">
+        <div class="section-header">Hosts<span class="hint">Optional A/AAAA overrides</span></div>
+        <div class="group"><div class="row stack">
+          ${d.hosts.length ? `<table class="hosts-table"><thead><tr><th style="width:55%">Domain</th><th>Address</th><th style="width:24px"></th></tr></thead><tbody>
+            ${d.hosts.map((h, i) => `<tr><td><input class="field mono ${e['hd' + i] ? 'invalid' : ''}" data-input="sheet:hosts:${i}:domain" value="${esc(h.domain)}" placeholder="*.example.com" aria-label="Host domain ${i + 1}" spellcheck="false"></td>
+              <td><input class="field mono ${e['ha' + i] ? 'invalid' : ''}" data-input="sheet:hosts:${i}:address" value="${esc(h.address)}" placeholder="192.168.1.10" aria-label="Host address ${i + 1}" spellcheck="false"></td>
+              <td><button class="minus" data-action="sheetRemoveHost" data-v="${i}" aria-label="Remove Host">${ic('minusCircle')}</button></td></tr>
+              ${e['hd' + i] || e['ha' + i] ? `<tr><td colspan="3"><div class="field-error" style="justify-content:flex-start;padding:0 4px">${ic('xCircle')}${esc(e['hd' + i] || e['ha' + i])}</div></td></tr>` : ''}`).join('')}
+          </tbody></table>` : `<span class="secondary">No host overrides.</span>`}
+          <div><button class="link" data-action="sheetAddHost">${ic('plus')}Add Host</button></div>
+        </div></div>
+        <div class="section-footer">Use an exact domain or a leftmost wildcard. *.example.com also covers example.com.</div>
+      </div>
+    </div>
+    <div class="sheet-foot">
+      <button class="btn" data-action="sheetTest">Test</button>${testStatus(sh.test)}
+      <span class="spacer"></span>
+      <button class="btn" data-action="closeSheet">Cancel</button>
+      <button class="btn primary" data-action="saveProfile">${sh.saving ? '<span class="spinner" style="border-color:rgba(255,255,255,.4);border-top-color:#fff"></span>' : ''}Save</button>
+    </div>
+  </div>`;
+}
+function ruleEditor(sh) {
+  const d = sh.draft; const e = d.errors || {};
+  const fe = k => e[k] ? `<div class="field-error">${ic('xCircle')}${esc(e[k])}</div>` : '';
+  const listEd = (key, ph, addLabel, extra = '') => `<div class="list-editor">${d[key].map((v, i) => `<div class="item"><input class="field grow mono ${e[key + i] ? 'invalid' : ''}" data-input="rule:${key}:${i}" value="${esc(v)}" placeholder="${ph}" spellcheck="false"><button class="minus" data-action="ruleRemove" data-k="${key}" data-v="${i}" aria-label="Remove">${ic('minusCircle')}</button></div>`).join('')}<div style="display:flex;gap:14px"><button class="link" data-action="ruleAdd" data-k="${key}">${ic('plus')}${addLabel}</button>${extra}</div></div>`;
+  const n = net();
+  return `<div class="sheet" role="dialog">
+    <div class="sheet-title">${sh.mode === 'create' ? 'New Rule' : `Edit “${esc(S.rules.find(r => r.id === d.id)?.name)}”`}</div>
+    <div class="sheet-body">
+      ${section('', `
+        <div class="row"><span class="lbl">Name</span><span class="val" style="flex:1"><input class="field grow right ${e.name ? 'invalid' : ''}" data-input="rule:name" value="${esc(d.name)}" placeholder="Office" aria-label="Name"></span></div>${fe('name')}
+        <div class="row"><span class="lbl">Enabled</span><span class="val">${sw(d.enabled, 'ruleEnabled', { label: 'Enabled' })}</span></div>
+        <div class="row"><span class="lbl">Use Profile</span><span class="val">${popup(pname(d.profile), 'rulePickProfile')}</span></div>`)}
+      <div class="section">
+        <div class="section-header">Conditions<span class="hint">All set conditions must match</span></div>
+        <div class="group">
+          <div class="row stack"><span class="lbl" style="display:flex;gap:7px;align-items:center">${ic('wifi')}Wi-Fi Networks</span>${listEd('ssids', 'Network name', 'Add Network', n.ssid ? `<button class="link" data-action="ruleAddCurrentSSID">Add “${esc(n.ssid)}”</button>` : '')}</div>
+          <div class="row"><span class="lbl" style="display:flex;gap:7px;align-items:center">${ic('ethernet')}Interface</span><span class="val">${['wifi', 'ethernet', 'other'].map(i => `<label style="display:inline-flex;gap:5px;align-items:center;color:var(--label)"><input type="checkbox" data-input="rule:iface:${i}" ${d.ifaces.includes(i) ? 'checked' : ''}>${{ wifi: 'Wi-Fi', ethernet: 'Ethernet', other: 'Other' }[i]}</label>`).join('')}</span></div>
+          <div class="row stack"><span class="lbl" style="display:flex;gap:7px;align-items:center">${ic('server')}IP Subnets</span>${listEd('subnets', '192.168.1.0/24', 'Add Subnet')}</div>
+        </div>
+        ${fe('conditions')}
+        <div class="section-footer">Leave a condition type empty to ignore it. A Rule with no conditions matches every network.</div>
+      </div>
+    </div>
+    <div class="sheet-foot"><span class="spacer"></span><button class="btn" data-action="closeSheet">Cancel</button><button class="btn primary" data-action="saveRule">Save</button></div>
+  </div>`;
+}
+function deleteProfileSheet(sh) {
+  const p = prof(sh.id);
+  const rulesUsing = S.rules.filter(r => r.profile === p.id);
+  const isDefault = p.id === S.defaultProfile;
+  const isActive = p.id === S.activeId && S.proxy === 'on';
+  const isManual = S.mode === 'manual' && S.manualProfile === p.id;
+  const needsReplacement = rulesUsing.length || isDefault || isActive || isManual;
+  const others = S.profiles.filter(x => x.id !== p.id);
+  if (!sh.replacement) sh.replacement = others[0]?.id;
+  const consequences = [isActive && 'It is the Active Profile', isDefault && 'It is the Default Profile', isManual && 'It is the Manual selection', rulesUsing.length && `${rulesUsing.length} Rule${rulesUsing.length > 1 ? 's use' : ' uses'} it (${rulesUsing.map(r => r.name).join(', ')})`].filter(Boolean);
+  return `<div class="sheet" style="width:440px" role="alertdialog">
+    <div class="sheet-title">Delete “${esc(p.name)}”?</div>
+    <div class="sheet-body">
+      ${needsReplacement ? section('This Profile is in use', consequences.map(c => `<div class="row"><span class="status-inline orange">${ic('warn')}</span><span>${esc(c)}</span></div>`).join('') + (others.length ? `<div class="row"><span class="lbl">Replace with</span><span class="val">${popup(pname(sh.replacement), 'pickReplacement')}</span></div>` : ''), { footer: 'References move to the replacement in one saved change.' + (isActive ? ' The running DNS Proxy switches before deletion.' : '') }) : `<p class="secondary" style="margin:6px 0 16px">This Profile is not used by any Rule. This cannot be undone.</p>`}
+    </div>
+    <div class="sheet-foot"><span class="spacer"></span><button class="btn" data-action="closeSheet">Cancel</button><button class="btn primary" style="background:var(--red)" data-action="confirmDeleteProfile" ${needsReplacement && !others.length ? 'disabled' : ''}>Delete</button></div>
+  </div>`;
+}
+
+/* ---------- Alert ---------- */
+function renderAlert() {
+  const a = S.alert;
+  return `<div class="alert glass" role="alertdialog" aria-label="${esc(a.title)}">${appIcon()}
+    <div class="t">${esc(a.title)}</div><div class="m">${esc(a.message)}</div>
+    ${a.extra ? `<div class="extra">${a.extra}</div>` : ''}
+    <div class="btns ${a.buttons.length === 2 ? 'row2' : ''}">${a.buttons.map((b, i) => `<button class="btn ${b.primary ? 'primary' : ''} ${b.destructive ? 'destructive' : ''}" data-action="alertBtn" data-v="${i}">${esc(b.label)}</button>`).join('')}</div></div>`;
+}
+function showAlert(a) { S.alert = a; renderAll(); }
+
+/* ============================================================
+   Settings window
+   ============================================================ */
+function renderSettings() {
+  const el = $('#settings');
+  el.style.display = S.settingsOpen ? 'flex' : 'none';
+  if (!S.settingsOpen) return;
+  el.classList.toggle('inactive', S.focused !== 'settings');
+  const tabs = [['general', 'General', 'gear'], ['privacy', 'Privacy', 'hand'], ['diagnostics', 'Diagnostics', 'stethoscope'], ['about', 'About', 'info']];
+  const cur = tabs.find(t => t[0] === S.settingsTab);
+  el.innerHTML = `
+    <div class="settings-bar" data-drag="settings">
+      <div class="traffic"><span class="close" data-action="closeSettings"></span><span></span><span></span></div>
+      <div class="ttl">${cur[1]}</div>
+      <div class="settings-tabs glass" role="tablist">${tabs.map(([id, l, i]) => `<button class="settings-tab ${id === S.settingsTab ? 'on' : ''}" role="tab" aria-selected="${id === S.settingsTab}" data-action="settingsTab" data-v="${id}">${ic(i)}${l}</button>`).join('')}</div>
+    </div>
+    <div class="settings-body">${settingsPane()}</div>
+    ${S.settingsAlert ? `<div class="scrim alert-scrim" style="border-radius:16px">${renderAlertFor(S.settingsAlert, 'settingsAlertBtn')}</div>` : ''}`;
+}
+function renderAlertFor(a, action) {
+  return `<div class="alert glass" role="alertdialog">${appIcon()}<div class="t">${esc(a.title)}</div><div class="m">${esc(a.message)}</div><div class="btns ${a.buttons.length === 2 ? 'row2' : ''}">${a.buttons.map((b, i) => `<button class="btn ${b.primary ? 'primary' : ''} ${b.destructive ? 'destructive' : ''}" data-action="${action}" data-v="${i}">${esc(b.label)}</button>`).join('')}</div></div>`;
+}
+function settingsPane() {
+  const st = S.settings;
+  switch (S.settingsTab) {
+    case 'general': {
+      const dirty = st.cacheDraftOn !== st.cacheOn || (st.cacheDraftOn && String(st.cacheDraft) !== String(st.cacheCapacity));
+      const n = Number(st.cacheDraft); const invalid = st.cacheDraftOn && (!/^\d+$/.test(String(st.cacheDraft).trim()) || n < 1 || n > 10000);
+      const applying = st.cacheStatus === 'applying';
+      const statusLine = applying ? `<span class="status-inline secondary"><span class="spinner"></span>Applying DNS cache settings…</span>`
+        : st.cacheStatus === 'saved-off' ? `<span class="status-inline secondary">${ic('info')}Saved. Applies when DNS Proxy is turned on.</span>`
+        : st.cacheStatus === 'saved' ? `<span class="status-inline green">${ic('checkCircle')}DNS cache settings applied.</span>` : '';
+      return section('Startup', `<div class="row"><span class="lbl">Launch at Login</span><span class="val">${sw(st.launchAtLogin, 'setLaunch', { label: 'Launch at Login' })}</span></div>`, { footer: 'DNSPilot starts in the menu bar and restores the previous DNS Proxy state when it is safe to do so.' })
+        + `<div class="section"><div class="section-header">DNS Cache</div><div class="group">
+          <div class="row"><span class="lbl">Cache DNS Responses</span><span class="val">${sw(st.cacheDraftOn, 'cacheToggle', { disabled: applying, label: 'Cache DNS Responses' })}</span></div>
+          <div class="row"><span class="lbl ${st.cacheDraftOn ? '' : 'tertiary'}">Maximum Cached Responses</span><span class="val"><input class="field right ${invalid ? 'invalid' : ''}" style="width:90px" data-input="cacheDraft" value="${esc(st.cacheDraft)}" ${st.cacheDraftOn && !applying ? '' : 'disabled'} aria-label="Maximum Cached Responses" inputmode="numeric"></span></div>
+          ${invalid ? `<div class="field-error">${ic('xCircle')}Enter a whole number from 1 through 10,000.</div>` : ''}
+          <div class="row"><span>${statusLine}</span><span class="val"><button class="btn" data-action="cacheDefault" ${applying ? 'disabled' : ''}>Restore Default</button><button class="btn primary" data-action="cacheSave" ${!dirty || invalid || applying ? 'disabled' : ''}>Save</button></span></div>
+        </div></div>`
+        + section('System Extension', `${row('Status', S.ext === 'active' ? `<span class="status-inline green">${ic('checkCircle')}Activated</span>` : S.ext === 'approval' ? `<span class="status-inline orange">${ic('warn')}Approval Required</span>` : `<span class="status-inline secondary">${ic('info')}Not Installed</span>`)}
+          ${row('Version', '1.4 (42)')}
+          <div class="row"><span class="val" style="margin-left:auto"><button class="btn destructive" data-action="deactivateExt" ${S.ext !== 'active' ? 'disabled' : ''}>Deactivate System Extension…</button></span></div>`);
+    }
+    case 'privacy':
+      return section('Location', `<div class="row"><span class="lbl">Wi-Fi Name Access</span><span class="val">${st.location === 'allowed' ? `<span class="status-inline green">${ic('checkCircle')}Allowed</span>` : st.location === 'denied' ? `Denied <button class="btn" data-action="noop">Open System Settings</button>` : `Not Requested <button class="btn" data-action="requestLocation">Request Access</button>`}</span></div>`, { footer: 'Location is used only to read the current Wi-Fi name for Wi-Fi Rules. Interface, subnet, and Default Profile selection work without it.' })
+        + `<div class="section"><div class="section-header">Logging</div><div class="group">
+          <div class="row"><span class="lbl">Debug Logging</span><span class="val">${sw(st.debug, 'toggleDebug', { label: 'Debug Logging' })}</span></div>
+          ${st.debug ? `<div class="notice" role="status"><span class="orange">${ic('warn')}</span><span class="t">Debug Logging is on</span><span class="m">Logs may record full domain names, endpoint tokens, Wi-Fi names, IP addresses, and DNS answers. Turn it off when you finish troubleshooting.</span></div>` : ''}
+        </div></div>`;
+    case 'diagnostics': {
+      const pres = proxyPresentation();
+      return section('Runtime', `${row('DNS Proxy', esc(pres.title))}${row('Runtime Phase', S.proxy === 'on' ? 'running' : S.proxy === 'off' ? 'stopped' : esc(S.proxy))}${row('Active Profile', esc(S.activeId ? pname(S.activeId) : 'None'))}${row('Runtime Protocol', '3')}${row('Transition Sequence', '<span class="mono">128</span>')}${row('Last Stable Error', S.proxy === 'error' ? '<span class="mono">runtimeIdentityMismatch</span>' : 'None')}${row('DnsLibs', '2.8.45')}`, { hint: '' })
+        + `<div class="footer-actions"><button class="btn" data-action="noop">${ic('refresh')}Refresh</button><span class="spacer"></span><button class="btn" data-action="noop">Copy Diagnostic Summary</button><button class="btn" data-action="exportDiag">Export Diagnostics…</button></div>
+        <p class="caption secondary" style="padding:10px 4px">The summary is redacted. An export is not redacted and asks for confirmation first.</p>`;
+    }
+    case 'about':
+      return `<div style="display:flex;flex-direction:column;align-items:center;padding:8px 0 18px;gap:4px">${appIcon(72)}<div style="font-size:17px;font-weight:600;margin-top:8px">DNSPilot</div><div class="secondary">Version 1.4 (42)</div><div class="caption tertiary">Source build · Apache License 2.0</div></div>`
+        + section('', ['Source Code', 'Privacy Policy', 'Support'].map(l => `<div class="row clickable" data-action="noop"><span>${l}</span><span class="val">${ic('external')}</span></div>`).join('') + `<div class="row clickable" data-action="noop"><span>Third-Party Notices</span><span class="val">${ic('chevRight')}</span></div><div class="row clickable" data-action="noop"><span>License</span><span class="val">${ic('chevRight')}</span></div>`);
+  }
+}
+
+/* ============================================================
+   Onboarding window
+   ============================================================ */
+const OB_STEPS = ['Introduction', 'DNS Profile', 'Location', 'Extension', 'DNS Proxy', 'Complete'];
+const TEMPLATES = [
+  ['cf-doh', 'Cloudflare', 'DNS over HTTPS · cloudflare-dns.com'], ['cf-plain', 'Cloudflare', 'Plain DNS · 1.1.1.1'],
+  ['g-doh', 'Google', 'DNS over HTTPS · dns.google'], ['q9-doh', 'Quad9', 'DNS over HTTPS · dns.quad9.net'],
+  ['custom', 'Custom…', 'Enter a DNS server or HTTPS endpoint'],
+];
+function renderOnboarding() {
+  const el = $('#onboarding'); const o = S.onboarding;
+  el.style.display = o.open ? 'flex' : 'none';
+  if (!o.open) return;
+  el.classList.toggle('inactive', S.focused !== 'onboarding');
+  let body = '', primary = ['Continue', 'obNext', false], secondaryBtn = '';
+  switch (o.step) {
+    case 0:
+      body = `<h2>Set Up DNSPilot</h2><p>DNSPilot forwards system DNS requests through a DNS Proxy extension, using the Profile you choose.</p>
+      <ul class="bullets">
+        <li>${ic('shieldCheck')}<div><b>Takes over system DNS</b><span>Every app uses the selected Profile while DNS Proxy is on.</span></div></li>
+        <li>${ic('rules')}<div><b>Switches by network</b><span>Rules choose a Profile from your Wi-Fi, interface, or subnet.</span></div></li>
+        <li>${ic('refresh')}<div><b>Restores on Quit</b><span>Quitting turns DNS Proxy off and returns to System DNS.</span></div></li>
+      </ul>
+      <p class="caption secondary" style="margin-top:18px">Other DNS Proxy or VPN apps may conflict with DNSPilot.</p>`;
+      break;
+    case 1:
+      body = `<h2>Choose a DNS Profile</h2><p>Start with a public resolver. You can add and edit Profiles later.</p>
+      <div class="group" role="radiogroup">${TEMPLATES.map(([id, n, s]) => `<div class="choice ${o.template === id ? 'on' : ''}" role="radio" aria-checked="${o.template === id}" data-action="obTemplate" data-v="${id}"><span class="radio"></span><span>${n}</span><span class="s">${s}</span></div>`).join('')}</div>
+      <div style="margin-top:12px;min-height:20px">${testStatus(o.testState)}</div>`;
+      primary = ['Test and Continue', 'obTest', o.testState?.state === 'testing'];
+      break;
+    case 2:
+      body = `<h2>Wi-Fi Network Names</h2><p>To match Rules by Wi-Fi name, macOS requires Location access. DNSPilot reads only the current Wi-Fi name.</p>
+      ${section('', row('Location Access', o.location === 'allowed' ? `<span class="status-inline green">${ic('checkCircle')}Allowed</span>` : o.location === 'denied' ? 'Denied' : 'Not Requested'))}
+      <p class="caption secondary">Interface, subnet, and Default Profile selection work without it.</p>`;
+      primary = o.location ? ['Continue', 'obNext', false] : ['Allow Location Access', 'obAllowLocation', false];
+      secondaryBtn = o.location ? '' : `<button class="btn" data-action="obNext">Not Now</button>`;
+      break;
+    case 3:
+      body = `<h2>Install System Extension</h2><p>The DNS Proxy runs as a System Extension. macOS asks you to approve it once.</p>
+      ${section('', row('System Extension', o.ext === 'idle' ? 'Not Installed' : o.ext === 'installing' ? '<span class="status-inline secondary"><span class="spinner"></span>Requesting…</span>' : o.ext === 'approval' ? `<span class="status-inline orange">${ic('warn')}Approval Required</span>` : `<span class="status-inline green">${ic('checkCircle')}Activated</span>`))}
+      ${o.ext === 'approval' ? `<p class="secondary">Open System Settings › General › Login Items &amp; Extensions and allow DNSPilot, then check again.</p>` : ''}`;
+      primary = o.ext === 'idle' ? ['Install', 'obInstall', false] : o.ext === 'approval' ? ['Check Again', 'obApprove', false] : o.ext === 'installing' ? ['Install', 'noop', true] : ['Continue', 'obNext', false];
+      secondaryBtn = o.ext === 'approval' ? `<button class="btn" data-action="noop">Open System Settings</button>` : '';
+      break;
+    case 4:
+      body = `<h2>Enable DNS Proxy</h2><p>DNSPilot will start forwarding system DNS through <b>${esc(TEMPLATES.find(t => t[0] === o.template)[1])}</b> after you confirm.</p>
+      ${section('', row('DNS Proxy', o.proxy === 'idle' ? 'Off' : o.proxy === 'enabling' ? '<span class="status-inline secondary"><span class="spinner"></span>Confirming runtime…</span>' : `<span class="status-inline green">${ic('checkCircle')}On</span>`))}`;
+      primary = o.proxy === 'idle' ? ['Enable DNS Proxy', 'obEnable', false] : o.proxy === 'enabling' ? ['Enable DNS Proxy', 'noop', true] : ['Continue', 'obNext', false];
+      break;
+    case 5:
+      body = `<h2>DNSPilot Is Ready</h2><p>DNS Proxy is on and confirmed by the extension. DNSPilot stays in the menu bar when you close the window.</p>
+      ${section('', row('DNS Proxy', `<span class="status-inline green">${ic('checkCircle')}On</span>`) + row('Active Profile', esc(TEMPLATES.find(t => t[0] === o.template)[1])) + row('Mode', 'Automatic'))}`;
+      primary = ['Open DNSPilot', 'obFinish', false];
+      break;
+  }
+  el.innerHTML = `
+    <div class="ob-steps glass" data-drag="onboarding"><div class="traffic"><span class="close" data-action="closeOnboarding"></span><span></span><span></span></div>
+      ${OB_STEPS.map((s, i) => `<div class="ob-step ${i < o.step ? 'done' : i === o.step ? 'cur' : ''}"><span class="dot">${i < o.step ? ic('check') : i + 1}</span>${s}</div>`).join('')}</div>
+    <div class="ob-main"><div class="ob-content">${body}</div>
+      <div class="ob-foot">${o.step > 0 && o.step < 5 ? `<button class="btn" data-action="obBack">Back</button>` : ''}<span class="spacer"></span>${secondaryBtn}<button class="btn primary" data-action="${primary[1]}" ${primary[2] ? 'disabled' : ''}>${esc(primary[0])}</button></div>
+    </div>`;
+}
+
+/* ============================================================
+   Menu bar extra + context menus
+   ============================================================ */
+function renderMenuExtra() {
+  const pres = proxyPresentation();
+  $('#menuExtra').innerHTML = pres.spin ? '<span class="spinner" style="width:12px;height:12px"></span>' : ic(S.proxy === 'on' ? 'shieldCheck' : S.proxy === 'off' ? 'shieldSlash' : 'shieldWarn');
+  $('#menuExtra').setAttribute('aria-label', 'DNSPilot: ' + pres.menu);
+}
+function openMenu(anchor, items, opts = {}) {
+  const layer = $('#menuLayer');
+  const r = anchor.getBoundingClientRect ? anchor.getBoundingClientRect() : anchor;
+  layer.innerHTML = `<div class="menu-layer" data-action="closeMenu"></div><div class="menu glass" role="menu">${items.map((it, i) => {
+    if (it === '-') return '<div class="msep"></div>';
+    if (it.header) return `<div class="mhead">${esc(it.header)}</div>`;
+    if (it.info) return `<div class="mi info ${it.strong ? 'strong' : ''}"><span></span><span>${esc(it.info)}</span><span></span></div>`;
+    return `<div class="mi ${it.disabled ? 'dis' : ''} ${it.danger ? 'danger' : ''}" role="menuitem" data-mi="${i}"><span class="ck">${it.checked ? ic('check') : ''}</span><span>${esc(it.label)}</span><span class="${it.sub ? 'sub-ar' : 'kb'}">${it.sub ? ic('chevRight') : esc(it.kb || '')}</span></div>`;
+  }).join('')}</div>`;
+  const menu = layer.querySelector('.menu');
+  if (opts.minWidth) menu.style.minWidth = opts.minWidth + 'px';
+  let x = opts.at ? opts.at[0] : r.left, y = opts.at ? opts.at[1] : r.bottom + 4;
+  if (opts.alignSelected) { x = r.left - 6; y = r.top - 6; }
+  menu.style.left = Math.min(x, innerWidth - menu.offsetWidth - 8) + 'px';
+  menu.style.top = Math.min(y, innerHeight - menu.offsetHeight - 8) + 'px';
+  menu.addEventListener('click', ev => {
+    const el = ev.target.closest('[data-mi]'); if (!el) return;
+    const it = items[+el.dataset.mi]; if (it.disabled) return;
+    if (it.sub) { const rr = el.getBoundingClientRect(); openMenu(el, it.sub, { at: [rr.right + 2, rr.top - 5] }); return; }
+    closeMenu(); it.action?.();
+  });
+  menu.addEventListener('mouseover', ev => {
+    const el = ev.target.closest('[data-mi]'); if (!el) return;
+    const it = items[+el.dataset.mi];
+    if (it.sub && !opts.isSub) {
+      const rr = el.getBoundingClientRect();
+      const sub = document.createElement('div');
+      layer.querySelectorAll('.menu.sub').forEach(m => m.remove());
+      sub.className = 'menu glass sub'; sub.setAttribute('role', 'menu');
+      sub.innerHTML = it.sub.map((s, j) => s === '-' ? '<div class="msep"></div>' : `<div class="mi ${s.disabled ? 'dis' : ''}" data-si="${j}"><span class="ck">${s.checked ? ic('check') : ''}</span><span>${esc(s.label)}</span><span class="kb"></span></div>`).join('');
+      layer.appendChild(sub);
+      sub.style.left = Math.min(rr.right + 2, innerWidth - sub.offsetWidth - 8) + 'px'; sub.style.top = (rr.top - 5) + 'px';
+      sub.addEventListener('click', e2 => { const s = e2.target.closest('[data-si]'); if (!s) return; const si = it.sub[+s.dataset.si]; if (si.disabled) return; closeMenu(); si.action?.(); });
+    } else if (!el.closest('.sub')) layer.querySelectorAll('.menu.sub').forEach(m => m.remove());
+  });
+}
+function closeMenu() { $('#menuLayer').innerHTML = ''; $('#menuExtra').classList.remove('open'); }
+function profileMenu(id, current, onPick) { return S.profiles.map(p => ({ label: p.name, checked: p.id === current, action: () => onPick(p.id) })); }
+
+function menuExtraItems() {
+  const pres = proxyPresentation(); const n = net();
+  const setupRequired = S.ext === 'notInstalled';
+  const items = [
+    { info: setupRequired ? 'Setup Required' : pres.menu, strong: true },
+    { info: S.proxy === 'on' ? `Active: ${pname(S.activeId)}` : S.proxy === 'off' ? 'Using System DNS' : pres.sub },
+    { info: `Network: ${n.up ? (n.ssid || n.ifaces.map(i => ({ wifi: 'Wi-Fi', ethernet: 'Ethernet' }[i])).join(', ')) : 'Offline'}` },
+    '-',
+    { label: 'Automatic', checked: S.mode === 'auto', disabled: busy() || setupRequired, action: () => setMode('auto') },
+    { label: 'Profiles', disabled: busy() || setupRequired, sub: [...S.profiles.map(p => ({ label: p.name, checked: S.mode === 'manual' && S.manualProfile === p.id, action: () => setMode('manual', p.id) })), '-', { label: 'Manage Profiles…', action: () => { S.page = 'profiles'; focusWin('main'); } }] },
+    '-',
+    { label: 'Open DNSPilot', action: () => focusWin('main') },
+    { label: 'Settings…', kb: '⌘,', action: () => openSettings() },
+  ];
+  if (S.proxy === 'off' || S.proxy === 'error') items.push({ label: 'Turn On DNS Proxy', disabled: !proxyUsable() || setupRequired, action: turnOn });
+  else items.push({ label: 'Restore System DNS', disabled: busy(), action: restoreSystemDNS });
+  if (['error', 'recovery'].includes(S.proxy) || S.switchFailed) items.push({ label: 'Open DNSPilot to Resolve', action: () => { S.page = 'overview'; focusWin('main'); } });
+  items.push('-', { label: 'Quit DNSPilot', kb: '⌘Q', action: () => startQuit(true) });
+  return items;
+}
+
+/* ============================================================
+   Prototype control panel
+   ============================================================ */
+const NOTES = {
+  overview: ['Liquid Glass：侧边栏、工具栏按钮、菜单、弹窗用玻璃材质；内容区保持白底+浅灰分组。', '顶部状态卡：图标+文字+颜色三重表达状态，大号开关直接控制 DNS Proxy。', '异常（扩展审批、恢复、切换失败）统一用 Notice 卡片，带可执行的恢复按钮。', '原「Test Active Profile」结果就近显示在按钮旁。'],
+  profiles: ['左列表 + 右详情，列表行显示协议图标、摘要、Active/Default 标记。', '底部 +/−/⋯ 工具条是 macOS 原生列表惯例；右键有上下文菜单。', '详情分组：Upstream / Hosts / Usage，Usage 显示哪些 Rule 引用了它。', '删除时如被引用，Sheet 内直接选择替代 Profile。'],
+  rules: ['Default Profile 放在顶部「Fallback」组，始终可见。', '规则行：拖拽把手、优先级、启用开关、条件摘要、→ 目标 Profile。', '「Matches now」实时标出当前网络命中的规则（切换右侧网络试试）。', '↑↓ 按钮提供拖拽之外的键盘替代；双击编辑。'],
+  test: ['左右分栏，分隔线可拖动；左侧表单，右侧结果。', '结果区区分：空 / 查询中 / 失败 / NOERROR / NXDOMAIN（无记录）。', 'Proxy 开启且为 Plain DNS 时显示 53 端口警告。', '试试域名含 fail 或以 nx. 开头。'],
+};
+function renderProto() {
+  $('#proto').innerHTML = `
+    <h3>原型控制</h3><div class="sub">模拟运行时状态，不属于 App 界面</div>
+    <label>DNS Proxy<select data-proto="proxy">${[['on', 'On'], ['off', 'Off'], ['applying', 'Applying'], ['recovery', 'Recovery Required'], ['error', 'Error'], ['switchFailed', 'On · 切换失败']].map(([v, l]) => `<option value="${v}" ${(v === 'switchFailed' ? S.switchFailed : !S.switchFailed && S.proxy === v) ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+    <label>扩展<select data-proto="ext">${[['active', 'Activated'], ['approval', '需要审批'], ['notInstalled', '未安装'], ['updateRequired', '需要更新']].map(([v, l]) => `<option value="${v}" ${S.ext === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+    <label>当前网络<select data-proto="network">${Object.entries(NETWORKS).map(([k, n]) => `<option value="${k}" ${S.network === k ? 'selected' : ''}>${n.label}</option>`).join('')}</select></label>
+    <label>窗口尺寸<select data-proto="windowSize"><option value="default" ${S.windowSize === 'default' ? 'selected' : ''}>1000 × 660</option><option value="min" ${S.windowSize === 'min' ? 'selected' : ''}>最小 760 × 520</option></select></label>
+    <label>外观<select data-proto="theme"><option value="light" ${S.theme === 'light' ? 'selected' : ''}>浅色</option><option value="dark" ${S.theme === 'dark' ? 'selected' : ''}>深色</option></select></label>
+    <div class="proto-row">
+      <button class="btn" data-action="openSettingsBtn">设置窗口</button>
+      <button class="btn" data-action="openOnboarding">引导流程</button>
+      <button class="btn" data-action="quitKey">模拟 ⌘Q</button>
+      <button class="btn" data-action="menuExtraBtn">菜单栏菜单</button>
+    </div>
+    <div class="notes"><b>本页设计要点</b><ul>${(NOTES[S.page] || []).map(n => `<li>${n}</li>`).join('')}</ul></div>`;
+}
+
+/* ============================================================
+   Render all + window management
+   ============================================================ */
+function renderAll() {
+  document.documentElement.dataset.theme = S.theme;
+  const active = document.activeElement;
+  const restore = active && active.dataset && active.dataset.input ? { key: active.dataset.input, start: active.selectionStart, end: active.selectionEnd } : null;
+  renderMain(); renderSettings(); renderOnboarding(); renderMenuExtra(); renderProto();
+  if (restore) {
+    const el = document.querySelector(`[data-input="${CSS.escape(restore.key)}"]`);
+    if (el) { el.focus(); try { el.setSelectionRange(restore.start, restore.end); } catch {} }
+  }
+}
+const Z = { main: 1, settings: 2, onboarding: 3 };
+function focusWin(name) {
+  if (name === 'main' && S.quitState === 'done') return;
+  S.focused = name;
+  Object.keys(Z).forEach(k => { const el = $('#' + k); if (el) el.style.zIndex = k === name ? 10 : 2; });
+  renderAll();
+}
+function openSettings(tab) { S.settingsOpen = true; if (tab) S.settingsTab = tab; focusWin('settings'); }
+function placeWindows() {
+  const s = $('#settings'); s.style.left = '640px'; s.style.top = '120px';
+  const o = $('#onboarding'); o.style.left = '220px'; o.style.top = '110px';
+}
+
+/* Quit: two ⌘Q presses within 2 s; a menu click quits immediately */
+let quitTimer = null;
+function startQuit(immediate) {
+  if (!immediate && !S.quitArmed) {
+    S.quitArmed = true;
+    $('#hudLayer').innerHTML = `<div class="hud glass" role="status" aria-live="polite">Press <kbd>⌘Q</kbd> again to quit DNSPilot</div>`;
+    clearTimeout(quitTimer); quitTimer = setTimeout(() => { S.quitArmed = false; $('#hudLayer').innerHTML = ''; }, 2000);
+    return;
+  }
+  clearTimeout(quitTimer); S.quitArmed = false; $('#hudLayer').innerHTML = '';
+  if (S.sheet) { showAlert({ title: 'Discard Unsaved Changes?', message: 'You have an open editor. Quitting discards its changes.', buttons: [{ label: 'Discard and Quit', destructive: true, action: () => { S.sheet = null; doQuit(); } }, { label: 'Cancel', primary: true }] }); return; }
+  doQuit();
+}
+async function doQuit() {
+  focusWin('main');
+  S.sheet = null;
+  const wasOn = S.proxy !== 'off';
+  if (wasOn) { S.alert = { title: 'Quitting DNSPilot', message: 'Restoring System DNS…', buttons: [] }; renderAll(); await wait(1200); }
+  S.alert = null; S.proxy = 'off'; S.activeId = null; S.quitState = 'done'; renderAll();
+}
+
+/* ============================================================
+   Actions
+   ============================================================ */
+const A = {
+  noop() {},
+  nav(v) { S.page = v; renderAll(); },
+  toggleSidebar() { S.sidebarHidden = !S.sidebarHidden; renderAll(); },
+  closeMain() { $('#main').style.visibility = 'hidden'; S.mainHidden = true; },
+  toggleProxy() { (S.proxy === 'on') ? restoreSystemDNS() : turnOn(); },
+  turnOn, restore: restoreSystemDNS,
+  async reconnect() { S.proxy = 'applying'; renderAll(); await wait(1000); S.proxy = 'on'; S.activeId = evaluate().profile; renderAll(); },
+  async retrySwitch() { S.switchFailed = false; S.proxy = 'applying'; renderAll(); await wait(900); S.proxy = 'on'; S.activeId = S.mode === 'manual' ? S.manualProfile : evaluate().profile; renderAll(); },
+  useActiveManual() { S.switchFailed = false; S.mode = 'manual'; S.manualProfile = S.activeId; renderAll(); },
+  extApprove() { S.ext = 'active'; renderAll(); },
+  async extUpdate() { const was = S.proxy; S.proxy = 'restoring'; renderAll(); await wait(900); S.ext = 'active'; S.proxy = 'off'; renderAll(); if (was === 'on') turnOn(); },
+  openDiagnostics() { openSettings('diagnostics'); },
+  setMode(v) { if (v === S.mode) return; setMode(v); },
+  pickManual(_, el) { openMenu(el, profileMenu('', S.manualProfile, id => setMode('manual', id)), { alignSelected: true, minWidth: el.offsetWidth + 12 }); },
+  gotoProfile(v) { S.page = 'profiles'; S.selectedProfile = v; renderAll(); },
+  gotoRule(v) { S.page = 'rules'; S.selectedRule = v; renderAll(); },
+  testActive() { const p = prof(S.activeId); if (p) runProfileTest(S, 'overviewTest', p); },
+  overviewMore(_, el) {
+    openMenu(el, [{ label: 'Copy Diagnostic Summary' }, { label: 'Open Diagnostics Settings', action: () => openSettings('diagnostics') }, '-', { label: 'Restore System DNS', disabled: S.proxy === 'off' || busy(), action: restoreSystemDNS }]);
+  },
+  /* Profiles */
+  selectProfile(v) { S.selectedProfile = v; renderAll(); },
+  newProfile() { S.page = 'profiles'; S.sheet = { type: 'profile', mode: 'create', draft: { ...blankDraft(''), errors: {} } }; renderAll(); setTimeout(() => document.querySelector('[data-input="sheet:name"]')?.focus(), 0); },
+  editProfile(v) { const p = prof(v); S.sheet = { type: 'profile', mode: 'edit', draft: draftFromProfile(p) }; renderAll(); },
+  duplicateProfile(v) { const p = prof(v); const d = draftFromProfile(p); d.id = uid(); d.name = p.name + ' Copy'; S.sheet = { type: 'profile', mode: 'duplicate', draft: d }; renderAll(); },
+  testProfile(v) { runProfileTest(S.profileTest, v, prof(v)); },
+  makeDefault(v) { S.defaultProfile = v; reapplyIfNeeded(); },
+  deleteProfile(v) { if (v) { S.sheet = { type: 'deleteProfile', id: v }; renderAll(); } },
+  profileMore(v, el) { if (!v) return; openMenu(el, profileContext(v), { at: [el.getBoundingClientRect().left, el.getBoundingClientRect().top - 8 - 4 * 24 - 20] }); },
+  pickReplacement(_, el) { openMenu(el, profileMenu('', S.sheet.replacement, id => { S.sheet.replacement = id; renderAll(); }).filter(i => i.label !== pname(S.sheet.id)), { alignSelected: true }); },
+  confirmDeleteProfile() {
+    const id = S.sheet.id, rep = S.sheet.replacement;
+    S.rules.forEach(r => { if (r.profile === id) r.profile = rep; });
+    if (S.defaultProfile === id) S.defaultProfile = rep;
+    if (S.manualProfile === id) S.manualProfile = rep;
+    if (S.activeId === id) S.activeId = rep;
+    S.profiles = S.profiles.filter(p => p.id !== id);
+    S.selectedProfile = S.profiles[0]?.id; S.sheet = null; renderAll();
+  },
+  sheetTransport(v) { S.sheet.draft.transport = v; S.sheet.draft.errors = {}; S.sheet.test = null; renderAll(); },
+  sheetAddBootstrap() { S.sheet.draft.bootstrap.push(''); renderAll(); },
+  sheetRemoveBootstrap(v) { S.sheet.draft.bootstrap.splice(+v, 1); if (!S.sheet.draft.bootstrap.length) S.sheet.draft.bootstrap.push(''); renderAll(); },
+  sheetAddHost() { S.sheet.draft.hosts.push({ domain: '', address: '', key: uid() }); renderAll(); const ins = document.querySelectorAll('.hosts-table input'); ins[ins.length - 2]?.focus(); },
+  sheetRemoveHost(v) { S.sheet.draft.hosts.splice(+v, 1); renderAll(); },
+  async sheetTest() {
+    const sh = S.sheet;
+    if (!validateUpstream(sh.draft, false)) { renderAll(); focusFirstInvalid(); return; }
+    sh.test = { state: 'testing' }; renderAll();
+    await wait(1000);
+    if (S.sheet !== sh) return;
+    sh.test = normalizeDraft(sh.draft).server.startsWith('10.') ? { state: 'fail', reason: 'Upstream timed out' } : { state: 'ok' };
+    renderAll();
+  },
+  async saveProfile() {
+    const sh = S.sheet;
+    if (!validateUpstream(sh.draft, true)) { renderAll(); focusFirstInvalid(); return; }
+    const p = normalizeDraft(sh.draft);
+    const editingActive = sh.mode === 'edit' && p.id === S.activeId && S.proxy === 'on';
+    if (editingActive) { sh.saving = true; renderAll(); S.proxy = 'applying'; renderAll(); await wait(900); S.proxy = 'on'; }
+    const i = S.profiles.findIndex(x => x.id === p.id);
+    if (i >= 0) S.profiles[i] = p; else S.profiles.push(p);
+    S.selectedProfile = p.id; S.sheet = null; renderAll();
+  },
+  closeSheet() { S.sheet = null; renderAll(); },
+  /* Rules */
+  selectRule(v, el, ev) { if (ev.target.closest('.switch')) return; S.selectedRule = v; renderAll(); },
+  toggleRule(v) { const r = S.rules.find(x => x.id === v); r.enabled = !r.enabled; reapplyIfNeeded(); },
+  newRule() { S.page = 'rules'; S.sheet = { type: 'rule', mode: 'create', draft: { id: uid(), name: '', enabled: true, ssids: [], ifaces: [], subnets: [], profile: S.defaultProfile, errors: {} } }; renderAll(); setTimeout(() => document.querySelector('[data-input="rule:name"]')?.focus(), 0); },
+  editRule() { const r = S.rules.find(x => x.id === S.selectedRule); if (!r) return; S.sheet = { type: 'rule', mode: 'edit', draft: { ...r, ssids: [...r.ssids], ifaces: [...r.ifaces], subnets: [...r.subnets], errors: {} } }; renderAll(); },
+  duplicateRule(v) { const r = S.rules.find(x => x.id === v); S.sheet = { type: 'rule', mode: 'create', draft: { ...r, id: uid(), name: r.name + ' Copy', ssids: [...r.ssids], ifaces: [...r.ifaces], subnets: [...r.subnets], errors: {} } }; renderAll(); },
+  deleteRule() {
+    const r = S.rules.find(x => x.id === S.selectedRule); if (!r) return;
+    showAlert({ title: `Delete “${r.name}”?`, message: 'This permanently deletes the Rule. Automatic mode reevaluates immediately.', buttons: [{ label: 'Delete', destructive: true, action: () => { const i = S.rules.indexOf(r); S.rules.splice(i, 1); S.selectedRule = S.rules[Math.min(i, S.rules.length - 1)]?.id; reapplyIfNeeded(); } }, { label: 'Cancel', primary: true }] });
+  },
+  moveRule(v) { const i = S.rules.findIndex(r => r.id === S.selectedRule); const j = i + Number(v); if (i < 0 || j < 0 || j >= S.rules.length) return; const [r] = S.rules.splice(i, 1); S.rules.splice(j, 0, r); reapplyIfNeeded(); },
+  pickDefault(_, el) { openMenu(el, profileMenu('', S.defaultProfile, id => { S.defaultProfile = id; reapplyIfNeeded(); }), { alignSelected: true, minWidth: el.offsetWidth + 12 }); },
+  ruleEnabled() { S.sheet.draft.enabled = !S.sheet.draft.enabled; renderAll(); },
+  rulePickProfile(_, el) { openMenu(el, profileMenu('', S.sheet.draft.profile, id => { S.sheet.draft.profile = id; renderAll(); }), { alignSelected: true }); },
+  ruleAdd(_, el) { S.sheet.draft[el.dataset.k].push(''); renderAll(); const ins = document.querySelectorAll(`[data-input^="rule:${el.dataset.k}:"]`); ins[ins.length - 1]?.focus(); },
+  ruleRemove(v, el) { S.sheet.draft[el.dataset.k].splice(+v, 1); renderAll(); },
+  ruleAddCurrentSSID() { const d = S.sheet.draft; if (!d.ssids.includes(net().ssid)) d.ssids.push(net().ssid); renderAll(); },
+  saveRule() {
+    const d = S.sheet.draft; const e = {};
+    if (!d.name.trim()) e.name = 'Enter a Rule name.';
+    d.ssids = d.ssids.map(s => s.trim()).filter(Boolean);
+    d.subnets = d.subnets.map(s => s.trim()).filter(Boolean);
+    d.subnets.forEach((s, i) => { const [b, m] = s.split('/'); if (!(isIP(b) && /^\d+$/.test(m || '') && +m <= (isIPv4(b) ? 32 : 128))) e['subnets' + i] = 'x'; });
+    if (Object.keys(e).some(k => k.startsWith('subnets'))) e.conditions = 'Subnets use CIDR notation, such as 192.168.1.0/24.';
+    d.errors = e;
+    if (Object.keys(e).length) { renderAll(); focusFirstInvalid(); return; }
+    const { errors, ...rule } = d;
+    const i = S.rules.findIndex(r => r.id === rule.id);
+    if (i >= 0) S.rules[i] = rule; else S.rules.push(rule);
+    S.selectedRule = rule.id; S.sheet = null; reapplyIfNeeded();
+  },
+  /* Test */
+  testSource(v) { S.testUI.source = v; renderAll(); },
+  testPickProfile(_, el) { openMenu(el, profileMenu('', S.testUI.profile, id => { S.testUI.profile = id; renderAll(); }), { alignSelected: true }); },
+  testPickType(_, el) { openMenu(el, RECORD_TYPES.map(t => ({ label: t, checked: t === S.testUI.type, action: () => { S.testUI.type = t; renderAll(); } })), { alignSelected: true, minWidth: 90 }); },
+  testTransport(v) { S.testUI.custom.transport = v; S.testUI.custom.errors = {}; renderAll(); },
+  testAddBootstrap() { S.testUI.custom.bootstrap.push(''); renderAll(); },
+  testRemoveBootstrap(v) { S.testUI.custom.bootstrap.splice(+v, 1); if (!S.testUI.custom.bootstrap.length) S.testUI.custom.bootstrap.push(''); renderAll(); },
+  testQuery: runQuery,
+  testCancel() { testToken++; S.testUI.state = 'empty'; renderAll(); },
+  /* Alerts */
+  alertBtn(v) { const b = S.alert.buttons[+v]; S.alert = null; renderAll(); b.action?.(); },
+  settingsAlertBtn(v) { const b = S.settingsAlert.buttons[+v]; S.settingsAlert = null; renderAll(); b.action?.(); },
+  /* Settings */
+  openSettingsBtn() { openSettings(); },
+  closeSettings() { S.settingsOpen = false; S.settingsAlert = null; focusWin('main'); },
+  settingsTab(v) { S.settingsTab = v; renderAll(); },
+  setLaunch() { S.settings.launchAtLogin = !S.settings.launchAtLogin; renderAll(); },
+  cacheToggle() { const s = S.settings; s.cacheDraftOn = !s.cacheDraftOn; s.cacheStatus = null; if (!s.cacheDraftOn) s.cacheDraft = String(s.cacheCapacity); renderAll(); },
+  cacheDefault() { const s = S.settings; s.cacheDraftOn = true; s.cacheDraft = '1000'; s.cacheStatus = null; renderAll(); },
+  async cacheSave() {
+    const s = S.settings;
+    if (S.proxy !== 'on') { s.cacheOn = s.cacheDraftOn; s.cacheCapacity = Number(s.cacheDraft); s.cacheStatus = 'saved-off'; renderAll(); return; }
+    s.cacheStatus = 'applying'; renderAll(); await wait(1000);
+    s.cacheOn = s.cacheDraftOn; s.cacheCapacity = Number(s.cacheDraft); s.cacheStatus = 'saved'; renderAll();
+  },
+  deactivateExt() { S.settingsAlert = { title: 'Deactivate System Extension?', message: 'DNS Proxy will be restored to System DNS first. The extension must be installed again before DNSPilot can be turned on.', buttons: [{ label: 'Deactivate', destructive: true, action: async () => { await restoreSystemDNS(); S.ext = 'notInstalled'; renderAll(); } }, { label: 'Cancel', primary: true }] }; renderAll(); },
+  requestLocation() { S.settings.location = 'allowed'; renderAll(); },
+  toggleDebug() {
+    const on = !S.settings.debug;
+    S.settingsAlert = on ? { title: 'Enable Debug Logging?', message: 'Debug logs may contain full domain names, endpoint tokens, Wi-Fi names, IP addresses, and DNS answers.', buttons: [{ label: 'Enable', action: () => { S.settings.debug = true; renderAll(); } }, { label: 'Cancel', primary: true }] }
+      : { title: 'Disable Debug Logging?', message: 'DNSPilot returns to standard, redacted logging.', buttons: [{ label: 'Disable', primary: true, action: () => { S.settings.debug = false; renderAll(); } }, { label: 'Cancel' }] };
+    renderAll();
+  },
+  exportDiag() { S.settingsAlert = { title: 'Export Sensitive Diagnostics?', message: 'The exported file is not redacted and may contain DNS endpoints, Wi-Fi names, IP addresses, Profile details, and error messages.', buttons: [{ label: 'Export…', primary: true }, { label: 'Cancel' }] }; renderAll(); },
+  /* Onboarding */
+  openOnboarding() { S.onboarding = { open: true, step: 0, template: 'cf-doh', testState: null, location: null, ext: 'idle', proxy: 'idle' }; focusWin('onboarding'); },
+  closeOnboarding() { S.onboarding.open = false; focusWin('main'); },
+  obNext() { S.onboarding.step++; renderAll(); },
+  obBack() { S.onboarding.step--; renderAll(); },
+  obTemplate(v) { S.onboarding.template = v; S.onboarding.testState = null; renderAll(); },
+  async obTest() { const o = S.onboarding; o.testState = { state: 'testing' }; renderAll(); await wait(1000); o.testState = { state: 'ok' }; renderAll(); await wait(500); o.step = 2; o.testState = null; renderAll(); },
+  obAllowLocation() { S.onboarding.location = 'allowed'; renderAll(); },
+  async obInstall() { const o = S.onboarding; o.ext = 'installing'; renderAll(); await wait(900); o.ext = 'approval'; renderAll(); },
+  obApprove() { S.onboarding.ext = 'active'; renderAll(); },
+  async obEnable() { const o = S.onboarding; o.proxy = 'enabling'; renderAll(); await wait(1200); o.proxy = 'on'; o.step = 5; renderAll(); },
+  obFinish() { S.onboarding.open = false; S.ext = 'active'; if (S.proxy === 'off') turnOn(); focusWin('main'); },
+  /* Menus & quit */
+  menuExtra(_, el) { el.classList.add('open'); openMenu(el, menuExtraItems(), { minWidth: 250 }); },
+  menuExtraBtn() { const el = $('#menuExtra'); el.classList.add('open'); openMenu(el, menuExtraItems(), { minWidth: 250 }); },
+  closeMenu,
+  quitKey() { startQuit(false); },
+  relaunch() { S.quitState = null; S.proxy = 'off'; renderAll(); turnOn(); },
+};
+function profileContext(id) {
+  return [
+    { label: 'Edit…', action: () => A.editProfile(id) },
+    { label: 'Duplicate', action: () => A.duplicateProfile(id) },
+    { label: 'Test', disabled: busy(), action: () => A.testProfile(id) },
+    { label: 'Make Default', disabled: id === S.defaultProfile, action: () => A.makeDefault(id) },
+    '-',
+    { label: 'Delete…', danger: true, action: () => A.deleteProfile(id) },
+  ];
+}
+function ruleContext(id) {
+  const i = S.rules.findIndex(r => r.id === id); const r = S.rules[i];
+  return [
+    { label: 'Edit…', action: () => { S.selectedRule = id; A.editRule(); } },
+    { label: 'Duplicate', action: () => A.duplicateRule(id) },
+    { label: r.enabled ? 'Disable' : 'Enable', action: () => A.toggleRule(id) },
+    '-',
+    { label: 'Move Up', disabled: i === 0, action: () => { S.selectedRule = id; A.moveRule(-1); } },
+    { label: 'Move Down', disabled: i === S.rules.length - 1, action: () => { S.selectedRule = id; A.moveRule(1); } },
+    '-',
+    { label: 'Delete…', danger: true, action: () => { S.selectedRule = id; A.deleteRule(); } },
+  ];
+}
+
+/* ============================================================
+   Event wiring
+   ============================================================ */
+document.addEventListener('click', ev => {
+  const el = ev.target.closest('[data-action]');
+  const win = ev.target.closest('.window');
+  if (win && S.focused !== win.id && !el) focusWin(win.id);
+  if (!el) return;
+  if (win && S.focused !== win.id) { S.focused = win.id; Object.keys(Z).forEach(k => $('#' + k).style.zIndex = k === win.id ? 10 : 2); }
+  if (el.disabled) return;
+  const fn = A[el.dataset.action];
+  if (fn) { ev.stopPropagation(); fn(el.dataset.v, el, ev); }
+});
+document.addEventListener('dblclick', ev => {
+  const r = ev.target.closest('[data-rule]'); if (r && !ev.target.closest('.switch')) { S.selectedRule = r.dataset.rule; A.editRule(); }
+  const p = ev.target.closest('[data-context="profile"]'); if (p) A.editProfile(p.dataset.v);
+});
+document.addEventListener('contextmenu', ev => {
+  const el = ev.target.closest('[data-context]'); if (!el) return;
+  ev.preventDefault();
+  if (el.dataset.context === 'profile') { S.selectedProfile = el.dataset.v; renderAll(); openMenu(el, profileContext(el.dataset.v), { at: [ev.clientX, ev.clientY] }); }
+  if (el.dataset.context === 'rule') { S.selectedRule = el.dataset.v; renderAll(); openMenu(el, ruleContext(el.dataset.v), { at: [ev.clientX, ev.clientY] }); }
+});
+document.addEventListener('input', ev => {
+  const el = ev.target; const k = el.dataset.input; if (!k) return;
+  const parts = k.split(':');
+  if (k === 'profileFilter') { S.profileFilter = el.value; renderAll(); return; }
+  if (k === 'testDomain') { S.testUI.domain = el.value; if (S.testUI.domainError) { S.testUI.domainError = null; renderAll(); } return; }
+  if (k === 'cacheDraft') { S.settings.cacheDraft = el.value; S.settings.cacheStatus = null; renderAll(); return; }
+  if (parts[0] === 'sheet' || parts[0] === 'test') {
+    const d = parts[0] === 'sheet' ? S.sheet.draft : S.testUI.custom;
+    if (parts[1] === 'bootstrap') d.bootstrap[+parts[2]] = el.value;
+    else if (parts[1] === 'hosts') d.hosts[+parts[2]][parts[3]] = el.value;
+    else d[parts[1]] = el.value;
+    if (parts[0] === 'sheet' && S.sheet.test) { S.sheet.test = null; renderAll(); }
+    return;
+  }
+  if (parts[0] === 'rule') {
+    const d = S.sheet.draft;
+    if (parts[1] === 'iface') { const i = parts[2]; d.ifaces = el.checked ? [...d.ifaces, i] : d.ifaces.filter(x => x !== i); return; }
+    if (parts.length === 3) d[parts[1]][+parts[2]] = el.value; else d[parts[1]] = el.value;
+  }
+});
+document.addEventListener('change', ev => {
+  const k = ev.target.dataset.proto; if (!k) return;
+  const v = ev.target.value;
+  if (k === 'proxy') {
+    S.switchFailed = v === 'switchFailed';
+    S.proxy = v === 'switchFailed' ? 'on' : v;
+    if (S.proxy === 'on' && !S.activeId) S.activeId = evaluate().profile;
+    if (S.switchFailed) {
+      if (S.mode === 'auto') { S.mode = 'manual'; }
+      S.manualProfile = S.profiles.find(p => p.id !== S.activeId)?.id;
+    }
+    if (S.proxy === 'off' || S.proxy === 'error') S.activeId = null;
+    if (S.proxy === 'recovery' && !S.activeId) S.activeId = evaluate().profile;
+    renderAll(); return;
+  }
+  if (k === 'network') { S.network = v; reapplyIfNeeded(); return; }
+  if (k === 'ext') { S.ext = v; if (v !== 'active' && S.proxy === 'on') { S.proxy = 'off'; S.activeId = null; } renderAll(); return; }
+  S[k] = v; renderAll();
+});
+document.addEventListener('keydown', ev => {
+  if (ev.key === 'Escape') {
+    if ($('#menuLayer').innerHTML) { closeMenu(); return; }
+    if (S.alert && S.alert.buttons.length) { S.alert = null; renderAll(); return; }
+    if (S.settingsAlert) { S.settingsAlert = null; renderAll(); return; }
+    if (S.sheet) { A.closeSheet(); return; }
+    if (S.quitArmed) { clearTimeout(quitTimer); S.quitArmed = false; $('#hudLayer').innerHTML = ''; }
+  }
+  if (ev.key === 'Enter' && !ev.isComposing) {
+    if (S.sheet?.type === 'profile' && ev.target.dataset?.input?.startsWith('sheet')) { ev.preventDefault(); A.saveProfile(); }
+    else if (S.sheet?.type === 'rule' && ev.target.dataset?.input?.startsWith('rule')) { ev.preventDefault(); A.saveRule(); }
+    else if (S.page === 'test' && ev.target.dataset?.input) { ev.preventDefault(); runQuery(); }
+  }
+  if (ev.ctrlKey && /^[1-4]$/.test(ev.key)) { S.page = ['overview', 'profiles', 'rules', 'test'][+ev.key - 1]; renderAll(); }
+});
+
+/* Rule drag-to-reorder */
+let dragId = null;
+document.addEventListener('dragstart', ev => { const r = ev.target.closest?.('[data-rule]'); if (!r) return; dragId = r.dataset.rule; r.classList.add('dragging'); ev.dataTransfer.effectAllowed = 'move'; });
+document.addEventListener('dragover', ev => { const r = ev.target.closest?.('[data-rule]'); if (!r || !dragId) return; ev.preventDefault(); document.querySelectorAll('.drop-before').forEach(x => x.classList.remove('drop-before')); r.classList.add('drop-before'); });
+document.addEventListener('drop', ev => {
+  const r = ev.target.closest?.('[data-rule]'); if (!r || !dragId) return; ev.preventDefault();
+  const from = S.rules.findIndex(x => x.id === dragId); const [item] = S.rules.splice(from, 1);
+  const to = S.rules.findIndex(x => x.id === r.dataset.rule); S.rules.splice(to < 0 ? S.rules.length : to, 0, item);
+  S.selectedRule = dragId; dragId = null; reapplyIfNeeded();
+});
+document.addEventListener('dragend', () => { dragId = null; document.querySelectorAll('.dragging,.drop-before').forEach(x => x.classList.remove('dragging', 'drop-before')); });
+
+/* Window dragging + split dividers */
+document.addEventListener('mousedown', ev => {
+  const div = ev.target.closest('[data-divider]');
+  if (div) {
+    const pane = document.getElementById(div.dataset.divider); const start = ev.clientX; const w0 = pane.getBoundingClientRect().width;
+    const move = e => { const w = Math.max(0, Math.min(460, w0 + e.clientX - start)); pane.style.flexBasis = w + 'px'; if (pane.id === 'testLeft') S.testUI.leftWidth = w; };
+    const up = () => { removeEventListener('mousemove', move); removeEventListener('mouseup', up); };
+    addEventListener('mousemove', move); addEventListener('mouseup', up); ev.preventDefault(); return;
+  }
+  const bar = ev.target.closest('[data-drag]');
+  if (!bar || ev.target.closest('button, input, [data-action]')) return;
+  const win = document.getElementById(bar.dataset.drag); const sx = ev.clientX, sy = ev.clientY; const x0 = win.offsetLeft, y0 = win.offsetTop;
+  const move = e => { win.style.left = Math.max(120 - win.offsetWidth, x0 + e.clientX - sx) + 'px'; win.style.top = Math.max(0, y0 + e.clientY - sy) + 'px'; };
+  const up = () => { removeEventListener('mousemove', move); removeEventListener('mouseup', up); };
+  addEventListener('mousemove', move); addEventListener('mouseup', up);
+});
+// Clicking the menu bar extra re-shows the hidden main window via "Open DNSPilot"
+const _focusWin = focusWin;
+focusWin = function (name) { if (name === 'main') { $('#main').style.visibility = ''; } _focusWin(name); };
+
+function tick() { const d = new Date(); $('#clock').textContent = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + '  ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }); }
+tick(); setInterval(tick, 30000);
+placeWindows();
+focusWin('main');
+</script>
+</body>
+</html>
