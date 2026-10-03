@@ -2,7 +2,7 @@
 
 All notable changes to DNSPilot are documented in this file. The format follows Keep a Changelog, and releases use semantic versioning once the first public version is tagged.
 
-## Unreleased
+## [1.5] - 2026-10-03
 
 ### Changed
 

@@ -59,9 +59,9 @@ DNSPilot 首次发布，支持普通 DNS、DNS over TLS 与 DNS over HTTPS Profi
 
 App Store Connect 不为 App 的首个版本提供“此版本的新功能”字段。仅在其他位置要求首次发布摘要时复用本段，不要尝试把它填写为版本 1.0 的更新说明。
 
-## 版本 1.4 更新说明
+## 版本 1.5 更新说明
 
-改进 DNS Proxy Extension 短暂延迟返回运行时状态时的 Profile 切换可靠性。自动与手动 Profile 切换不再等待上游联网检测，优先应用选中的配置，同时保留配置校验和精确运行状态确认。
+以分组布局重新设计管理窗口：概览显示状态标题与内联恢复提示，侧边栏常驻 DNS Proxy 状态摘要，Profile 显示传输方式、Active 与 Default 标记以及 Upstream、Hosts 与使用情况详情，Rule 会标记与当前网络匹配的规则。
 
 ## App 隐私草案
 

@@ -59,9 +59,9 @@ Initial release of DNSPilot with Plain DNS, DNS over TLS, and DNS over HTTPS Pro
 
 App Store Connect does not provide the What's New field for an app's first version. Reuse this summary only where a first-release summary is requested; do not try to enter it as What's New for version 1.0.
 
-## Version 1.4 What's New
+## Version 1.5 What's New
 
-Improves Profile switching reliability when the DNS Proxy Extension briefly delays a runtime-status response. Automatic and Manual Profile switches now apply the selected configuration without waiting for an upstream connectivity test, while retaining configuration validation and exact runtime confirmation.
+Redesigns the management window with grouped layouts: Overview shows a status header with inline recovery notices, the sidebar keeps a persistent DNS Proxy status summary, Profiles show transport, Active, and Default markers with Upstream, Hosts, and Usage details, and Rules mark the Rule that matches the current network.
 
 ## App Privacy Draft
 
