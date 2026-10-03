@@ -2,25 +2,27 @@
 
 set -eu
 
-if [ -z "${DEVELOPER_DIR:-}" ]; then
-    printf 'error: DEVELOPER_DIR must explicitly select Xcode 26.4.\n' >&2
+# Minimum supported toolchain. Newer Xcode and Swift releases are accepted.
+minimum_xcode_version="26.4"
+minimum_swift_version="6.3"
+
+# Succeeds when dotted version $1 is greater than or equal to $2.
+version_at_least() {
+    [ "$(printf '%s\n%s\n' "$2" "$1" | sort -t. -k1,1n -k2,2n -k3,3n | head -n 1)" = "$2" ]
+}
+
+xcode_version_output="$(xcodebuild -version)"
+xcode_version="$(printf '%s\n' "$xcode_version_output" | sed -n 's/^Xcode \([0-9][0-9.]*\).*/\1/p' | head -n 1)"
+if [ -z "$xcode_version" ] || ! version_at_least "$xcode_version" "$minimum_xcode_version"; then
+    printf 'error: expected Xcode %s or later, got:\n%s\n' "$minimum_xcode_version" "$xcode_version_output" >&2
     exit 1
 fi
 
-xcode_version="$(xcodebuild -version)"
-expected_xcode_version="$(printf 'Xcode 26.4\nBuild version 17E192')"
-if [ "$xcode_version" != "$expected_xcode_version" ]; then
-    printf 'error: expected Xcode 26.4 build 17E192, got:\n%s\n' "$xcode_version" >&2
+swift_version_output="$(xcrun swift --version 2>&1)"
+swift_version="$(printf '%s\n' "$swift_version_output" | sed -n 's/.*Apple Swift version \([0-9][0-9.]*\).*/\1/p' | head -n 1)"
+if [ -z "$swift_version" ] || ! version_at_least "$swift_version" "$minimum_swift_version"; then
+    printf 'error: expected Apple Swift %s or later, got:\n%s\n' "$minimum_swift_version" "$swift_version_output" >&2
     exit 1
 fi
 
-swift_version="$(xcrun swift --version)"
-case "$swift_version" in
-    *"Apple Swift version 6.3"*) ;;
-    *)
-        printf 'error: expected Apple Swift 6.3, got:\n%s\n' "$swift_version" >&2
-        exit 1
-        ;;
-esac
-
-printf 'Validated Xcode 26.4 (17E192) and Apple Swift 6.3.\n'
+printf 'Validated Xcode %s and Apple Swift %s.\n' "$xcode_version" "$swift_version"

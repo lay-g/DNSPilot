@@ -20,7 +20,7 @@ DNSPilot 是原生 macOS DNS Proxy 工具，用于管理普通 DNS 和 DNS-over-
 ## 要求
 
 - macOS 15 或更高版本。
-- Xcode 26.4 build 17E192，Apple Swift 6.3。
+- Xcode 26.4 或更高版本，Apple Swift 6.3 或更高版本。
 - 签名安装需要 Apple Developer Team 获得 `dns-proxy` Network Extension entitlement。
 - Team 自有的 Host、System Extension 和 App Group identifier。
 
@@ -60,7 +60,6 @@ DNSPilot 处理 macOS DNS Proxy 子系统提供的 DNS flow。正常 Quit 会尝
 ## 开发
 
 ```bash
-export DEVELOPER_DIR="/Applications/Xcode-26.4.0.app/Contents/Developer"
 scripts/ci/all.sh
 ```
 

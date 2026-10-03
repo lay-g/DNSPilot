@@ -4,7 +4,7 @@ DNSPilot develops in public. Use issues for reproducible bugs and focused propos
 
 ## Development Baseline
 
-Read `AGENTS.md` and `docs/en/design/toolchain.md` before changing Swift, Xcode settings, build scripts, or CI. DNSPilot uses macOS 15, Swift 6 language mode, complete strict concurrency, default nonisolated targets, and Xcode 26.4 build 17E192.
+Read `AGENTS.md` and `docs/en/design/toolchain.md` before changing Swift, Xcode settings, build scripts, or CI. DNSPilot uses macOS 15, Swift 6 language mode, complete strict concurrency, default nonisolated targets, and Xcode 26.4 or later.
 
 Use the `DNSPilot Community` scheme and a local ignored identity file. Never commit certificates, provisioning profiles, App Store credentials, Team IDs, personal Bundle IDs, SSIDs, DNS query names, endpoint tokens, raw diagnostic exports, or private logs.
 

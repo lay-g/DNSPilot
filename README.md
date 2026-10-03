@@ -20,7 +20,7 @@ DNSPilot is a native macOS DNS Proxy utility for managing Plain DNS and DNS-over
 ## Requirements
 
 - macOS 15 or later.
-- Xcode 26.4 build 17E192 with Apple Swift 6.3.
+- Xcode 26.4 or later with Apple Swift 6.3 or later.
 - For signed installation, an Apple Developer Team authorized for the `dns-proxy` Network Extension entitlement.
 - Team-owned Host, System Extension, and App Group identifiers.
 
@@ -60,7 +60,6 @@ DNSPilot processes the DNS flows supplied by the macOS DNS Proxy subsystem. Norm
 ## Development
 
 ```bash
-export DEVELOPER_DIR="/Applications/Xcode-26.4.0.app/Contents/Developer"
 scripts/ci/all.sh
 ```
 

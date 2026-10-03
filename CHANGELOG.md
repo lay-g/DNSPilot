@@ -4,6 +4,10 @@ All notable changes to DNSPilot are documented in this file. The format follows 
 
 ## Unreleased
 
+### Changed
+
+- Building now accepts Xcode 26.4 or later with Apple Swift 6.3 or later instead of requiring an exact Xcode build.
+
 ## [1.4] - 2026-09-02
 
 ### Changed

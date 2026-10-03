@@ -5,7 +5,7 @@
 ## 要求
 
 - macOS 15 或更高版本。
-- Xcode 26.4 build 17E192，Apple Swift 6.3。
+- Xcode 26.4 或更高版本，Apple Swift 6.3 或更高版本。
 - 签名运行需要 Apple Developer Team 获得 `dns-proxy` entitlement。
 
 修改 Swift、Xcode setting、build script 或 CI 前阅读[工具链基线](design/toolchain.md)。
@@ -44,7 +44,6 @@ IDENTITY_BUNDLE_ID_PREFIX = org.example
 ## Community 验证
 
 ```bash
-export DEVELOPER_DIR="/Applications/Xcode-26.4.0.app/Contents/Developer"
 scripts/check-toolchain.sh
 scripts/ci/all.sh
 ```

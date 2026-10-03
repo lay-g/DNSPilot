@@ -8,9 +8,8 @@ This document is the canonical compiler, deployment, and concurrency baseline.
 
 | Item | Baseline |
 | --- | --- |
-| Xcode | 26.4 |
-| Xcode build | 17E192 |
-| Apple Swift compiler | 6.3 |
+| Xcode | 26.4 or later |
+| Apple Swift compiler | 6.3 or later |
 | Swift language mode | Swift 6 |
 | `SWIFT_VERSION` | `6.0` |
 | Strict concurrency | `complete` |
@@ -18,7 +17,7 @@ This document is the canonical compiler, deployment, and concurrency baseline.
 | macOS deployment target | `15.0` |
 | Architectures | `arm64`, `x86_64` where dependencies support both |
 
-Compiler version, language mode, and deployment target are separate concepts. Xcode 26.4 does not imply a macOS 26 deployment target, and the upstream `swift-5` artifact label does not require Swift 5 language mode.
+Compiler version, language mode, and deployment target are separate concepts. The Xcode and compiler rows are minimums, not exact pins; newer releases are accepted. Xcode 26.4 does not imply a macOS 26 deployment target, and the upstream `swift-5` artifact label does not require Swift 5 language mode.
 
 All first-party targets inherit the baseline from `Configurations/Base.xcconfig`. Project or target settings must not override it.
 
@@ -40,15 +39,12 @@ Do not suppress diagnostics with module-wide `@preconcurrency import` or broad `
 
 ## Tool Selection
 
-Local commands use:
+`scripts/check-toolchain.sh` verifies that the selected Xcode and Swift compiler meet the minimums. Select a toolchain with `DEVELOPER_DIR` or `xcode-select`:
 
 ```bash
-export DEVELOPER_DIR="/Applications/Xcode-26.4.0.app/Contents/Developer"
 scripts/check-toolchain.sh
 ```
 
-CI may install Xcode elsewhere but must select it explicitly and verify the same Xcode build and compiler. Never rely on ambient `xcode-select` state.
-
 ## Upgrade Rule
 
-Changing Xcode, compiler, language mode, strict-concurrency level, default isolation, deployment target, or architectures requires one reviewed change that updates this document, `Configurations/Base.xcconfig`, toolchain checks, CI pins, architecture constraints, and relevant tests. Host and Extension must both compile the shared Contracts and DnsLibs adapter before the upgrade is accepted.
+Raising the minimum Xcode or compiler, or changing language mode, strict-concurrency level, default isolation, deployment target, or architectures requires one reviewed change that updates this document, `Configurations/Base.xcconfig`, toolchain checks, CI pins, architecture constraints, and relevant tests. Host and Extension must both compile the shared Contracts and DnsLibs adapter before the upgrade is accepted.

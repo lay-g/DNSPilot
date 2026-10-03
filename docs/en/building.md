@@ -5,7 +5,7 @@
 ## Requirements
 
 - macOS 15 or later.
-- Xcode 26.4 build 17E192 with Apple Swift 6.3.
+- Xcode 26.4 or later with Apple Swift 6.3 or later.
 - For signed runtime use, an Apple Developer Team authorized for `dns-proxy`.
 
 Read the [toolchain baseline](design/toolchain.md) before changing Swift, Xcode settings, build scripts, or CI.
@@ -44,7 +44,6 @@ Certificates remain in Keychain or protected CI. Provisioning profiles and store
 ## Community Validation
 
 ```bash
-export DEVELOPER_DIR="/Applications/Xcode-26.4.0.app/Contents/Developer"
 scripts/check-toolchain.sh
 scripts/ci/all.sh
 ```

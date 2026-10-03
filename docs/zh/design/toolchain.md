@@ -8,9 +8,8 @@
 
 | 项目 | 基线 |
 | --- | --- |
-| Xcode | 26.4 |
-| Xcode build | 17E192 |
-| Apple Swift compiler | 6.3 |
+| Xcode | 26.4 或更高版本 |
+| Apple Swift compiler | 6.3 或更高版本 |
 | Swift language mode | Swift 6 |
 | `SWIFT_VERSION` | `6.0` |
 | Strict concurrency | `complete` |
@@ -18,7 +17,7 @@
 | macOS deployment target | `15.0` |
 | Architectures | 依赖支持时使用 `arm64`、`x86_64` |
 
-Compiler version、language mode 和 deployment target 是独立概念。Xcode 26.4 不表示 deployment target 是 macOS 26，上游 `swift-5` artifact 标签也不要求 Swift 5 language mode。
+Compiler version、language mode 和 deployment target 是独立概念。Xcode 与 compiler 两行是最低版本，不是精确锁定；接受更新的版本。Xcode 26.4 不表示 deployment target 是 macOS 26，上游 `swift-5` artifact 标签也不要求 Swift 5 language mode。
 
 所有 first-party target 从 `Configurations/Base.xcconfig` 继承基线。Project 或 target setting 不得覆盖这些值。
 
@@ -40,15 +39,12 @@ Compiler version、language mode 和 deployment target 是独立概念。Xcode 2
 
 ## 工具选择
 
-本地命令使用：
+`scripts/check-toolchain.sh` 校验所选 Xcode 与 Swift compiler 满足最低版本。可以通过 `DEVELOPER_DIR` 或 `xcode-select` 选择工具链：
 
 ```bash
-export DEVELOPER_DIR="/Applications/Xcode-26.4.0.app/Contents/Developer"
 scripts/check-toolchain.sh
 ```
 
-CI 可以使用不同安装路径，但必须显式选择并验证相同 Xcode build 和 compiler。不得依赖环境中的 `xcode-select`。
-
 ## 升级规则
 
-修改 Xcode、compiler、language mode、strict-concurrency、default isolation、deployment target 或 architecture 时，必须在同一个 reviewed change 中更新本文件、`Configurations/Base.xcconfig`、toolchain check、CI pin、架构约束和相关测试。升级前 Host 与 Extension 都必须成功编译共享 Contracts 和 DnsLibs adapter。
+提高 Xcode 或 compiler 的最低版本，或修改 language mode、strict-concurrency、default isolation、deployment target 或 architecture 时，必须在同一个 reviewed change 中更新本文件、`Configurations/Base.xcconfig`、toolchain check、CI pin、架构约束和相关测试。升级前 Host 与 Extension 都必须成功编译共享 Contracts 和 DnsLibs adapter。

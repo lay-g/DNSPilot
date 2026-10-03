@@ -2,10 +2,9 @@
 
 This source is compiled into a disposable directory and signed separately for authenticated Mach XPC security tests. It is intentionally not an Xcode target and must not be embedded in DNSPilot.
 
-Compile with the pinned toolchain:
+Compile with a supported toolchain (Xcode 26.4 or later):
 
 ```bash
-export DEVELOPER_DIR="/Applications/Xcode-26.4.0.app/Contents/Developer"
 OUT="${TMPDIR:-/tmp}/DNSPilotMachXPCProbe"
 
 xcrun swiftc \
