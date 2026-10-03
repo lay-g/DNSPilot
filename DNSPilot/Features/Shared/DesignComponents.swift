@@ -144,12 +144,48 @@ struct ListActionBar<Content: View>: View {
 
     var body: some View {
         HStack(spacing: 2) { content }
-            .buttonStyle(.borderless)
+            .buttonStyle(ListActionButtonStyle())
             .labelStyle(.iconOnly)
             .imageScale(.medium)
-            .padding(.horizontal, 6)
+            .padding(.horizontal, 4)
             .frame(height: 32)
             .floatingControlBackground()
+    }
+}
+
+/// Fixed-size icon hit target so cluster buttons keep even spacing and a hover/press highlight.
+struct ListActionButtonStyle: ButtonStyle {
+    static let size = CGSize(width: 28, height: 24)
+
+    func makeBody(configuration: Configuration) -> some View {
+        ListActionButton(configuration: configuration)
+    }
+
+    private struct ListActionButton: View {
+        let configuration: Configuration
+        @Environment(\.isEnabled) private var isEnabled
+        @State private var isHovering = false
+
+        var body: some View {
+            configuration.label
+                .foregroundStyle(isEnabled ? .primary : .tertiary)
+                .frame(width: ListActionButtonStyle.size.width, height: ListActionButtonStyle.size.height)
+                .background {
+                    Capsule()
+                        .fill(.primary.opacity(configuration.isPressed ? 0.14 : (isHovering && isEnabled ? 0.07 : 0)))
+                }
+                .contentShape(Capsule())
+                .onHover { isHovering = $0 }
+        }
+    }
+}
+
+/// Separator between groups in a `ListActionBar`.
+struct ListActionDivider: View {
+    var body: some View {
+        Divider()
+            .frame(height: 14)
+            .padding(.horizontal, 4)
     }
 }
 

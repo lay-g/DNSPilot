@@ -142,7 +142,7 @@ struct RulesView: View {
                 }
                 .help("Delete Rule")
                 .disabled(selectedRule == nil)
-                Divider().frame(height: 14)
+                ListActionDivider()
                 Button {
                     if let selection { move(selection, offset: -1) }
                 } label: {
@@ -159,7 +159,7 @@ struct RulesView: View {
                 .help("Move Down")
                 .keyboardShortcut(.downArrow, modifiers: [.command, .option])
                 .disabled(selectedIndex.map { $0 == appState.rules.count - 1 } ?? true)
-                Divider().frame(height: 14)
+                ListActionDivider()
                 Button {
                     if let selection { appState.requestEditor(.editRule(selection)) }
                 } label: {

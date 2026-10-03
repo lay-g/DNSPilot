@@ -82,7 +82,7 @@ struct ProfilesView: View {
                     }
                     .help("Delete Profile")
                     .disabled(selectedProfile == nil)
-                    Divider().frame(height: 14)
+                    ListActionDivider()
                     Menu {
                         if let profile = selectedProfile {
                             Button("Edit…") { appState.requestEditor(.editProfile(profile.id)) }
@@ -100,6 +100,7 @@ struct ProfilesView: View {
                     .menuStyle(.borderlessButton)
                     .menuIndicator(.hidden)
                     .fixedSize()
+                    .frame(width: ListActionButtonStyle.size.width, height: ListActionButtonStyle.size.height)
                     .help("More Profile Actions")
                     .disabled(selectedProfile == nil)
                 }
