@@ -9,6 +9,44 @@ struct WindowLifecycleTests {
         #expect(ProductWindowPolicy.primaryDestination(onboardingCompleted: true) == .main)
     }
 
+    @Test func dockIconFollowsTheLastOpenWindow() {
+        let mainWindow = NSObject()
+        let settingsWindow = NSObject()
+        var policy = DockWindowPolicy()
+        #expect(policy.activationPolicy == .accessory)
+
+        policy.windowOpened(ObjectIdentifier(mainWindow))
+        #expect(policy.activationPolicy == .regular)
+        policy.windowOpened(ObjectIdentifier(settingsWindow))
+        policy.windowClosed(ObjectIdentifier(mainWindow))
+        #expect(policy.activationPolicy == .regular)
+        policy.windowClosed(ObjectIdentifier(settingsWindow))
+        #expect(policy.activationPolicy == .accessory)
+    }
+
+    @Test func retainedWindowCanReopenWithoutDoubleCounting() {
+        let window = NSObject()
+        var policy = DockWindowPolicy()
+        policy.windowOpened(ObjectIdentifier(window))
+        policy.windowOpened(ObjectIdentifier(window))
+        policy.windowClosed(ObjectIdentifier(window))
+        #expect(policy.activationPolicy == .accessory)
+
+        policy.windowOpened(ObjectIdentifier(window))
+        #expect(policy.activationPolicy == .regular)
+        policy.windowClosed(ObjectIdentifier(window))
+        #expect(policy.activationPolicy == .accessory)
+    }
+
+    @Test func closingUntrackedWindowsDoesNotHideAnOpenWindow() {
+        let mainWindow = NSObject()
+        let auxiliaryWindow = NSObject()
+        var policy = DockWindowPolicy()
+        policy.windowOpened(ObjectIdentifier(mainWindow))
+        policy.windowClosed(ObjectIdentifier(auxiliaryWindow))
+        #expect(policy.activationPolicy == .regular)
+    }
+
     @Test func loginItemDetectionRequiresOpenApplicationAndLoginReason() {
         #expect(LoginItemLaunchDetector.isLoginItem(
             isOpenApplicationEvent: true,

@@ -59,9 +59,9 @@ Initial release of DNSPilot with Plain DNS, DNS over TLS, and DNS over HTTPS Pro
 
 App Store Connect does not provide the What's New field for an app's first version. Reuse this summary only where a first-release summary is requested; do not try to enter it as What's New for version 1.0.
 
-## Version 1.5 What's New
+## Version 1.6 What's New
 
-Redesigns the management window with grouped layouts: Overview shows a status header with inline recovery notices, the sidebar keeps a persistent DNS Proxy status summary, Profiles show transport, Active, and Default markers with Upstream, Hosts, and Usage details, and Rules mark the Rule that matches the current network.
+The Dock icon now appears while the management or Settings window is open and hides after the last window closes. Minimizing a window keeps the Dock icon available. DNSPilot continues running in the menu bar without changing the DNS Proxy state, and background or login launches stay out of the Dock until a window is opened.
 
 ## App Privacy Draft
 

@@ -26,6 +26,50 @@ enum ProductWindowPolicy {
     }
 }
 
+struct DockWindowPolicy {
+    private var openWindows: Set<ObjectIdentifier> = []
+
+    var activationPolicy: NSApplication.ActivationPolicy {
+        openWindows.isEmpty ? .accessory : .regular
+    }
+
+    mutating func windowOpened(_ id: ObjectIdentifier) {
+        openWindows.insert(id)
+    }
+
+    mutating func windowClosed(_ id: ObjectIdentifier) {
+        openWindows.remove(id)
+    }
+}
+
+@MainActor
+struct ApplicationWindowTrackingView: NSViewRepresentable {
+    let applicationDelegate: ApplicationDelegate
+
+    func makeNSView(context: Context) -> NSView {
+        TrackingView(applicationDelegate: applicationDelegate)
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) { }
+
+    private final class TrackingView: NSView {
+        private weak var applicationDelegate: ApplicationDelegate?
+
+        init(applicationDelegate: ApplicationDelegate) {
+            self.applicationDelegate = applicationDelegate
+            super.init(frame: .zero)
+        }
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) { nil }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if let window { applicationDelegate?.trackApplicationWindow(window) }
+        }
+    }
+}
+
 struct WindowFrameAutosaveView: NSViewRepresentable {
     let name: String
 

@@ -6,6 +6,8 @@
 
 DNSPilot is a quiet, native macOS utility with one management window, one standard Settings window, and a persistent menu-bar menu. Closing the window leaves the app running and preserves the current DNS Proxy state.
 
+The app launches as an accessory without a running Dock icon. Opening the management or Settings window restores regular application presentation, including the Dock icon and application menus. Closing the last of these windows returns to accessory presentation; minimizing a window does not. The menu-bar status item remains available in either presentation. User-pinned Dock icons are not removed.
+
 The management window uses a two-column navigation split view with Overview, Profiles, Rules, and Test. Settings contains General, Privacy, Diagnostics, and About. Use native lists, grouped forms, sheets, alerts, menus, segmented controls, toggles, system typography, semantic colors, and SF Symbols, and let the system apply its own material, including Liquid Glass on macOS 26. Custom floating control clusters use Liquid Glass on macOS 26 and a system material on earlier releases; content areas do not use glass. Color never carries status alone.
 
 The bottom of the navigation sidebar shows a persistent Proxy status summary that pairs a status symbol with the state and the Active Profile or System DNS. Activating it opens Overview.

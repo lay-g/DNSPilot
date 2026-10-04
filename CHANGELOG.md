@@ -2,6 +2,13 @@
 
 All notable changes to DNSPilot are documented in this file. The format follows Keep a Changelog, and releases use semantic versioning once the first public version is tagged.
 
+## [1.6] - 2026-10-04
+
+### Changed
+
+- The Dock icon now appears while the management or Settings window is open and hides after the last window closes. Minimizing a window keeps the Dock icon available, and closing windows leaves the menu-bar controls and DNS Proxy running.
+- Background and login launches start without a running Dock icon until a window is opened.
+
 ## [1.5] - 2026-10-03
 
 ### Changed

@@ -6,6 +6,8 @@
 
 DNSPilot 是安静、原生的 macOS utility，包含一个管理窗口、一个标准 Settings 窗口和常驻菜单栏菜单。关闭窗口后 App 继续运行，并保持当前 DNS Proxy 状态。
 
+App 以 accessory 身份启动，不显示运行中的 Dock 图标。打开管理窗口或 Settings 窗口时，恢复 regular 应用展示，包括 Dock 图标和应用菜单。关闭这两个窗口中的最后一个后，恢复 accessory 展示；最小化窗口不触发该切换。菜单栏状态图标在两种展示下都保持可用。不会移除用户固定在 Dock 中的图标。
+
 管理窗口使用两列 NavigationSplitView，包含 Overview、Profiles、Rules、Test。Settings 包含 General、Privacy、Diagnostics、About。使用原生 list、grouped form、sheet、alert、menu、segmented control、toggle、系统字体、语义色和 SF Symbols，并由系统自行应用材质，包括 macOS 26 上的 Liquid Glass。自定义的浮动控件组在 macOS 26 上使用 Liquid Glass，在更早版本上使用系统 material；内容区域不使用玻璃材质。颜色不能单独表达状态。
 
 导航 sidebar 底部常驻 Proxy 状态摘要，用状态符号配合状态文字以及 Active Profile 或 System DNS。激活它会打开 Overview。

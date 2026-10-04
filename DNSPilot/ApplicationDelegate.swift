@@ -107,6 +107,7 @@ final class ApplicationDelegate: NSObject, NSApplicationDelegate {
     private var terminationAlertAction: ((Int) -> Void)?
     private var pendingPrimaryWindowRequest = false
     private var suppressAutomaticWindows = false
+    private var dockWindowPolicy = DockWindowPolicy()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         installQuitEventHandling()
@@ -116,6 +117,7 @@ final class ApplicationDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        NotificationCenter.default.removeObserver(self)
         if let keyEventMonitor { NSEvent.removeMonitor(keyEventMonitor) }
         if let resignActiveObserver { NotificationCenter.default.removeObserver(resignActiveObserver) }
         dismissTerminationAlert()
@@ -130,6 +132,52 @@ final class ApplicationDelegate: NSObject, NSApplicationDelegate {
         guard pendingPrimaryWindowRequest else { return }
         pendingPrimaryWindowRequest = false
         if !suppressAutomaticWindows { appState.requestPrimaryWindow() }
+    }
+
+    func prepareForWindowPresentation() {
+        setActivationPolicy(.regular)
+    }
+
+    func trackApplicationWindow(_ window: NSWindow) {
+        guard !AppRuntimeEnvironment.isUnitTestProcess, !suppressAutomaticWindows else { return }
+        let center = NotificationCenter.default
+        // SwiftUI may reattach the content to a retained window after closing it.
+        center.removeObserver(self, name: NSWindow.didBecomeKeyNotification, object: window)
+        center.removeObserver(self, name: NSWindow.willCloseNotification, object: window)
+        center.addObserver(
+            self,
+            selector: #selector(applicationWindowDidBecomeKey(_:)),
+            name: NSWindow.didBecomeKeyNotification,
+            object: window
+        )
+        center.addObserver(
+            self,
+            selector: #selector(applicationWindowWillClose(_:)),
+            name: NSWindow.willCloseNotification,
+            object: window
+        )
+        dockWindowPolicy.windowOpened(ObjectIdentifier(window))
+        setActivationPolicy(dockWindowPolicy.activationPolicy)
+    }
+
+    @objc private func applicationWindowDidBecomeKey(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow else { return }
+        dockWindowPolicy.windowOpened(ObjectIdentifier(window))
+        setActivationPolicy(dockWindowPolicy.activationPolicy)
+    }
+
+    @objc private func applicationWindowWillClose(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow else { return }
+        dockWindowPolicy.windowClosed(ObjectIdentifier(window))
+        setActivationPolicy(dockWindowPolicy.activationPolicy)
+    }
+
+    private func setActivationPolicy(_ policy: NSApplication.ActivationPolicy) {
+        guard !AppRuntimeEnvironment.isUnitTestProcess, !suppressAutomaticWindows,
+              NSApp.activationPolicy() != policy else { return }
+        if !NSApp.setActivationPolicy(policy) {
+            logger.error("Could not update application activation policy.")
+        }
     }
 
     private func requestMenuQuit() {

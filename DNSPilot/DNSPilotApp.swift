@@ -48,6 +48,7 @@ struct DNSPilotApp: App {
                 ProductWindowContent()
                     .environmentObject(appState)
                     .background(WindowFrameAutosaveView(name: "DNSPilot.MainWindow"))
+                    .background(ApplicationWindowTrackingView(applicationDelegate: applicationDelegate))
                     .task {
                         applicationDelegate.configure(
                             appState: appState,
@@ -65,6 +66,7 @@ struct DNSPilotApp: App {
 
         Settings {
             SettingsView().environmentObject(appState)
+                .background(ApplicationWindowTrackingView(applicationDelegate: applicationDelegate))
                 .task {
                     applicationDelegate.configure(
                         appState: appState,
@@ -101,6 +103,7 @@ private struct MenuBarLabel: View {
 
     private func route(_ request: ProductWindowRequest?) {
         guard let request, !suppressAutomaticWindows else { return }
+        applicationDelegate.prepareForWindowPresentation()
         openWindow(id: "main")
         NSApp.activate(ignoringOtherApps: true)
         appState.consumeWindowRequest(request.id)
